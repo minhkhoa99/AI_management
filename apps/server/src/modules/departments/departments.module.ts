@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AgentsModule } from '../agents/agents.module';
 import { AddDepartmentMemberUseCase } from './application/use-cases/add-department-member.use-case';
+import { ChangeTeamModeUseCase } from './application/use-cases/change-team-mode.use-case';
 import { BuildOrgTreeUseCase } from './application/use-cases/build-org-tree.use-case';
 import { ChangeReportingLineUseCase } from './application/use-cases/change-reporting-line.use-case';
 import { CreateDepartmentUseCase } from './application/use-cases/create-department.use-case';
@@ -30,11 +31,13 @@ import { DepartmentsController } from './presentation/controllers/departments.co
     UpdateDepartmentUseCase,
     DeleteDepartmentUseCase,
     ToggleDepartmentUseCase,
+    ChangeTeamModeUseCase,
     BuildOrgTreeUseCase,
     AddDepartmentMemberUseCase,
     UpdateDepartmentMemberUseCase,
     ChangeReportingLineUseCase,
     RemoveDepartmentMemberUseCase,
   ],
+  exports: [DEPARTMENT_REPOSITORY, POSITION_REPOSITORY],
 })
 export class DepartmentsModule {}
