@@ -64,7 +64,7 @@ export class EngineTestRunRegistry {
     const timeout = setTimeout(() => record.abortController.abort(), TEST_RUN_TIMEOUT_MS);
     void this.consumeSession(testRunId, record, openSession).finally(() => {
       clearTimeout(timeout);
-      releaseResources();
+      this.releaseTestRunResources(testRunId, releaseResources);
     });
     return testRunId;
   }
@@ -105,12 +105,14 @@ export class EngineTestRunRegistry {
   ): Promise<void> {
     let lastEvent: AgentEngineEvent | undefined;
     try {
+      // Read the session to its natural end even after the terminal event: breaking out early
+      // would kill the CLI while it is still exiting, and its working directory stays locked.
       for await (const event of openSession(record.abortController.signal)) {
+        if (lastEvent !== undefined && TERMINAL_EVENT_KINDS.has(lastEvent.kind)) {
+          continue;
+        }
         lastEvent = event;
         this.publishTestRunEvent(record, event);
-        if (TERMINAL_EVENT_KINDS.has(event.kind)) {
-          break;
-        }
       }
     } catch (error) {
       this.logger.error({ err: error, testRunId }, 'engine test run crashed');
@@ -142,6 +144,18 @@ export class EngineTestRunRegistry {
     record.listeners.clear();
     record.finishListeners.clear();
     setTimeout(() => this.testRuns.delete(testRunId), FINISHED_RUN_RETENTION_MS).unref();
+  }
+
+  /** Cleanup failures are logged; they must never take the server down. */
+  private releaseTestRunResources(testRunId: string, releaseResources: () => void): void {
+    try {
+      releaseResources();
+    } catch (error) {
+      this.logger.warn(
+        { testRunId, err: error },
+        'engine test run resources could not be released',
+      );
+    }
   }
 
   private publishTestRunEvent(record: TestRunRecord, event: AgentEngineEvent): void {

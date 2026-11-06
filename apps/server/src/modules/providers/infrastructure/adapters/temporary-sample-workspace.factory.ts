@@ -21,7 +21,9 @@ export class TemporarySampleWorkspaceFactory implements SampleWorkspaceFactory {
     writeFileSync(path.join(directory, 'README.md'), SAMPLE_README);
     return {
       directory,
-      disposeSampleWorkspace: () => rmSync(directory, { recursive: true, force: true }),
+      // Retries cover Windows, where a just-exited CLI can hold the directory for a moment (EBUSY).
+      disposeSampleWorkspace: () =>
+        rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }),
     };
   }
 }
