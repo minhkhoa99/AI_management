@@ -14,6 +14,20 @@ export const AGENT_PROVIDERS = ['claude_code', 'codex', 'custom_api'] as const;
 export const agentProviderSchema = z.enum(AGENT_PROVIDERS);
 export type AgentProvider = z.infer<typeof agentProviderSchema>;
 
+/** Fixed set of agent roles; workflow steps (owner_role) reference the same list. */
+export const AGENT_ROLES = [
+  'manager',
+  'pm',
+  'dev',
+  'qc',
+  'designer',
+  'writer',
+  'analyst',
+  'support',
+] as const;
+export const agentRoleSchema = z.enum(AGENT_ROLES);
+export type AgentRole = z.infer<typeof agentRoleSchema>;
+
 /** What an agent may do in its workspace. */
 export const ACCESS_LEVELS = ['read_only', 'edit_workspace'] as const;
 export const accessLevelSchema = z.enum(ACCESS_LEVELS);
