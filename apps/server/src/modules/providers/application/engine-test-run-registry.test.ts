@@ -1,13 +1,19 @@
 import type { AgentEngineEvent } from '@aiteam/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import type { AppLogger } from '../../../shared/logging/app-logger';
+import { AgentSessionSupervisor } from '../../../shared/runtime/agent-session-supervisor';
 import { EngineTestRunRegistry } from './engine-test-run-registry';
 
 function createRegistry() {
   let nextId = 0;
   // Computed key: "info" is pino's method name, not one of our identifiers.
   const logger = { ['info']: vi.fn(), warn: vi.fn(), error: vi.fn() } as unknown as AppLogger;
-  const registry = new EngineTestRunRegistry({ generateId: () => `run-${(nextId += 1)}` }, logger);
+  const idGenerator = { generateId: () => `id-${(nextId += 1)}` };
+  const registry = new EngineTestRunRegistry(
+    idGenerator,
+    logger,
+    new AgentSessionSupervisor(idGenerator, logger),
+  );
   return { registry, logger };
 }
 
