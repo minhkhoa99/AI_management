@@ -154,6 +154,8 @@ Ràng buộc kết hợp ở `workflow_steps`: `return_to_step` bắt buộc có
 
 Patch lớn và tài liệu QA lưu thành file trong `~/.aiteam/data/`, bảng chỉ giữ đường dẫn, để cơ sở dữ liệu luôn gọn.
 
+Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của Giai đoạn 3, không thêm sớm): cấu hình engine chụp lúc bắt đầu phiên, xem mục 5.11.
+
 ## 5. Quy tắc code áp dụng cụ thể
 
 1. **Single Responsibility:** mỗi use case là một class với một phương thức công khai mang tên đúng việc làm, ví dụ `DelegateTaskToSubordinateUseCase.delegateTask()`.
@@ -185,6 +187,18 @@ Patch lớn và tài liệu QA lưu thành file trong `~/.aiteam/data/`, bảng 
     - Danh sách dài trong UI dùng ảo hoá.
     - Đọc file và diff theo yêu cầu, không nạp sẵn.
     - Giới hạn output terminal giữ trong bộ nhớ.
+    - **Ngân sách bundle web (gzip, mỗi route):**
+      - Chunk framework Next/React: không giới hạn tuyệt đối, nhưng có mốc đo lưu trong repo; CI lỗi nếu tăng quá 10% so với mốc. Mốc đo ngày 06/11/2026 (Next 16.4.5, React 19.3.1): khoảng 156 KB.
+      - Code ứng dụng (mọi chunk không thuộc framework, kể cả zod và `packages/contracts`): ≤ 70 KB.
+      - Tổng tải lần đầu (mọi JS mà HTML của route nạp): ≤ 230 KB.
+      - Script đo và bước kiểm tra trong CI làm ở Giai đoạn 2. Chưa đổi sang `zod/mini`; web chỉ import schema mình thật sự dùng.
+
+11. **Đổi cấu hình agent khi đang chạy task** (quy tắc chốt; hiện thực đầy đủ ở Giai đoạn 3):
+    - Agent lưu cấu hình mới ngay và phát sự kiện domain `AgentConfigurationChanged { agentId, changes, reducesPermissions }`.
+    - Phiên đang chạy dùng `engine_snapshot` chụp lúc bắt đầu phiên; thay đổi chỉ áp dụng từ phiên kế tiếp.
+    - Đổi provider hoặc connection: bỏ `session_ref`, phiên mới bắt đầu với bản tóm tắt bàn giao. Chỉ đổi model trong cùng provider: giữ `session_ref`.
+    - Giảm quyền (`edit_workspace` → `read_only`, tắt `network_access`, tắt agent): huỷ lượt hiện tại ngay (vẫn lưu mốc) rồi chạy lại với quyền mới.
+    - `reducesPermissions` là hàm thuần trong domain module agents, có unit test; module orchestration chỉ dựa vào cờ này, không tự so sánh cấu hình.
 
 ## 6. Lệnh `aiteam`
 
@@ -228,6 +242,8 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - `OpenAiCompatibleEngine`, `AnthropicApiEngine` cho Custom API.
 - Màn hình Cài đặt: kết nối Custom API (thêm, sửa, xoá, tải model, kiểm tra), thẻ Claude Code và Codex với nút chạy thử.
 - Contract test cho từng engine bằng JSONL ghi sẵn.
+- Sự kiện `AgentConfigurationChanged` và hàm xác định `reducesPermissions` trong module agents/providers, có test (mục 5.11). Chưa có phần phản ứng ở orchestration.
+- Script đo bundle web theo route và bước kiểm tra ngân sách trong CI, kèm file mốc đo chunk framework (mục 5.10).
 
 **Hoàn thành khi:** nút "Chạy thử" trên UI chạy một task nhỏ thật bằng Claude Code và Codex trên máy bạn.
 
@@ -237,6 +253,7 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - Worktree cho mỗi task; tài liệu QA; `GoalBuilder` (QA hoặc mô tả + tiêu chí).
 - Quy trình: CRUD, mẫu, điều kiện chuyển bước, thử lại, quay lại bước trước.
 - Huỷ task: tín hiệu tới engine, chờ xác nhận, dọn worktree.
+- Migration thêm `tasks.engine_snapshot_json`; chụp cấu hình engine khi bắt đầu phiên; phản ứng với `AgentConfigurationChanged` theo mục 5.11 (bỏ/giữ `session_ref`, huỷ lượt khi giảm quyền).
 - Duyệt việc nhạy cảm.
 - UI: màn hình Task (kanban, chi tiết, form), màn hình Quy trình.
 

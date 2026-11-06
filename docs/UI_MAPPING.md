@@ -216,4 +216,4 @@ Mỗi sự kiện có `traceId`, `taskId`, `agentId`, `ts`. Server gộp sự ki
 - Chạy được ở chiều rộng 360 px: menu xếp chồng, bảng cuộn ngang trong khung.
 - Mọi nút là `<button>` hoặc `<a>` thật, có `aria-label` khi chỉ có icon; điều khiển được bằng bàn phím.
 - Không có dữ liệu giả trong bản build; trạng thái trống có hướng dẫn hành động tiếp theo.
-- Bundle JavaScript của mỗi trang dưới 150 KB (gzip). CI báo lỗi khi vượt.
+- Ngân sách bundle mỗi route (gzip), xem mục 5.10 của `IMPLEMENTATION_PLAN.md`: framework Next/React theo mốc đo (CI lỗi nếu tăng > 10%), code ứng dụng ≤ 70 KB, tổng tải lần đầu ≤ 230 KB. CI kiểm tra từ Giai đoạn 2.

@@ -78,6 +78,27 @@ Cấm tên chung chung: `execute`, `run`, `handle`, `process`, `doWork`, `data`,
 Ít dependency, không ORM. Mục tiêu: RAM rảnh < 150 MB, khởi động < 2 giây, gói cài (`dist/`) < 15 MB.
 Server được esbuild bundle thành một file; không cần `node_modules` khi chạy.
 
+Ngân sách bundle web (gzip, mỗi route):
+
+- Chunk framework Next/React: không giới hạn tuyệt đối; có mốc đo trong repo, CI lỗi nếu tăng > 10%.
+  Mốc 06/11/2026: khoảng 156 KB.
+- Code ứng dụng (mọi chunk khác, kể cả zod và contracts): ≤ 70 KB.
+- Tổng tải lần đầu: ≤ 230 KB.
+- Chưa dùng `zod/mini`. Web chỉ import schema mình thật sự dùng.
+- Script đo và bước CI làm ở Giai đoạn 2.
+
+## Đổi cấu hình agent khi đang chạy task
+
+Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`, Giai đoạn 3 làm phần còn lại.
+
+- Lưu cấu hình mới, phát `AgentConfigurationChanged { agentId, changes, reducesPermissions }`.
+- Phiên đang chạy dùng `engine_snapshot` chụp lúc bắt đầu; thay đổi áp dụng từ phiên kế tiếp.
+- Đổi provider/connection: bỏ `session_ref`, phiên mới có bản tóm tắt bàn giao. Chỉ đổi model cùng
+  provider: giữ `session_ref`.
+- Giảm quyền (`edit_workspace` → `read_only`, tắt `network_access`, tắt agent): huỷ lượt hiện tại ngay
+  (vẫn lưu mốc), chạy lại với quyền mới.
+- Cột `tasks.engine_snapshot_json` thêm bằng migration của Giai đoạn 3, không thêm sớm.
+
 ## Lệnh
 
 ```
