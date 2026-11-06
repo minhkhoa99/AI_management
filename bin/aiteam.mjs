@@ -138,6 +138,7 @@ async function startApplication(options) {
     sessionToken,
     dataDirectory,
     logDirectory,
+    secretKeyFilePath: path.join(aiteamHome, 'secret.key'),
     webRootDirectory,
   });
 

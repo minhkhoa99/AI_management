@@ -36,8 +36,13 @@ export function listCandidatePorts(preferredPort: number): number[] {
   return candidates;
 }
 
-export function isAddressInUseError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | undefined)?.code === 'EADDRINUSE';
+/**
+ * Errors meaning "try another port": in use, or (Windows) inside a port range reserved by
+ * Hyper-V/WSL, which fails with EACCES even though nothing listens there.
+ */
+export function isPortUnusableError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'EADDRINUSE' || code === 'EACCES';
 }
 
 export function createNoFreePortError(preferredPort: number): ConflictError {

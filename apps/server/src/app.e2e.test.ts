@@ -46,6 +46,8 @@ describe('aiteam HTTP application (e2e)', () => {
         version: '9.9.9-test',
         startedAtEpochMs: Date.now() - 3_000,
         sessionToken: SESSION_TOKEN,
+
+        secretKeyFilePath: path.join(tmpdir(), `aiteam-test-secret-${process.pid}.key`),
         listenPort: LISTEN_PORT,
       },
       database,

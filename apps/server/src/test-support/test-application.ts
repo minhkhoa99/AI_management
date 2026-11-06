@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { SESSION_COOKIE_NAME } from '@aiteam/contracts';
@@ -22,6 +25,7 @@ export interface TestApiResponse {
 
 export interface TestApplication {
   database: DatabaseSync;
+  application: NestFastifyApplication;
   /** Sends a request the way the logged-in UI does: session cookie, same-origin Origin, JSON. */
   callApi(method: HttpMethod, url: string, requestBody?: unknown): Promise<TestApiResponse>;
   closeApplication(): Promise<void>;
@@ -31,6 +35,7 @@ export interface TestApplication {
 export async function startTestApplication(
   databaseLocation = IN_MEMORY_DATABASE_LOCATION,
 ): Promise<TestApplication> {
+  const secretDirectory = mkdtempSync(path.join(tmpdir(), 'aiteam-test-secret-'));
   const database = openSqliteDatabase(databaseLocation);
   applyPendingMigrations(database, ALL_MIGRATIONS);
   const application: NestFastifyApplication = await createAiteamApplication({
@@ -39,6 +44,7 @@ export async function startTestApplication(
       startedAtEpochMs: Date.now(),
       sessionToken: TEST_SESSION_TOKEN,
       listenPort: TEST_LISTEN_PORT,
+      secretKeyFilePath: path.join(secretDirectory, 'secret.key'),
     },
     database,
     logger: createAppLogger({ level: 'silent' }),
@@ -46,6 +52,7 @@ export async function startTestApplication(
 
   return {
     database,
+    application,
     async callApi(method, url, requestBody) {
       const response = await application.inject({
         method,
@@ -66,6 +73,7 @@ export async function startTestApplication(
     async closeApplication() {
       await application.close();
       database.close();
+      rmSync(secretDirectory, { recursive: true, force: true });
     },
   };
 }
