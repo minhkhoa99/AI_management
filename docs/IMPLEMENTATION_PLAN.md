@@ -2,6 +2,8 @@
 
 Nền tảng điều phối nhiều agent theo phòng ban, chạy hoàn toàn trên máy. Gõ `aiteam` là toàn bộ ứng dụng khởi động và mở trình duyệt.
 
+Tài liệu liên quan: [mapping giao diện](UI_MAPPING.md) (màn hình → API → use case → giai đoạn), [giao diện mẫu](design/aiteam-ui.html).
+
 ## 1. Mục tiêu và giới hạn
 
 **Phải có (theo giao diện đã thiết kế):**
@@ -177,7 +179,7 @@ aiteam --port 4321     # đổi cổng
 
 ## 7. Lộ trình
 
-Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, được merge vào `main` qua pull request.
+Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, được merge vào `master` qua pull request.
 
 ### Giai đoạn 0: Nền móng
 
@@ -249,6 +251,6 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 ## 9. Cách làm việc với repo
 
-- Nhánh `main` luôn chạy được. Mỗi giai đoạn chia thành pull request nhỏ theo module.
+- Nhánh `master` luôn chạy được. Mỗi giai đoạn chia thành pull request nhỏ theo module.
 - Commit theo Conventional Commits: `feat(orchestration): delegate task to subordinate`.
 - CI phải xanh (lint, test, build) trước khi merge.
