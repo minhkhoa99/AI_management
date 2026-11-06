@@ -11,3 +11,5 @@ Công nghệ: NestJS, Next.js, SQLite. Mục tiêu sử dụng:
 npm i -g aiteam
 aiteam
 ```
+
+Giao diện mẫu tương tác: mở `docs/design/aiteam-ui.html` bằng trình duyệt.
