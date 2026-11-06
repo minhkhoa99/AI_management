@@ -1,5 +1,5 @@
-import { DEPARTMENT_NAME_MAX_LENGTH, type TeamMode } from '@aiteam/contracts';
-import { ConflictError } from '../../../../shared/errors/app-error';
+import { DEPARTMENT_NAME_MAX_LENGTH, SUPPORTED_TEAM_MODES, type TeamMode } from '@aiteam/contracts';
+import { ConflictError, ValidationError } from '../../../../shared/errors/app-error';
 import { DisplayName } from '../../../../shared/domain/display-name';
 import { parseHexColor } from '../value-objects/hex-color';
 
@@ -48,6 +48,16 @@ export class Department {
 
   recolor(newColor: string): void {
     this.state.color = parseHexColor(newColor);
+  }
+
+  /** Only modes the platform can run are accepted (SUPPORTED_TEAM_MODES). */
+  changeTeamMode(teamMode: TeamMode): void {
+    if (!SUPPORTED_TEAM_MODES.includes(teamMode)) {
+      throw new ValidationError('Chế độ team này chưa được hỗ trợ.', {
+        code: 'TEAM_MODE_NOT_SUPPORTED',
+      });
+    }
+    this.state.teamMode = teamMode;
   }
 
   setEnabled(enabled: boolean): void {
