@@ -104,8 +104,8 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 | Chi tiết agent: sửa tên, vai trò | `PATCH /api/departments/:id/members/:positionId` `{ name?, role? }` | `UpdateDepartmentMemberUseCase` · departments | 1 |
 | Chi tiết agent: đổi cấp trên | `PUT /api/departments/:id/members/:positionId/reports-to` `{ reportsToPositionId }` | `ChangeReportingLineUseCase` (chặn vòng lặp) · departments | 1 |
 | Chi tiết agent: xoá khỏi phòng | `DELETE /api/departments/:id/members/:positionId` (chặn khi còn cấp dưới) | `RemoveDepartmentMemberUseCase` (xoá ghế + agent) · departments | 1 |
-| Chi tiết agent: đổi bộ não | `PATCH /api/agents/:id/provider` | `ChangeAgentProviderUseCase` · agents | 2 |
-| Cấu hình Custom API của agent (kết nối + model) | `GET /api/provider-connections`, `PATCH /api/agents/:id/provider` | như trên · agents + providers | 2 |
+| Chi tiết agent: đổi bộ não và quyền (provider, kết nối, model, quyền trong thư mục, mạng) | `PATCH /api/agents/:id/configuration` (phát `AgentConfigurationChanged`) | `ChangeAgentConfigurationUseCase` · agents | 2 |
+| Cấu hình Custom API của agent (kết nối + model) | `GET /api/provider-connections`, `PATCH /api/agents/:id/configuration` | như trên · agents + providers | 2 |
 | "Xem trực tiếp agent này" | điều hướng `/monitor?agent=…` | — | 4 |
 
 Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế chỉ có một agent; tắt phòng thì task mới bị từ chối.
@@ -177,9 +177,10 @@ Loại việc của agent (code, giao diện, tài liệu, kiểm thử…) khô
 
 | Thành phần UI | API | Use case / module | GĐ |
 |---|---|---|---|
-| Thẻ Claude Code / Codex: đã cài, tài khoản đăng nhập | `GET /api/local-engines` | `CheckLocalEnginesUseCase` (`claude --version`, `codex --version`, `codex login status`) · providers | 2 |
-| Chọn model, quyền / sandbox, chặn lệnh nguy hiểm, cho phép mạng | `PATCH /api/local-engines/:engine/settings` | `UpdateLocalEngineSettingsUseCase` · providers | 2 |
-| Chạy thử trên máy | `POST /api/local-engines/:engine/test-runs` + SSE theo `testRunId` | `StartEngineTestRunUseCase` (chạy trong thư mục tạm, chỉ đọc) · providers | 2 |
+| Thẻ Claude Code / Codex: đã cài, tài khoản đăng nhập | `GET /api/local-engines` | `ListLocalEnginesUseCase` (`claude --version`, `claude auth status`, `codex --version`, `codex login status`) · providers | 2 |
+| Model mặc định, chặn lệnh nguy hiểm, cho phép mạng (giới hạn trên; quyền thật do từng agent quyết) | `PATCH /api/local-engines/:engine/settings` | `UpdateLocalEngineSettingsUseCase` · providers | 2 |
+| Chạy thử trên máy | `POST /api/local-engines/:engine/test-runs`, SSE `GET /api/engine-test-runs/:testRunId/events`, huỷ `POST /api/engine-test-runs/:testRunId/cancellation` | `StartLocalEngineTestRunUseCase` (thư mục tạm, chỉ đọc, không mạng), `WatchEngineTestRunUseCase`, `CancelEngineTestRunUseCase` · providers | 2 |
+| Chạy thử một kết nối Custom API | `POST /api/provider-connections/:id/test-runs` `{ model }` + cùng SSE | `StartConnectionTestRunUseCase` · providers | 2 |
 | Hướng dẫn cài | nội dung tĩnh | — | 2 |
 | Danh sách kết nối Custom API | `GET /api/provider-connections` (key luôn che) | `ListProviderConnectionsUseCase` · providers | 2 |
 | Thêm / sửa kết nối | `POST`, `PATCH /api/provider-connections/:id` | `SaveProviderConnectionUseCase` (mã hoá key bằng `SecretVault`) · providers | 2 |

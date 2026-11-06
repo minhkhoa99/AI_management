@@ -35,8 +35,8 @@ Tài liệu liên quan: [mapping giao diện](UI_MAPPING.md) (màn hình → API
 | Truy vấn | SQL viết tay trong repository, migration đánh số | KISS, không kéo ORM nặng |
 | Hàng đợi task | Bảng `tasks` + bộ lập lịch trong tiến trình, giới hạn số agent chạy song song | Một máy, một tiến trình, không cần Redis |
 | Thời gian thực | Server-Sent Events | Một chiều là đủ, nhẹ hơn WebSocket |
-| Gọi Claude Code | `claude -p --output-format stream-json --verbose` | Dùng tài khoản đã đăng nhập |
-| Gọi Codex | `@openai/codex-sdk` (gọi `codex` CLI trên máy) | Dùng chung đăng nhập với Codex app |
+| Gọi Claude Code | `claude -p --output-format stream-json --verbose --setting-sources project,local --strict-mcp-config` | Dùng tài khoản đã đăng nhập; không nạp hook/plugin/MCP cá nhân để agent chạy giống nhau trên mọi máy |
+| Gọi Codex | `codex exec --json --ignore-user-config` (gọi thẳng CLI, chốt ở Giai đoạn 2 thay cho `@openai/codex-sdk`) | Dùng chung đăng nhập với Codex app, không thêm dependency |
 | Custom API | `fetch` thuần tới OpenAI-compatible hoặc Anthropic Messages API | Không cần SDK riêng |
 | Không gian làm việc | Mỗi task một git worktree + nhánh `agent/<taskId>`; mỗi mốc là một commit | Diff, hoàn tác, huỷ đều dựa trên git |
 | Kiểm tra đầu vào | `zod` dùng chung cho backend và frontend | Một nguồn định nghĩa, nhẹ |
@@ -188,7 +188,7 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
     - Đọc file và diff theo yêu cầu, không nạp sẵn.
     - Giới hạn output terminal giữ trong bộ nhớ.
     - **Ngân sách bundle web (gzip, mỗi route):**
-      - Chunk framework Next/React: không giới hạn tuyệt đối, nhưng có mốc đo lưu trong repo; CI lỗi nếu tăng quá 10% so với mốc. Mốc đo ngày 06/11/2026 (Next 16.4.5, React 19.3.1): khoảng 156 KB.
+      - Chunk framework Next/React: không giới hạn tuyệt đối, nhưng có mốc đo lưu trong repo; CI lỗi nếu tăng quá 10% so với mốc. Mốc đo lưu ở `scripts/web-bundle-baseline.json`: 128,7 KB (Next 16.4.5, React 19.3.1; chunk `rootMainFiles` của build manifest, không tính polyfill `noModule`).
       - Code ứng dụng (mọi chunk không thuộc framework, kể cả zod và `packages/contracts`): ≤ 70 KB.
       - Tổng tải lần đầu (mọi JS mà HTML của route nạp): ≤ 230 KB.
       - Script đo và bước kiểm tra trong CI làm ở Giai đoạn 2. Chưa đổi sang `zod/mini`; web chỉ import schema mình thật sự dùng.
