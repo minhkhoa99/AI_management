@@ -159,6 +159,7 @@ describe('migration 001 initial schema', () => {
         'agents',
         'approvals',
         'checkpoints',
+        'cli_process_records',
         'departments',
         'line_comments',
         'local_engine_settings',

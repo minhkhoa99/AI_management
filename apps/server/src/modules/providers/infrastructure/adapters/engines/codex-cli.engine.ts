@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { AgentEngineEvent } from '@aiteam/contracts';
 import { AppError } from '../../../../../shared/errors/app-error';
+import {
+  CLI_PROCESS_TRACKER,
+  type CliProcessTracker,
+} from '../../../../../shared/runtime/cli-process-tracker';
 import type {
   AgentEnginePort,
   AgentSessionRequest,
@@ -18,6 +22,8 @@ import { toFailedEvent } from './engine-failure';
  */
 @Injectable()
 export class CodexCliEngine implements AgentEnginePort {
+  constructor(@Inject(CLI_PROCESS_TRACKER) private readonly processTracker: CliProcessTracker) {}
+
   async *startSession(
     request: AgentSessionRequest,
     signal: AbortSignal,
@@ -34,7 +40,7 @@ export class CodexCliEngine implements AgentEnginePort {
     }
     const translator = new CodexStreamTranslator();
     try {
-      for await (const output of streamCliOutput(invocation, signal)) {
+      for await (const output of streamCliOutput(invocation, signal, this.processTracker)) {
         yield* output.kind === 'line'
           ? translator.translateCodexLine(output.text)
           : translator.translateCodexExit(output);
