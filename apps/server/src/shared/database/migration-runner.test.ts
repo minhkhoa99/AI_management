@@ -153,7 +153,7 @@ describe('migration 001 initial schema', () => {
     database.close();
   });
 
-  it('creates every table from section 4 of the plan', () => {
+  it('creates every table from section 4 of the plan, plus later additions', () => {
     expect(listTableNames(database)).toEqual(
       [
         'agents',
@@ -161,6 +161,7 @@ describe('migration 001 initial schema', () => {
         'checkpoints',
         'departments',
         'line_comments',
+        'local_engine_settings',
         'positions',
         'provider_connections',
         'schema_migrations',
