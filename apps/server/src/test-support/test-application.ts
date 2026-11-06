@@ -12,6 +12,8 @@ import {
   openSqliteDatabase,
 } from '../shared/database/sqlite-connection';
 import { createAppLogger } from '../shared/logging/app-logger';
+import type { ProcessInspector } from '../shared/runtime/process-identity';
+import type { ProcessTerminator } from '../shared/runtime/process-termination';
 
 export const TEST_SESSION_TOKEN = 'test-session-token-0123456789abcdef0123456789';
 export const TEST_LISTEN_PORT = 7419;
@@ -32,8 +34,14 @@ export interface TestApplication {
 }
 
 /** Full Nest application (all modules, middleware, filter) on a SQLite database. */
+export interface TestApplicationOverrides {
+  processInspector?: ProcessInspector;
+  processTerminator?: ProcessTerminator;
+}
+
 export async function startTestApplication(
   databaseLocation = IN_MEMORY_DATABASE_LOCATION,
+  overrides: TestApplicationOverrides = {},
 ): Promise<TestApplication> {
   const secretDirectory = mkdtempSync(path.join(tmpdir(), 'aiteam-test-secret-'));
   const database = openSqliteDatabase(databaseLocation);
@@ -48,6 +56,9 @@ export async function startTestApplication(
     },
     database,
     logger: createAppLogger({ level: 'silent' }),
+    // Tests never inspect or kill real processes unless they say so.
+    processInspector: overrides.processInspector ?? { inspectProcess: () => Promise.resolve(null) },
+    processTerminator: overrides.processTerminator ?? { terminateProcessTree: () => undefined },
   });
 
   return {
