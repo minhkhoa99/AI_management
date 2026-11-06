@@ -280,3 +280,66 @@
   border: 1px solid #7f1d1d;
   background: #1f0d10;
 }
+
+.brainForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-input);
+  background: #0b1324;
+}
+
+.brainHeading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-soft);
+}
+
+.providerChoices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.providerChoice {
+  min-height: 52px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-input);
+  background: transparent;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+
+.providerChoice[aria-checked='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-nav-active);
+}
+
+.providerChoiceLabel {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.brainGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.monoInput {
+  font-family: var(--font-mono-stack);
+  font-size: 12.5px;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  font-size: 13px;
+  color: var(--color-text-soft);
+}

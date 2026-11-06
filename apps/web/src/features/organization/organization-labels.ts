@@ -17,9 +17,6 @@ export interface ProviderPresentation {
   note: string;
   background: string;
   foreground: string;
-  /** Selectable when adding a member in this phase. */
-  availableNow: boolean;
-  unavailableHint?: string;
 }
 
 /** Colours follow the design mockup (Claude Code blue, Codex green, Custom API amber). */
@@ -29,22 +26,18 @@ export const PROVIDER_PRESENTATION: Record<AgentProvider, ProviderPresentation> 
     note: 'Tài khoản Claude đã đăng nhập',
     background: '#1C3256',
     foreground: '#B9D3FF',
-    availableNow: true,
   },
   codex: {
     label: 'Codex',
     note: 'Tài khoản ChatGPT đã đăng nhập',
     background: '#113329',
     foreground: '#86E8C4',
-    availableNow: true,
   },
   custom_api: {
     label: 'Custom API',
     note: 'OpenAI-compatible hoặc Anthropic',
     background: '#3A2A12',
     foreground: '#F7CD90',
-    availableNow: false,
-    unavailableHint: 'Cần kết nối API, có ở Giai đoạn 2',
   },
 };
 
