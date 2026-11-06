@@ -169,7 +169,7 @@ function AgentDetailContent({
         </p>
       )}
 
-      <form className={styles.form} onSubmit={saveProfile} noValidate>
+      <form className={styles.form} onSubmit={(event) => void saveProfile(event)} noValidate>
         <label className={controlStyles.field}>
           Tên hiển thị
           <input

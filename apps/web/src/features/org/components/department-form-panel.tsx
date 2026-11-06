@@ -53,7 +53,7 @@ export function DepartmentFormPanel({
       title={editedDepartment === undefined ? 'Thêm phòng ban' : `Sửa ${editedDepartment.name}`}
       emphasised
     >
-      <form className={styles.form} onSubmit={submitDepartment} noValidate>
+      <form className={styles.form} onSubmit={(event) => void submitDepartment(event)} noValidate>
         <label className={controlStyles.field}>
           Tên phòng
           <input

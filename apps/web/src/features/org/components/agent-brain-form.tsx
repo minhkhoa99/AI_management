@@ -69,7 +69,12 @@ export function AgentBrainForm({ agent }: { agent: AgentDetail }) {
   };
 
   return (
-    <form className={styles.brainForm} onSubmit={saveBrain} noValidate aria-label="Bộ não và quyền">
+    <form
+      className={styles.brainForm}
+      onSubmit={(event) => void saveBrain(event)}
+      noValidate
+      aria-label="Bộ não và quyền"
+    >
       <span className={styles.brainHeading}>Bộ não</span>
       <div role="radiogroup" aria-label="Chọn bộ não" className={styles.providerChoices}>
         {AGENT_PROVIDERS.map((providerOption) => {

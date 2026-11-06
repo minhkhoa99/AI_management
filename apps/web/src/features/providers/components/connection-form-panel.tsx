@@ -125,7 +125,7 @@ export function ConnectionFormPanel({
       title={editedConnection === undefined ? 'Thêm kết nối API' : `Sửa ${editedConnection.name}`}
       emphasised
     >
-      <form className={styles.form} onSubmit={saveConnection} noValidate>
+      <form className={styles.form} onSubmit={(event) => void saveConnection(event)} noValidate>
         <label className={controlStyles.field}>
           Tên kết nối
           <input
