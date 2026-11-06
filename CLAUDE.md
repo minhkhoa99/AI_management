@@ -14,7 +14,26 @@ Tài liệu gốc: `docs/IMPLEMENTATION_PLAN.md` (kiến trúc, dữ liệu, l�
 - Node: chỉ các bản LTS đã vá bảo mật mới nhất. Tối thiểu hiện tại: 22.23.4 / 24.22.1 / 26.12.1
   (bản vá 10/2026, CVE-2026-111497). Bảng tối thiểu nằm ở `bin/node-version-policy.mjs`; cập nhật khi
   Node ra bản vá bảo mật mới.
-- Một tiến trình Node duy nhất, chỉ lắng nghe `127.0.0.1`. API yêu cầu token phiên (trừ `/api/health`).
+- Một tiến trình Node duy nhất, chỉ lắng nghe `127.0.0.1`. Cổng mặc định `7419`
+  (`--port` > `AITEAM_PORT` > 7419; cổng bận thì tự thử cổng trống kế tiếp, in URL thật).
+
+## Bảo mật phiên (bắt buộc giữ nguyên)
+
+- `aiteam` mở `/?session=<token>` → server đổi token lấy cookie `aiteam_session`
+  (`HttpOnly; SameSite=Strict; Path=/`) rồi redirect `303` về `/`. Không dùng header token.
+- Mọi `/api/*` (REST và SSE) xác thực bằng cookie; chỉ `/api/health` mở.
+- Mọi request: Host phải là `127.0.0.1:<port>` hoặc `localhost:<port>`.
+- `POST/PATCH/PUT/DELETE`: Origin phải là `http://127.0.0.1:<port>` hoặc `http://localhost:<port>`.
+- Code ở `apps/server/src/shared/security/`. Không ghi token vào log, không lặp lại query string trong lỗi.
+
+## Giá trị liệt kê
+
+- Định nghĩa một lần trong `packages/contracts/src/enumerations.ts` (mảng `as const` + `z.enum`).
+- SQL `CHECK` phải liệt kê đúng các giá trị đó; đổi danh sách = migration mới + sửa contracts cùng lúc.
+  `enumerations.test.ts` chèn từng giá trị và so danh sách trong `CHECK` để bắt lệch.
+- Migration đã phát hành không bao giờ sửa; thêm file mới (`NNN_ten.sql` hoặc `.ts`). Migration dựng
+  lại bảng đặt `rebuildsTables: true` (runner tắt foreign keys quanh transaction, chạy
+  `foreign_key_check` trước khi commit).
 
 ## Kiến trúc mỗi module (`apps/server/src/modules/<tên>/`)
 
@@ -65,7 +84,7 @@ Server được esbuild bundle thành một file; không cần `node_modules` kh
 npm run lint     # eslint + prettier --check + tsc typecheck
 npm test         # vitest
 npm run build    # dist/server (bundle) + dist/web (Next export)
-node bin/aiteam.mjs [--port 4321] [--no-open]
+node bin/aiteam.mjs [--port 7419] [--no-open]
 node bin/aiteam.mjs doctor
 ```
 
