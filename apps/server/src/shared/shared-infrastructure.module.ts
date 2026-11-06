@@ -2,6 +2,8 @@ import { type DynamicModule, Global, Module } from '@nestjs/common';
 import type { DatabaseSync } from 'node:sqlite';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../app-runtime-config';
 import { SQLITE_DATABASE } from './database/sqlite-connection';
+import { SqliteTransactionRunner, TRANSACTION_RUNNER } from './database/transaction-runner';
+import { ID_GENERATOR, randomUuidGenerator } from './identifiers/id-generator';
 import { APP_LOGGER, type AppLogger } from './logging/app-logger';
 
 export interface SharedInfrastructureDependencies {
@@ -22,6 +24,11 @@ export class SharedInfrastructureModule {
       { provide: APP_RUNTIME_CONFIG, useValue: dependencies.runtimeConfig },
       { provide: SQLITE_DATABASE, useValue: dependencies.database },
       { provide: APP_LOGGER, useValue: dependencies.logger },
+      {
+        provide: TRANSACTION_RUNNER,
+        useValue: new SqliteTransactionRunner(dependencies.database),
+      },
+      { provide: ID_GENERATOR, useValue: randomUuidGenerator },
     ];
     return {
       module: SharedInfrastructureModule,
