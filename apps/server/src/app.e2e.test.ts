@@ -118,9 +118,7 @@ describe('aiteam HTTP application (e2e)', () => {
 
       const response = await sendRequest('/api/departments', { cookie: cookiePair });
 
-      // Authenticated: reaches routing (no departments route yet in phase 0).
-      expect(response.statusCode).toBe(404);
-      expect(readErrorCode(response)).toBe('ROUTE_NOT_FOUND');
+      expect(response.statusCode).toBe(200);
     });
   });
 
@@ -234,11 +232,12 @@ describe('aiteam HTTP application (e2e)', () => {
 
     it('lets a same-origin write with the cookie reach routing', async () => {
       const response = await sendRequest(
-        '/api/departments',
+        '/api/not-a-route',
         { cookie: VALID_SESSION_COOKIE, origin: ALLOWED_ORIGIN },
         'POST',
       );
 
+      // Passed Host, Origin and session checks: reaches routing.
       expect(response.statusCode).toBe(404);
       expect(readErrorCode(response)).toBe('ROUTE_NOT_FOUND');
     });

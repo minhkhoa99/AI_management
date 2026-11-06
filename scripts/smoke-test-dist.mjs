@@ -70,12 +70,12 @@ try {
     headers: { cookie: sessionCookie },
   });
   assertSmokeExpectation(
-    authorisedResponse.status === 404,
-    'API call with session cookie passes authentication',
+    authorisedResponse.status === 200 && Array.isArray(await authorisedResponse.json()),
+    'GET /api/departments with session cookie returns the department list',
   );
   assertSmokeExpectation(
-    runningServer.appliedMigrationVersions.join(',') === '1,2',
-    'migrations 001 and 002 applied on a fresh database',
+    runningServer.appliedMigrationVersions.join(',') === '1,2,3',
+    'migrations 001-003 applied on a fresh database',
   );
 } finally {
   await runningServer.stopServer();

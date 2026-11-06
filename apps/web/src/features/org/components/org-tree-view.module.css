@@ -1,0 +1,169 @@
+.scrollFrame {
+  overflow-x: auto;
+  padding: 28px 16px 20px;
+}
+
+/* Connector lines between blocks, ported from the design mockup (.otree). */
+.orgTree {
+  width: max-content;
+  margin: 0 auto;
+}
+
+.orgTree ul {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  padding: 28px 0 0;
+  position: relative;
+  list-style: none;
+}
+
+.orgTree > ul {
+  padding-top: 0;
+}
+
+.orgTree li {
+  position: relative;
+  padding: 28px 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.orgTree li::before,
+.orgTree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 28px;
+  border-top: 1px solid #3a4b75;
+}
+
+.orgTree li::after {
+  right: auto;
+  left: 50%;
+  border-left: 1px solid #3a4b75;
+}
+
+.orgTree li:only-child {
+  padding-top: 0;
+}
+
+.orgTree li:only-child::before,
+.orgTree li:only-child::after {
+  display: none;
+}
+
+.orgTree li:first-child::before,
+.orgTree li:last-child::after {
+  border: 0 none;
+}
+
+.orgTree li:last-child::before {
+  border-right: 1px solid #3a4b75;
+  border-radius: 0 10px 0 0;
+}
+
+.orgTree li:first-child::after {
+  border-radius: 10px 0 0 0;
+}
+
+.orgTree ul ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 28px;
+  border-left: 1px solid #3a4b75;
+}
+
+.orgTree > ul > li {
+  padding-top: 0;
+}
+
+.orgTree > ul > li::before,
+.orgTree > ul > li::after {
+  display: none;
+}
+
+.memberBlock {
+  width: 204px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border-input);
+  background: #0b1324;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+}
+
+.memberBlockSelected {
+  border-color: var(--color-primary);
+  background: var(--color-nav-active);
+}
+
+.memberButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+}
+
+.memberText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.memberName {
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 130px;
+}
+
+.memberNameOff {
+  color: #8d99b3;
+}
+
+.memberMeta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.memberActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.memberButtons {
+  display: flex;
+  gap: 2px;
+}
+
+.iconButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.iconButton:not(:disabled):hover {
+  background: var(--color-hover);
+}

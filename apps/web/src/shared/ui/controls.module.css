@@ -1,0 +1,227 @@
+/* Small shared controls: toggle, badges, avatar, status pill, buttons, notices, panels. */
+
+.toggleButton {
+  width: fit-content;
+  min-width: 44px;
+  min-height: 40px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.toggleButton:not(:disabled):hover {
+  background: var(--color-hover);
+}
+
+.toggleTrack {
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--color-border-strong);
+  position: relative;
+  display: inline-block;
+  flex: none;
+  transition: background-color 0.15s;
+}
+
+.toggleTrackOn {
+  background: var(--color-primary);
+}
+
+.toggleKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--color-text);
+  transition: left 0.15s;
+}
+
+.toggleTrackOn .toggleKnob {
+  left: 14px;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.avatar {
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex: none;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.statusPillAvailable {
+  background: #123327;
+  color: #9bebc9;
+}
+
+.statusPillOff {
+  background: #1c2438;
+  color: #aeb8cc;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
+  font-weight: 600;
+}
+
+.primaryButton {
+  border: none;
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.primaryButton:not(:disabled):hover {
+  background: var(--color-primary-hover);
+}
+
+.secondaryButton {
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  font-weight: 500;
+}
+
+.secondaryButton:not(:disabled):hover {
+  background: var(--color-hover);
+}
+
+.dangerButton {
+  border: 1px solid #7f1d1d;
+  background: #3b1111;
+  color: #fecaca;
+}
+
+.dangerButton:not(:disabled):hover {
+  background: #4c1515;
+}
+
+.notice {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.noticeSuccess {
+  background: #123327;
+  color: #9bebc9;
+}
+
+.noticeError {
+  background: #3b1111;
+  color: #fecaca;
+}
+
+.noticeTrace {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono-stack);
+  font-size: 11.5px;
+  opacity: 0.8;
+}
+
+.panel {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panelEmphasis {
+  border-color: var(--color-border-strong);
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 17px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-soft);
+}
+
+.fieldInput {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg);
+}
+
+.fieldInputInvalid {
+  border-color: var(--color-danger);
+}
+
+.fieldError {
+  font-size: 13px;
+  color: #fca5a5;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pillButton {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: transparent;
+  font-size: 13px;
+}
+
+.pillButton[aria-pressed='true'] {
+  background: var(--color-brand-chip);
+  border-color: var(--color-primary);
+  color: var(--color-text);
+}
+
+.pillButton:not(:disabled):not([aria-pressed='true']):hover {
+  background: var(--color-hover);
+}

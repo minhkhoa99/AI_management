@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
   ACCESS_LEVELS,
+  AGENT_ROLES,
   AGENT_PROVIDERS,
   API_FORMATS,
   STEP_FAILURE_ACTIONS,
@@ -42,8 +43,8 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
     invalidValue: 'solo',
     insertRowWith: (database, value, rowId) =>
       database
-        .prepare("INSERT INTO departments (id, name, color, team_mode) VALUES (?, 'D', '#000', ?)")
-        .run(rowId, value),
+        .prepare("INSERT INTO departments (id, name, color, team_mode) VALUES (?, ?, '#000', ?)")
+        .run(rowId, rowId, value),
   },
   {
     table: 'agents',
@@ -55,6 +56,16 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
         .prepare(
           "INSERT INTO agents (id, name, role, provider, connection_id) VALUES (?, 'A', 'dev', ?, 'conn')",
         )
+        .run(rowId, value),
+  },
+  {
+    table: 'agents',
+    column: 'role',
+    contractValues: AGENT_ROLES,
+    invalidValue: 'Manager',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare("INSERT INTO agents (id, name, role, provider) VALUES (?, 'A', ?, 'codex')")
         .run(rowId, value),
   },
   {
