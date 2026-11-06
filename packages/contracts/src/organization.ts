@@ -143,7 +143,13 @@ export const addDepartmentMemberRequestSchema = z
     role: agentRoleSchema,
     provider: agentProviderSchema,
     connectionId: entityIdSchema.optional(),
-    model: z.string().trim().min(1).max(MODEL_NAME_MAX_LENGTH).optional(),
+    // Same rule as modelNameSchema (providers.ts): never starts with "-" (CLI flag injection).
+    model: z
+      .string()
+      .trim()
+      .max(MODEL_NAME_MAX_LENGTH)
+      .regex(/^[A-Za-z0-9][A-Za-z0-9._:/-]*$/, 'Tên model không hợp lệ')
+      .optional(),
     /** null only for the first member, who becomes the head of the department. */
     reportsToPositionId: entityIdSchema.nullable(),
   })
