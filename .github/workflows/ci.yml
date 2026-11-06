@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-test-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 22 LTS; check-latest picks up the newest security release (>= 22.23.4).
+          node-version: '22'
+          check-latest: true
+          cache: npm
+
+      - name: Check Node version against security policy
+        run: node --input-type=module -e "import { evaluateNodeVersion } from './bin/node-version-policy.mjs'; const v = evaluateNodeVersion(process.version); console.log(v.reason); if (!v.accepted) process.exit(1);"
+
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - name: Smoke test the bundled app
+        run: node scripts/smoke-test-dist.mjs
+
+      - name: Check install size (dist < 15 MB)
+        run: |
+          size_kb=$(du -sk dist | cut -f1)
+          echo "dist size: ${size_kb} KB"
+          test "$size_kb" -lt 15360

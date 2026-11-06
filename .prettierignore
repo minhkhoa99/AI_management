@@ -1,0 +1,14 @@
+node_modules
+dist
+.next
+out
+coverage
+package-lock.json
+docs/design
+apps/web/next-env.d.ts
+*.bundle
+.playwright-mcp
+AI_management.bundle
+IMPLEMENTATION_PLAN.md
+UI_MAPPING.md
+index.html

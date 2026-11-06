@@ -1,0 +1,29 @@
+.emptyState {
+  padding: 28px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 720px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 17px;
+}
+
+.description {
+  margin: 0;
+  color: var(--color-text-soft);
+}
+
+.phaseBadge {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-border);
+  color: var(--color-text-soft);
+}
