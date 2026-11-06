@@ -34,6 +34,9 @@ jobs:
       - name: Smoke test the bundled app
         run: node scripts/smoke-test-dist.mjs
 
+      - name: Check web bundle budget (framework +10% max, app <= 70 KB, first load <= 230 KB)
+        run: npm run check:bundle
+
       - name: Check install size (dist < 15 MB)
         run: |
           size_kb=$(du -sk dist | cut -f1)
