@@ -1,0 +1,118 @@
+/* Design tokens taken from docs/design/aiteam-ui.html. Use the variables, never raw hex values. */
+:root {
+  --color-bg: #080d1a;
+  --color-sidebar: #0b1222;
+  --color-topbar: #0a1020;
+  --color-surface: #0e172b;
+  --color-surface-deep: #050913;
+  --color-border: #1e2a47;
+  --color-border-input: #24314f;
+  --color-border-strong: #33436a;
+  --color-hover: #1a2642;
+  --color-nav-active: #16213a;
+  --color-text: #e6ecf5;
+  --color-text-soft: #c5d0e3;
+  --color-text-muted: #9aa8c1;
+  --color-placeholder: #7f8ca6;
+  --color-link: #7fb0ff;
+  --color-link-hover: #a9c9ff;
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2f74e8;
+  --color-action: #f97316;
+  --color-action-hover: #fb8a3c;
+  --color-on-action: #1a0a00;
+  --color-brand-chip: #1d3a70;
+  --color-avatar-bg: #2a2456;
+  --color-avatar-fg: #cec8ff;
+  --color-success: #34d399;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+
+  --font-heading-stack: var(--font-heading), 'Space Grotesk', system-ui, sans-serif;
+  --font-body-stack: var(--font-body), 'Be Vietnam Pro', system-ui, sans-serif;
+  --font-mono-stack: ui-monospace, Menlo, Consolas, monospace;
+
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --page-gutter: clamp(16px, 3vw, 32px);
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body-stack);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+a {
+  color: var(--color-link);
+}
+
+a:hover {
+  color: var(--color-link-hover);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+input::placeholder {
+  color: var(--color-placeholder);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading-stack);
+  font-weight: 600;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

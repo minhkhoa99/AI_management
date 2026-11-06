@@ -1,0 +1,27 @@
+/* Same flex-wrap trick as the design: sidebar stacks above content on narrow screens. */
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.main {
+  flex: 999 1 600px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  padding: 22px var(--page-gutter) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .main {
+    flex-basis: 100%;
+  }
+}
