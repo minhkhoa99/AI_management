@@ -1,0 +1,37 @@
+.departmentTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.departmentTab {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-soft);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.departmentTab[aria-selected='true'] {
+  background: var(--color-brand-chip);
+  color: #ffffff;
+}
+
+.departmentTab:not([aria-selected='true']):hover {
+  background: var(--color-hover);
+}
+
+.colorDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}

@@ -1,11 +1,11 @@
-import { EmptyState } from '../../shared/ui/empty-state';
+import { Suspense } from 'react';
+import { WorkflowsScreen } from '../../features/workflows/components/workflows-screen';
 
 export default function WorkflowsPage() {
+  // useSearchParams needs a Suspense boundary in a static export.
   return (
-    <EmptyState
-      heading="Chưa có quy trình"
-      description="Định nghĩa các bước, điều kiện chuyển bước và hành vi khi không đạt cho từng phòng."
-      deliveredInPhase={3}
-    />
+    <Suspense fallback={null}>
+      <WorkflowsScreen />
+    </Suspense>
   );
 }
