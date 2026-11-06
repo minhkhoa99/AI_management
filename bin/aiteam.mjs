@@ -31,7 +31,6 @@ const path = (await import('node:path')).default;
 const { fileURLToPath } = await import('node:url');
 const { parseArgs } = await import('node:util');
 
-const DEFAULT_PORT = 4321;
 const SESSION_TOKEN_BYTES = 32;
 const DOCTOR_COMMAND_TIMEOUT_MS = 15_000;
 
@@ -50,8 +49,12 @@ function printUsage() {
   aiteam [--port <số>] [--no-open]   Khởi động AI Team và mở trình duyệt
   aiteam doctor                      Kiểm tra Node, git, Claude Code, Codex
 
+Cổng: --port, nếu không có thì AITEAM_PORT, nếu không có thì 7419.
+Cổng đang bận thì tự thử cổng trống kế tiếp; URL in ra là cổng thật.
+
 Biến môi trường:
-  AITEAM_HOME   Thư mục dữ liệu (mặc định ~/.aiteam)`);
+  AITEAM_HOME   Thư mục dữ liệu (mặc định ~/.aiteam)
+  AITEAM_PORT   Cổng ưu tiên`);
 }
 
 function parseLauncherArguments(argv) {
@@ -64,16 +67,27 @@ function parseLauncherArguments(argv) {
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
-  const port = values.port === undefined ? DEFAULT_PORT : Number(values.port);
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error(`--port phải là số nguyên 1-65535, nhận được "${values.port}".`);
-  }
   return {
     subcommand: positionals[0],
-    port,
+    portOverride: values.port,
     shouldOpenBrowser: !values['no-open'],
     shouldPrintHelp: values.help,
   };
+}
+
+/** --port wins over AITEAM_PORT, which wins over the default port. */
+function resolvePreferredPort(portOverride, defaultPort) {
+  const [sourceLabel, rawPort] =
+    portOverride !== undefined
+      ? ['--port', portOverride]
+      : process.env.AITEAM_PORT !== undefined && process.env.AITEAM_PORT !== ''
+        ? ['AITEAM_PORT', process.env.AITEAM_PORT]
+        : ['mặc định', String(defaultPort)];
+  const port = Number(rawPort);
+  if (!/^\d+$/.test(rawPort) || port < 1 || port > 65_535) {
+    throw new Error(`${sourceLabel} phải là số nguyên 1-65535, nhận được "${rawPort}".`);
+  }
+  return port;
 }
 
 function resolveAiteamHome() {
@@ -114,36 +128,32 @@ async function startApplication(options) {
   const version = readPackageVersion();
   const sessionToken = randomBytes(SESSION_TOKEN_BYTES).toString('base64url');
 
-  const { startAiteamServer } = createRequire(import.meta.url)(serverBundlePath);
-  let runningServer;
-  try {
-    runningServer = await startAiteamServer({
-      port: options.port,
-      version,
-      sessionToken,
-      dataDirectory,
-      logDirectory,
-      webRootDirectory,
-    });
-  } catch (error) {
-    if (error?.code === 'EADDRINUSE') {
-      throw new Error(
-        `Cổng ${options.port} đang được dùng. Thử: aiteam --port ${options.port + 1}`,
-        {
-          cause: error,
-        },
-      );
-    }
-    throw error;
-  }
+  const { startAiteamServer, DEFAULT_SERVER_PORT, SESSION_QUERY_PARAM } = createRequire(
+    import.meta.url,
+  )(serverBundlePath);
+  const preferredPort = resolvePreferredPort(options.portOverride, DEFAULT_SERVER_PORT);
+  const runningServer = await startAiteamServer({
+    preferredPort,
+    version,
+    sessionToken,
+    dataDirectory,
+    logDirectory,
+    webRootDirectory,
+  });
 
-  const openUrl = `${runningServer.baseUrl}/?token=${sessionToken}`;
+  // Opened once: the server swaps the token for an HttpOnly cookie and redirects to /.
+  const openUrl = `${runningServer.baseUrl}/?${SESSION_QUERY_PARAM}=${sessionToken}`;
+  const portNotice =
+    runningServer.listenPort === preferredPort
+      ? ''
+      : `
+  Cổng ${preferredPort} đang bận, dùng cổng ${runningServer.listenPort}.`;
   const readyAfterMs = Math.round(performance.now());
   console.log(`AI Team v${version} đang chạy
   Mở:       ${openUrl}
   Dữ liệu:  ${aiteamHome}
   Log:      ${path.join(logDirectory, 'aiteam.log')}
-  Sẵn sàng sau ${readyAfterMs} ms. Nhấn Ctrl+C để dừng.`);
+  Sẵn sàng sau ${readyAfterMs} ms. Nhấn Ctrl+C để dừng.${portNotice}`);
 
   if (options.shouldOpenBrowser) {
     openBrowser(openUrl);

@@ -97,6 +97,32 @@ describe('applyPendingMigrations', () => {
     }
   });
 
+  it('rolls back a table rebuild that leaves foreign key violations and restores enforcement', () => {
+    database.exec(`
+      CREATE TABLE parents (id TEXT PRIMARY KEY);
+      CREATE TABLE children (id TEXT PRIMARY KEY, parent_id TEXT REFERENCES parents (id) ON DELETE CASCADE);
+      INSERT INTO parents VALUES ('p1');
+      INSERT INTO children VALUES ('c1', 'p1');
+    `);
+    const rebuildLosingParent: SqlMigration = {
+      version: 1,
+      name: 'rebuild-parents-badly',
+      rebuildsTables: true,
+      sql: `
+        CREATE TABLE parents_rebuilt (id TEXT PRIMARY KEY);
+        DROP TABLE parents;
+        ALTER TABLE parents_rebuilt RENAME TO parents;
+      `,
+    };
+
+    expect(() => applyPendingMigrations(database, [rebuildLosingParent])).toThrow(
+      expect.objectContaining({ code: 'MIGRATION_FOREIGN_KEY_VIOLATION' }),
+    );
+    expect(database.prepare('SELECT id FROM parents').all()).toEqual([{ id: 'p1' }]);
+    expect(database.prepare('SELECT id FROM children').all()).toEqual([{ id: 'c1' }]);
+    expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
+  });
+
   it('rejects migrations that are not strictly ascending', () => {
     expect(() => applyPendingMigrations(database, [addNotesAuthor, createNotesTable])).toThrow(
       expect.objectContaining({ code: 'MIGRATION_DEFINITION_INVALID' }),
@@ -160,7 +186,7 @@ describe('migration 001 initial schema', () => {
       .prepare("INSERT INTO departments (id, name, color) VALUES ('dev', 'Dev', '#3B82F6')")
       .run();
     const insertTask = database.prepare(
-      "INSERT INTO tasks (id, department_id, title, priority, status) VALUES (?, 'dev', 'Task', 'high', ?)",
+      "INSERT INTO tasks (id, department_id, title, priority, status) VALUES (?, 'dev', 'Task', 1, ?)",
     );
 
     insertTask.run('t1', 'waiting_approval');

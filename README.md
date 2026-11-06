@@ -10,7 +10,7 @@ Yêu cầu Node LTS đã vá bảo mật: 22.23.4+, 24.22.1+ hoặc 26.12.1+.
 ```
 npm install
 npm run build
-node bin/aiteam.mjs          # mở http://127.0.0.1:4321 kèm token phiên
+node bin/aiteam.mjs          # mở http://127.0.0.1:7419 (cổng bận thì dùng cổng kế tiếp)
 node bin/aiteam.mjs doctor   # kiểm tra node, git, claude, codex
 ```
 

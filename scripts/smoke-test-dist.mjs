@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Starts the bundled server from dist/ against a throwaway data directory and checks that
-// /api/health answers, the UI is served and the API rejects calls without the session token.
+// /api/health answers, the UI is served, the session link sets the cookie and the API accepts
+// the cookie but rejects calls without it.
 // Unit tests run TypeScript sources through SWC; this proves the esbuild bundle itself works
 // (decorator metadata, lazy requires, static files).
 import { randomBytes } from 'node:crypto';
@@ -23,10 +24,11 @@ function assertSmokeExpectation(condition, description) {
   console.log(`ok  ${description}`);
 }
 
+const sessionToken = randomBytes(32).toString('base64url');
 const runningServer = await startAiteamServer({
-  port: 4399,
+  preferredPort: 4399,
   version: '0.0.0-smoke',
-  sessionToken: randomBytes(32).toString('base64url'),
+  sessionToken,
   dataDirectory: path.join(aiteamHome, 'data'),
   logDirectory: path.join(aiteamHome, 'logs'),
   webRootDirectory: path.join(repositoryRoot, 'dist', 'web'),
@@ -50,11 +52,30 @@ try {
   const unauthorisedResponse = await fetch(`${runningServer.baseUrl}/api/departments`);
   assertSmokeExpectation(
     unauthorisedResponse.status === 403,
-    'API call without session token is rejected',
+    'API call without session cookie is rejected',
+  );
+
+  const exchangeResponse = await fetch(`${runningServer.baseUrl}/?session=${sessionToken}`, {
+    redirect: 'manual',
+  });
+  const sessionCookie = (exchangeResponse.headers.get('set-cookie') ?? '').split(';')[0];
+  assertSmokeExpectation(
+    exchangeResponse.status === 303 &&
+      exchangeResponse.headers.get('location') === '/' &&
+      sessionCookie.startsWith('aiteam_session='),
+    'session link sets the cookie and redirects to /',
+  );
+
+  const authorisedResponse = await fetch(`${runningServer.baseUrl}/api/departments`, {
+    headers: { cookie: sessionCookie },
+  });
+  assertSmokeExpectation(
+    authorisedResponse.status === 404,
+    'API call with session cookie passes authentication',
   );
   assertSmokeExpectation(
-    runningServer.appliedMigrationVersions.includes(1),
-    'migration 001 applied on a fresh database',
+    runningServer.appliedMigrationVersions.join(',') === '1,2',
+    'migrations 001 and 002 applied on a fresh database',
   );
 } finally {
   await runningServer.stopServer();

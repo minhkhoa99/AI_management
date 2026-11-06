@@ -37,24 +37,58 @@ export function applyPendingMigrations(
     if (recordedVersions.has(migration.version)) {
       continue;
     }
-    database.exec('BEGIN IMMEDIATE');
-    try {
-      database.exec(migration.sql);
-      recordMigration.run(migration.version, migration.name);
-      database.exec('COMMIT');
-    } catch (error) {
-      database.exec('ROLLBACK');
-      throw new MigrationFailedError(
-        'MIGRATION_FAILED',
-        `Migration ${formatMigrationLabel(migration)} failed; schema left at previous version.`,
-        error,
-      );
-    }
+    applyMigrationAtomically(database, migration, () =>
+      recordMigration.run(migration.version, migration.name),
+    );
     appliedVersions.push(migration.version);
   }
 
   const lastMigration = migrations.at(-1);
   return { appliedVersions, currentVersion: lastMigration?.version ?? 0 };
+}
+
+function applyMigrationAtomically(
+  database: DatabaseSync,
+  migration: SqlMigration,
+  recordInHistory: () => void,
+): void {
+  if (migration.rebuildsTables === true) {
+    database.exec('PRAGMA foreign_keys = OFF');
+  }
+  try {
+    database.exec('BEGIN IMMEDIATE');
+    try {
+      database.exec(migration.sql);
+      if (migration.rebuildsTables === true) {
+        assertNoForeignKeyViolations(database, migration);
+      }
+      recordInHistory();
+      database.exec('COMMIT');
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error instanceof MigrationFailedError
+        ? error
+        : new MigrationFailedError(
+            'MIGRATION_FAILED',
+            `Migration ${formatMigrationLabel(migration)} failed; schema left at previous version.`,
+            error,
+          );
+    }
+  } finally {
+    if (migration.rebuildsTables === true) {
+      database.exec('PRAGMA foreign_keys = ON');
+    }
+  }
+}
+
+function assertNoForeignKeyViolations(database: DatabaseSync, migration: SqlMigration): void {
+  const violations = database.prepare('PRAGMA foreign_key_check').all();
+  if (violations.length > 0) {
+    throw new MigrationFailedError(
+      'MIGRATION_FOREIGN_KEY_VIOLATION',
+      `Migration ${formatMigrationLabel(migration)} left ${violations.length} foreign key violation(s); rolled back.`,
+    );
+  }
 }
 
 function assertMigrationsAreOrdered(migrations: readonly SqlMigration[]): void {

@@ -132,6 +132,8 @@ async function bundleServer() {
     keepNames: true,
     legalComments: 'none',
     external: OPTIONAL_RUNTIME_MODULES,
+    // Migrations written as .sql files are embedded in the bundle as strings.
+    loader: { '.sql': 'text' },
     plugins: [swcDecoratorMetadataPlugin],
     logLevel: 'warning',
   });

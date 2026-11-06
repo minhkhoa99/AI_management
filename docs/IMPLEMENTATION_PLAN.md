@@ -123,8 +123,8 @@ Module providers đăng ký các engine theo token DI. `EngineResolver` chọn e
 |---|---|
 | departments | id, name, color, enabled, team_mode, created_at |
 | positions | id, department_id, title, reports_to_position_id, agent_id, enabled |
-| agents | id, name, role, provider (claude_code / codex / custom), connection_id, model, permission_mode, enabled |
-| provider_connections | id, name, format (openai / anthropic), base_url, encrypted_key, models_json, default_model |
+| agents | id, name, role, provider, connection_id, model, access_level, network_access, enabled |
+| provider_connections | id, name, format, base_url, encrypted_key, models_json, default_model |
 | workflows | id, department_id, name, description, is_default, enforce, rules_json |
 | workflow_steps | id, workflow_id, position, name, owner_role, gate, on_fail, fail_target_step_id, max_retries, required_output |
 | tasks | id, department_id, workflow_id, title, description, criteria, priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, created_at, updated_at |
@@ -135,6 +135,22 @@ Module providers đăng ký các engine theo token DI. `EngineResolver` chọn e
 | approvals | id, task_id, summary, detail_json, status, decided_at |
 
 Trạng thái task: `queued → running → waiting_children → waiting_approval → succeeded | failed | cancelling → cancelled`.
+
+**Giá trị liệt kê** được định nghĩa một lần trong `packages/contracts/src/enumerations.ts` (mảng `as const` + `z.enum`), SQL có `CHECK` tương ứng (migration `002_constrain_enumerations.sql`). Test chèn từng giá trị của contracts và so danh sách trong `CHECK` để phát hiện lệch.
+
+| Cột | Giá trị |
+|---|---|
+| departments.team_mode | `orchestrator` \| `claude_code_teams` \| `codex_subagents` |
+| agents.provider | `claude_code` \| `codex` \| `custom_api` (`custom_api` bắt buộc có `connection_id`) |
+| agents.access_level | `read_only` \| `edit_workspace` (mặc định `read_only`) |
+| agents.network_access | `0` \| `1` (mặc định `0`) |
+| provider_connections.format | `openai` \| `anthropic` |
+| tasks.priority | INTEGER `1` (cao) \| `2` (vừa) \| `3` (thấp) |
+| tasks.status | `queued` \| `running` \| `waiting_children` \| `waiting_approval` \| `succeeded` \| `failed` \| `cancelling` \| `cancelled` |
+| workflow_steps.gate | `auto` \| `tests_pass` \| `qc_pass` \| `lead_approval` \| `user_approval` |
+| workflow_steps.on_fail | `retry` \| `return_to_step` \| `stop` |
+
+Ràng buộc kết hợp ở `workflow_steps`: `return_to_step` bắt buộc có `fail_target_step_id`, các giá trị khác thì cột này phải `NULL`; `retry` thì `max_retries` từ 1 đến 5.
 
 Patch lớn và tài liệu QA lưu thành file trong `~/.aiteam/data/`, bảng chỉ giữ đường dẫn, để cơ sở dữ liệu luôn gọn.
 
@@ -153,7 +169,11 @@ Patch lớn và tài liệu QA lưu thành file trong `~/.aiteam/data/`, bảng 
 7. **Testability:** domain và use case có unit test với repository trong bộ nhớ và engine giả. Mỗi engine có contract test chạy trên file JSONL ghi sẵn từ Claude Code và Codex thật. Mỗi bug fix đi kèm một regression test.
 8. **Observability:** `AsyncLocalStorage` mang `traceId`, `taskId`, `agentId` xuyên suốt. Mọi log dạng JSON có các trường này. Mỗi task là một trace, mỗi bước là một span lưu trong `task_events`.
 9. **Security by design:**
-   - Chỉ lắng nghe `127.0.0.1`. Khi khởi động, tạo token phiên ngẫu nhiên và gắn vào URL mở trình duyệt; API kiểm tra token để chặn web khác gọi trộm.
+   - Chỉ lắng nghe `127.0.0.1`.
+   - **Phiên đăng nhập bằng cookie:** mỗi lần chạy tạo token ngẫu nhiên (32 byte). `aiteam` mở `/?session=<token>`; server kiểm tra (so sánh constant-time), đặt cookie `aiteam_session` (`HttpOnly; SameSite=Strict; Path=/`) rồi redirect `303` về `/` để xoá token khỏi URL. Mọi API và SSE (`/api/*`) xác thực bằng cookie này; chỉ `/api/health` mở. File giao diện tĩnh không cần phiên (không chứa dữ liệu).
+   - **Kiểm tra Host** cho mọi request: chỉ nhận `127.0.0.1:<port>` hoặc `localhost:<port>` (chống DNS rebinding).
+   - **Kiểm tra Origin** cho `POST/PATCH/PUT/DELETE`: phải là `http://127.0.0.1:<port>` hoặc `http://localhost:<port>`; thiếu Origin cũng bị từ chối.
+   - Token không bao giờ được ghi vào log hay lặp lại trong phản hồi lỗi.
    - Mọi DTO kiểm tra bằng zod.
    - API key của Custom API mã hoá AES-256-GCM, khoá lưu trong `~/.aiteam/secret.key` với quyền 600.
    - Thư mục làm việc phải nằm trong danh sách cho phép.
@@ -172,8 +192,10 @@ Patch lớn và tài liệu QA lưu thành file trong `~/.aiteam/data/`, bảng 
 npm i -g aiteam        # một lần
 aiteam                 # mở ứng dụng: tạo ~/.aiteam, chạy migration, bật server, mở trình duyệt
 aiteam doctor          # kiểm tra Node, git, claude, codex và trạng thái đăng nhập
-aiteam --port 4321     # đổi cổng
+aiteam --port 8000     # đổi cổng ưu tiên (hoặc biến môi trường AITEAM_PORT)
 ```
+
+Cổng mặc định `7419`. Thứ tự ưu tiên: `--port` > `AITEAM_PORT` > `7419`. Nếu cổng đang bận, server thử các cổng kế tiếp (tối đa 20 cổng) và in URL của cổng thật sự dùng.
 
 `bin/aiteam.mjs` chỉ làm bốn việc: kiểm tra phiên bản Node, chuẩn bị thư mục dữ liệu, nạp file server đã bundle, mở trình duyệt. Tắt bằng `Ctrl+C`: các task đang chạy được huỷ an toàn, mốc đã làm được lưu.
 
