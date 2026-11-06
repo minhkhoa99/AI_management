@@ -81,13 +81,13 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 | 4 thẻ KPI (task xong, agent hoạt động, tỉ lệ qua QC, token/chi phí) | `GET /api/overview/metrics` | `CalculateOverviewMetricsUseCase` · tracing | 4 |
 | Biểu đồ task theo giờ | `GET /api/overview/throughput?range=today` | `AggregateHourlyThroughputUseCase` · tracing | 4 |
 | Chi phí theo bộ não | `GET /api/overview/usage-by-provider` | `AggregateUsageByProviderUseCase` · tracing | 4 |
-| Bảng agent: lọc phòng, tìm, chọn nhiều | `GET /api/agents?departmentId=&q=` | `ListAgentsUseCase` · agents | 1 |
+| Bảng agent: lọc phòng, tìm, chọn nhiều (cột task xong, tỉ lệ thành công, chi phí có ở GĐ 3–4) | `GET /api/agents?departmentId=&q=` | `ListAgentsUseCase` · agents | 1 |
 | Bật/tắt một agent | `PATCH /api/agents/:id/enabled` | `ToggleAgentUseCase` · agents | 1 |
 | Bật/tắt hàng loạt | `PATCH /api/agents/enabled` `{ ids, enabled }` | `ToggleAgentsInBulkUseCase` · agents | 1 |
 | Bấm tên agent → mở sơ đồ | điều hướng `/org?dept=…&agent=…` | — | 1 |
 | Chờ bạn duyệt: Duyệt / Từ chối | `POST /api/approvals/:id/decision` `{ approved }` | `DecideApprovalUseCase` · orchestration | 3 |
 | Hoạt động gần đây | `GET /api/activity?limit=6`, SSE `/api/stream/workspace` | `ListRecentActivityUseCase` · tracing | 4 |
-| Thẻ phòng ban | `GET /api/departments/summary` | `SummarizeDepartmentsUseCase` · departments | 1 |
+| Thẻ phòng ban (trưởng phòng, số agent, avatar thành viên; task mở và chi phí có ở GĐ 3–4) | `GET /api/departments/summary` | `SummarizeDepartmentsUseCase` · departments | 1 |
 
 ### 4.3 Sơ đồ tổ chức `/org?dept=&agent=`
 
@@ -99,11 +99,18 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 | Cây phân cấp dạng khối | `GET /api/departments/:id/org-tree` | `BuildOrgTreeUseCase` · departments | 1 |
 | Nút + trên khối (thêm cấp dưới) | mở form với `reportsTo` điền sẵn | — | 1 |
 | Form thêm thành viên | `POST /api/departments/:id/members` `{ name, role, provider, connectionId?, model?, reportsToPositionId }` | `AddDepartmentMemberUseCase` (tạo agent + ghế trong một transaction) · departments + agents | 1 |
+| Thêm / sửa / xoá phòng | `POST /api/departments` `{ name, color }`, `PATCH /api/departments/:id` `{ name?, color? }`, `DELETE /api/departments/:id` (chặn khi còn thành viên) | `CreateDepartmentUseCase`, `UpdateDepartmentUseCase`, `DeleteDepartmentUseCase` · departments | 1 |
+| Chi tiết agent: thông tin, cấp dưới | `GET /api/agents/:id` | `GetAgentDetailUseCase` · agents | 1 |
+| Chi tiết agent: sửa tên, vai trò | `PATCH /api/departments/:id/members/:positionId` `{ name?, role? }` | `UpdateDepartmentMemberUseCase` · departments | 1 |
+| Chi tiết agent: đổi cấp trên | `PUT /api/departments/:id/members/:positionId/reports-to` `{ reportsToPositionId }` | `ChangeReportingLineUseCase` (chặn vòng lặp) · departments | 1 |
+| Chi tiết agent: xoá khỏi phòng | `DELETE /api/departments/:id/members/:positionId` (chặn khi còn cấp dưới) | `RemoveDepartmentMemberUseCase` (xoá ghế + agent) · departments | 1 |
 | Chi tiết agent: đổi bộ não | `PATCH /api/agents/:id/provider` | `ChangeAgentProviderUseCase` · agents | 2 |
 | Cấu hình Custom API của agent (kết nối + model) | `GET /api/provider-connections`, `PATCH /api/agents/:id/provider` | như trên · agents + providers | 2 |
 | "Xem trực tiếp agent này" | điều hướng `/monitor?agent=…` | — | 4 |
 
 Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế chỉ có một agent; tắt phòng thì task mới bị từ chối.
+
+Đã chốt ở Giai đoạn 1: mỗi thành viên = một ghế + một agent (tạo/xoá cùng nhau); mỗi phòng đúng một trưởng phòng (gốc), người khác báo cáo cho thành viên cùng phòng; vai trò là danh sách cố định `AGENT_ROLES`; xoá agent còn cấp dưới hoặc phòng còn thành viên đều bị chặn; tắt phòng giữ nguyên cờ bật/tắt riêng của từng agent. Custom API chỉ chọn được khi có kết nối (Giai đoạn 2).
 
 ### 4.4 Quy trình `/workflows?dept=&workflow=`
 
