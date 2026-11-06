@@ -16,7 +16,10 @@ const ENGINE_PRESENTATION = {
     via: 'claude -p · tài khoản Claude đã đăng nhập',
     modelSuggestions: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
     modelPlaceholder: 'Mặc định của Claude Code',
-    dangerNote: 'Chặn rm -rf, git push, git reset --hard, npm publish khi chạy tự động',
+    commandSafety: {
+      kind: 'toggle',
+      label: 'Chặn rm -rf, git push, git reset --hard, npm publish khi chạy tự động',
+    },
     background: '#1C3256',
     foreground: '#B9D3FF',
   },
@@ -26,7 +29,11 @@ const ENGINE_PRESENTATION = {
     via: 'codex exec · tài khoản ChatGPT đã đăng nhập',
     modelSuggestions: [] as string[],
     modelPlaceholder: 'Mặc định của Codex',
-    dangerNote: 'Codex chạy lệnh trong sandbox: chỉ ghi trong thư mục của task',
+    commandSafety: {
+      kind: 'note',
+      label:
+        'Lệnh nguy hiểm do sandbox của Codex giới hạn: agent chỉ đọc chạy read-only; agent được sửa chỉ ghi trong thư mục của task, mạng theo công tắc bên dưới. Codex không lọc từng lệnh.',
+    },
     background: '#113329',
     foreground: '#86E8C4',
   },
@@ -126,21 +133,25 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
         </span>
       )}
 
-      <ToggleSwitch
-        pressed={engine.settings.blockDangerousCommands}
-        accessibleLabel={presentation.dangerNote}
-        visibleLabel={presentation.dangerNote}
-        onToggle={() =>
-          void performAction(
-            () =>
-              updateLocalEngineSettings(engine.engine, {
-                blockDangerousCommands: !engine.settings.blockDangerousCommands,
-              }),
-            () => null,
-          )
-        }
-        disabled={isPending || engine.engine === 'codex'}
-      />
+      {presentation.commandSafety.kind === 'toggle' ? (
+        <ToggleSwitch
+          pressed={engine.settings.blockDangerousCommands}
+          accessibleLabel={presentation.commandSafety.label}
+          visibleLabel={presentation.commandSafety.label}
+          onToggle={() =>
+            void performAction(
+              () =>
+                updateLocalEngineSettings(engine.engine, {
+                  blockDangerousCommands: !engine.settings.blockDangerousCommands,
+                }),
+              () => null,
+            )
+          }
+          disabled={isPending}
+        />
+      ) : (
+        <p className={styles.fieldHint}>{presentation.commandSafety.label}</p>
+      )}
       <ToggleSwitch
         pressed={engine.settings.allowNetwork}
         accessibleLabel="Cho phép truy cập mạng (giới hạn trên cho mọi agent dùng engine này)"
