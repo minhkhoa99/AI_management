@@ -1,6 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { AgentEngineEvent } from '@aiteam/contracts';
 import { AppError } from '../../../../../shared/errors/app-error';
+import {
+  CLI_PROCESS_TRACKER,
+  type CliProcessTracker,
+} from '../../../../../shared/runtime/cli-process-tracker';
 import type {
   AgentEnginePort,
   AgentSessionRequest,
@@ -38,6 +42,8 @@ const DANGEROUS_COMMAND_RULES = [
  */
 @Injectable()
 export class ClaudeCodeCliEngine implements AgentEnginePort {
+  constructor(@Inject(CLI_PROCESS_TRACKER) private readonly processTracker: CliProcessTracker) {}
+
   async *startSession(
     request: AgentSessionRequest,
     signal: AbortSignal,
@@ -54,7 +60,7 @@ export class ClaudeCodeCliEngine implements AgentEnginePort {
     }
     const translator = new ClaudeStreamTranslator();
     try {
-      for await (const output of streamCliOutput(invocation, signal)) {
+      for await (const output of streamCliOutput(invocation, signal, this.processTracker)) {
         const events =
           output.kind === 'line'
             ? translator.translateClaudeLine(output.text)

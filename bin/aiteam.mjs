@@ -140,6 +140,7 @@ async function startApplication(options) {
     logDirectory,
     secretKeyFilePath: path.join(aiteamHome, 'secret.key'),
     webRootDirectory,
+    installFatalErrorHandlers: true,
   });
 
   // Opened once: the server swaps the token for an HttpOnly cookie and redirects to /.

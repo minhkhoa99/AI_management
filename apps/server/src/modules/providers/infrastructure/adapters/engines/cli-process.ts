@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import { EngineUnavailableError } from '../../../../../shared/errors/app-error';
+import type { CliProcessTracker } from '../../../../../shared/runtime/cli-process-tracker';
+import { osProcessTerminator } from '../../../../../shared/runtime/process-termination';
 
 export interface ResolvedExecutable {
   command: string;
@@ -29,7 +31,6 @@ export type CliOutput =
     };
 
 const STDERR_TAIL_BYTES = 8 * 1024;
-const FORCE_KILL_DELAY_MS = 3_000;
 
 /**
  * Finds a CLI on PATH without using a shell. On Windows a native .exe is preferred; an npm
@@ -92,6 +93,7 @@ function createCliMissingError(executableName: string): EngineUnavailableError {
 export async function* streamCliOutput(
   invocation: CliInvocation,
   signal: AbortSignal,
+  processTracker?: CliProcessTracker,
 ): AsyncGenerator<CliOutput> {
   const child = spawn(
     invocation.executable.command,
@@ -104,6 +106,11 @@ export async function* streamCliOutput(
       detached: process.platform !== 'win32',
     },
   );
+  // Recorded so a restart after a crash can kill it if it outlives the server.
+  const forgetProcess =
+    child.pid === undefined
+      ? undefined
+      : processTracker?.recordSpawnedProcess(child.pid, invocation.executable.command);
 
   let stderrTail = '';
   child.stderr?.setEncoding('utf8');
@@ -112,7 +119,10 @@ export async function* streamCliOutput(
   });
   const exitCodePromise = new Promise<number | null>((resolve, reject) => {
     child.once('error', reject);
-    child.once('close', (exitCode) => resolve(exitCode));
+    child.once('close', (exitCode) => {
+      forgetProcess?.();
+      resolve(exitCode);
+    });
   });
   // Spawn failures surface through the exit promise; keep it from being reported as unhandled.
   exitCodePromise.catch(() => undefined);
@@ -120,7 +130,7 @@ export async function* streamCliOutput(
   let cancelled = false;
   const stopOnAbort = () => {
     cancelled = true;
-    terminateProcessTree(child);
+    stopChildProcessTree(child);
   };
   if (signal.aborted) {
     stopOnAbort();
@@ -159,38 +169,13 @@ export async function* streamCliOutput(
     signal.removeEventListener('abort', stopOnAbort);
     if (child.exitCode === null && child.signalCode === null) {
       // Consumer stopped early (break/return): do not leave the CLI running.
-      terminateProcessTree(child);
+      stopChildProcessTree(child);
     }
   }
 }
 
-export function terminateProcessTree(child: ChildProcess): void {
-  if (child.pid === undefined || child.exitCode !== null) {
-    return;
+function stopChildProcessTree(child: ChildProcess): void {
+  if (child.pid !== undefined && child.exitCode === null) {
+    osProcessTerminator.terminateProcessTree(child.pid);
   }
-  if (process.platform === 'win32') {
-    spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
-      windowsHide: true,
-      stdio: 'ignore',
-    }).on('error', () => child.kill());
-    return;
-  }
-  const processGroupId = -child.pid;
-  try {
-    process.kill(processGroupId, 'SIGTERM');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-      throw error;
-    }
-    return;
-  }
-  setTimeout(() => {
-    try {
-      process.kill(processGroupId, 'SIGKILL');
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
-        throw error;
-      }
-    }
-  }, FORCE_KILL_DELAY_MS).unref();
 }

@@ -14,7 +14,13 @@ import { ValidationError } from './shared/errors/app-error';
 import { applyPendingMigrations } from './shared/database/migration-runner';
 import { ALL_MIGRATIONS } from './shared/database/migrations';
 import { openSqliteDatabase } from './shared/database/sqlite-connection';
+import { randomUuidGenerator } from './shared/identifiers/id-generator';
 import { createAppLogger } from './shared/logging/app-logger';
+import { AgentSessionSupervisor } from './shared/runtime/agent-session-supervisor';
+import {
+  installFatalErrorHandlers,
+  SESSION_SHUTDOWN_TIMEOUT_MS,
+} from './shared/runtime/fatal-error-handler';
 
 // Re-exported for the launcher (bin/aiteam.mjs), which cannot import TypeScript contracts.
 export { DEFAULT_SERVER_PORT, SESSION_QUERY_PARAM } from '@aiteam/contracts';
@@ -37,6 +43,11 @@ export interface StartAiteamServerOptions {
   secretKeyFilePath?: string;
   webRootDirectory?: string;
   logLevel?: LevelWithSilent;
+  /**
+   * Install process-wide unhandledRejection/uncaughtException handlers (crash report, cancel
+   * sessions, exit 1). Only the launcher sets this; tests must not take over the process.
+   */
+  installFatalErrorHandlers?: boolean;
 }
 
 export interface RunningAiteamServer {
@@ -66,6 +77,18 @@ export async function startAiteamServer(
     logFilePath: path.join(options.logDirectory, 'aiteam.log'),
   });
   const database = openSqliteDatabase(path.join(options.dataDirectory, 'aiteam.db'));
+  const sessionSupervisor = new AgentSessionSupervisor(randomUuidGenerator, logger);
+  const uninstallFatalErrorHandlers =
+    options.installFatalErrorHandlers === true
+      ? installFatalErrorHandlers({
+          logger,
+          sessionSupervisor,
+          crashDirectory: options.logDirectory,
+          appVersion: options.version,
+          exitProcess: (exitCode) => process.exit(exitCode),
+          writeToTerminal: (text) => process.stderr.write(text),
+        })
+      : () => undefined;
 
   try {
     const migrationReport = applyPendingMigrations(database, ALL_MIGRATIONS);
@@ -84,6 +107,7 @@ export async function startAiteamServer(
         },
         database,
         logger,
+        sessionSupervisor,
         webRootDirectory: options.webRootDirectory,
       }),
     );
@@ -99,13 +123,22 @@ export async function startAiteamServer(
       listenPort,
       appliedMigrationVersions: migrationReport.appliedVersions,
       stopServer: async () => {
+        // Same order as a fatal stop: end agent sessions first (bounded), then the server.
+        const { unfinishedOwners } = await sessionSupervisor.cancelAllSessions(
+          SESSION_SHUTDOWN_TIMEOUT_MS,
+        );
+        if (unfinishedOwners.length > 0) {
+          logger.warn({ unfinishedOwners }, 'sessions still running at shutdown');
+        }
         await application.close();
+        uninstallFatalErrorHandlers();
         database.close();
         logger.info('aiteam server stopped');
         logger.flush();
       },
     };
   } catch (error) {
+    uninstallFatalErrorHandlers();
     logger.fatal({ err: error }, 'aiteam server failed to start');
     logger.flush();
     database.close();

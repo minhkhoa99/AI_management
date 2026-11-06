@@ -91,6 +91,17 @@ export default tseslint.config(
     },
   },
   {
+    // Error policy (CLAUDE.md): no promise may be left floating or passed where void is expected.
+    files: ['apps/*/src/**/*.{ts,tsx}', 'packages/*/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },
+    },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+    },
+  },
+  {
     files: ['apps/server/src/**/domain/**/*.ts'],
     rules: {
       'no-restricted-imports': [

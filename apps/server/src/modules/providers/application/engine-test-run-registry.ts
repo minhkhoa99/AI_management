@@ -3,31 +3,31 @@ import type { AgentEngineEvent, EngineTestRunMessage } from '@aiteam/contracts';
 import { ConflictError, NotFoundError } from '../../../shared/errors/app-error';
 import { ID_GENERATOR, type IdGenerator } from '../../../shared/identifiers/id-generator';
 import { APP_LOGGER, type AppLogger } from '../../../shared/logging/app-logger';
+import {
+  AgentSessionSupervisor,
+  type TerminalEngineEvent,
+} from '../../../shared/runtime/agent-session-supervisor';
 
 const TEST_RUN_TIMEOUT_MS = 3 * 60_000;
 const FINISHED_RUN_RETENTION_MS = 10 * 60_000;
 const MAX_BUFFERED_EVENTS = 500;
-const TERMINAL_EVENT_KINDS = new Set<AgentEngineEvent['kind']>([
-  'completed',
-  'failed',
-  'cancelled',
-]);
 
 type TestRunListener = (message: EngineTestRunMessage) => void;
 
 interface TestRunRecord {
   targetKey: string;
+  sessionId: string | null;
   messages: EngineTestRunMessage[];
   finished: boolean;
-  abortController: AbortController;
   listeners: Set<TestRunListener>;
   finishListeners: Set<() => void>;
 }
 
 /**
  * In-memory test runs ("Chạy thử"): one at a time per engine or connection, buffered so a
- * browser connecting late still receives every event, cancelled after a timeout, forgotten
- * a few minutes after finishing.
+ * browser connecting late still receives every event, cancelled after a timeout, forgotten a
+ * few minutes after finishing. Each run is a session of the AgentSessionSupervisor, so its
+ * failures stay inside the run.
  */
 @Injectable()
 export class EngineTestRunRegistry {
@@ -36,6 +36,7 @@ export class EngineTestRunRegistry {
   constructor(
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
     @Inject(APP_LOGGER) private readonly logger: AppLogger,
+    private readonly sessionSupervisor: AgentSessionSupervisor,
   ) {}
 
   startEngineTestRun(
@@ -54,17 +55,22 @@ export class EngineTestRunRegistry {
     const testRunId = this.idGenerator.generateId();
     const record: TestRunRecord = {
       targetKey,
+      sessionId: null,
       messages: [],
       finished: false,
-      abortController: new AbortController(),
       listeners: new Set(),
       finishListeners: new Set(),
     };
     this.testRuns.set(testRunId, record);
-    const timeout = setTimeout(() => record.abortController.abort(), TEST_RUN_TIMEOUT_MS);
-    void this.consumeSession(testRunId, record, openSession).finally(() => {
-      clearTimeout(timeout);
-      this.releaseTestRunResources(testRunId, releaseResources);
+    const timeout = setTimeout(() => this.cancelEngineTestRun(testRunId), TEST_RUN_TIMEOUT_MS);
+    record.sessionId = this.sessionSupervisor.startSupervisedSession({
+      ownerLabel: `test-run:${testRunId}`,
+      openSession,
+      receiveSessionEvent: (event) => this.publishTestRunEvent(record, event),
+      finishSession: (terminalEvent) => {
+        clearTimeout(timeout);
+        this.completeTestRun(testRunId, record, terminalEvent, releaseResources);
+      },
     });
     return testRunId;
   }
@@ -75,7 +81,10 @@ export class EngineTestRunRegistry {
   }
 
   cancelEngineTestRun(testRunId: string): void {
-    this.requireTestRun(testRunId).abortController.abort();
+    const record = this.requireTestRun(testRunId);
+    if (record.sessionId !== null) {
+      this.sessionSupervisor.cancelSupervisedSession(record.sessionId);
+    }
   }
 
   /** Replays buffered messages, then streams new ones; `onFinish` fires once at the end. */
@@ -98,51 +107,21 @@ export class EngineTestRunRegistry {
     };
   }
 
-  private async consumeSession(
+  private completeTestRun(
     testRunId: string,
     record: TestRunRecord,
-    openSession: (signal: AbortSignal) => AsyncIterable<AgentEngineEvent>,
-  ): Promise<void> {
-    let lastEvent: AgentEngineEvent | undefined;
-    try {
-      // Read the session to its natural end even after the terminal event: breaking out early
-      // would kill the CLI while it is still exiting, and its working directory stays locked.
-      for await (const event of openSession(record.abortController.signal)) {
-        if (lastEvent !== undefined && TERMINAL_EVENT_KINDS.has(lastEvent.kind)) {
-          continue;
-        }
-        lastEvent = event;
-        this.publishTestRunEvent(record, event);
-      }
-    } catch (error) {
-      this.logger.error({ err: error, testRunId }, 'engine test run crashed');
-      lastEvent = {
-        kind: 'failed',
-        code: 'INTERNAL_ERROR',
-        message: 'Lỗi nội bộ khi chạy thử.',
-        retryable: false,
-      };
-      this.publishTestRunEvent(record, lastEvent);
-    }
-    if (lastEvent === undefined || !TERMINAL_EVENT_KINDS.has(lastEvent.kind)) {
-      lastEvent = record.abortController.signal.aborted
-        ? { kind: 'cancelled' }
-        : {
-            kind: 'failed',
-            code: 'ENGINE_STREAM_ENDED',
-            message: 'Engine dừng mà không báo kết quả.',
-            retryable: true,
-          };
-      this.publishTestRunEvent(record, lastEvent);
-    }
+    terminalEvent: TerminalEngineEvent,
+    releaseResources: () => void,
+  ): void {
     record.finished = true;
     this.logger.info(
-      { testRunId, targetKey: record.targetKey, outcome: lastEvent.kind },
+      { testRunId, targetKey: record.targetKey, outcome: terminalEvent.kind },
       'engine test run finished',
     );
     record.finishListeners.forEach((notifyFinished) => notifyFinished());
     record.listeners.clear();
     record.finishListeners.clear();
+    this.releaseTestRunResources(testRunId, releaseResources);
     setTimeout(() => this.testRuns.delete(testRunId), FINISHED_RUN_RETENTION_MS).unref();
   }
 
@@ -160,7 +139,9 @@ export class EngineTestRunRegistry {
 
   private publishTestRunEvent(record: TestRunRecord, event: AgentEngineEvent): void {
     const message = { sequence: record.messages.length, event };
-    if (record.messages.length < MAX_BUFFERED_EVENTS || TERMINAL_EVENT_KINDS.has(event.kind)) {
+    const isTerminal =
+      event.kind === 'completed' || event.kind === 'failed' || event.kind === 'cancelled';
+    if (record.messages.length < MAX_BUFFERED_EVENTS || isTerminal) {
       record.messages.push(message);
     }
     record.listeners.forEach((listener) => listener(message));

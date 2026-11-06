@@ -83,7 +83,7 @@ export function AddMemberPanel(props: AddMemberPanelProps) {
 
   return (
     <InlinePanel title={`Thêm thành viên vào ${props.departmentName}`} emphasised>
-      <form className={styles.form} onSubmit={submitMember} noValidate>
+      <form className={styles.form} onSubmit={(event) => void submitMember(event)} noValidate>
         <label className={controlStyles.field}>
           Tên hiển thị
           <input

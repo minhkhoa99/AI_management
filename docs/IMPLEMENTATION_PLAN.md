@@ -168,6 +168,9 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
    - Lớp con: `ValidationError`, `NotFoundError`, `PermissionDeniedError`, `ConflictError`, `EngineUnavailableError` (retryable), `EngineAuthError` (không retry), `RateLimitedError` (retryable, có `retryAfterMs`).
    - `RetryPolicy` chỉ retry lỗi có `retryable = true`, backoff tăng dần, có giới hạn.
    - Filter toàn cục chuyển lỗi thành HTTP kèm `traceId`. Không có `catch` rỗng.
+   - **Cô lập lỗi theo phiên:** mọi phiên agent chạy trong `AgentSessionSupervisor`. Mọi promise, stream và listener của phiên phải được `await` hoặc dẫn lỗi về supervisor. Lỗi trong phiên chuyển thành `failed` của task (hoặc thử lại nếu `retryable`), không lan ra tiến trình. ESLint bật `@typescript-eslint/no-floating-promises` và `no-misused-promises` ở mức error.
+   - **Lỗi cấp tiến trình** (`unhandledRejection`, `uncaughtException`): log `fatal` kèm stack và `traceId`, ghi `~/.aiteam/logs/crash-<timestamp>.json`, huỷ mọi phiên đang chạy và lưu mốc (tối đa 5 giây), flush log, `exit(1)`, in hướng dẫn chạy lại `aiteam`. Không ghi log rồi chạy tiếp. Không thêm tiến trình giám sát.
+   - **Phục hồi khi khởi động:** mỗi tiến trình CLI của phiên được ghi lại PID, tên và thời điểm bắt đầu. Khi khởi động: chỉ kill PID còn sống nếu đúng tên đã ghi (claude/codex) **và** thời điểm bắt đầu khớp (tránh giết nhầm tiến trình được hệ điều hành cấp lại PID); task `running` → `queued` (giữ `session_ref`), `cancelling` → `cancelled`.
 7. **Testability:** domain và use case có unit test với repository trong bộ nhớ và engine giả. Mỗi engine có contract test chạy trên file JSONL ghi sẵn từ Claude Code và Codex thật. Mỗi bug fix đi kèm một regression test.
 8. **Observability:** `AsyncLocalStorage` mang `traceId`, `taskId`, `agentId` xuyên suốt. Mọi log dạng JSON có các trường này. Mỗi task là một trace, mỗi bước là một span lưu trong `task_events`.
 9. **Security by design:**
@@ -270,7 +273,7 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 ### Giai đoạn 5: Hoàn thiện và đóng gói
 
-- Khôi phục sau khi tắt đột ngột: task đang chạy chuyển về `queued` hoặc tiếp tục bằng `session_ref`.
+- Khôi phục sau khi tắt đột ngột: phần nền (kill tiến trình CLI mồ côi, `running` → `queued`, `cancelling` → `cancelled`) đã kéo lên làm trước Giai đoạn 3 (mục 5.6); ở đây chỉ còn tiếp tục phiên bằng `session_ref`.
 - Giới hạn ngân sách theo task/phòng (token, số lượt).
 - Script đo RAM, thời gian khởi động, kích thước gói; tối ưu tới khi đạt mục tiêu.
 - Rà soát bảo mật theo mục 5.9.
