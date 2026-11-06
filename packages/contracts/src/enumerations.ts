@@ -62,6 +62,13 @@ export const TASK_STATUSES = [
 export const taskStatusSchema = z.enum(TASK_STATUSES);
 export type TaskStatus = z.infer<typeof taskStatusSchema>;
 
+/** Statuses a task never leaves on its own. */
+export const FINISHED_TASK_STATUSES = [
+  'succeeded',
+  'failed',
+  'cancelled',
+] as const satisfies readonly TaskStatus[];
+
 /** Condition a workflow step must meet before the task moves to the next step. */
 export const STEP_GATES = [
   'auto',
@@ -80,3 +87,11 @@ export type StepFailureAction = z.infer<typeof stepFailureActionSchema>;
 
 /** Allowed max_retries when on_fail = 'retry'. */
 export const STEP_RETRY_LIMITS = { min: 1, max: 5 } as const;
+
+/**
+ * Who owns a workflow step: an agent role of the department (the platform picks an enabled
+ * agent with that role), or the user. A user-owned step is an approval step (gate user_approval).
+ */
+export const STEP_OWNERS = [...AGENT_ROLES, 'user'] as const;
+export const stepOwnerSchema = z.enum(STEP_OWNERS);
+export type StepOwner = z.infer<typeof stepOwnerSchema>;
