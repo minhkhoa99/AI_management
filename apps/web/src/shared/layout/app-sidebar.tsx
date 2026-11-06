@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { healthResponseSchema } from '@aiteam/contracts';
 import { fetchApiJson } from '../api/api-client';
 import { useApiQuery } from '../api/use-api-query';
+import { SidebarDepartmentList } from '../../features/organization/components/sidebar-department-list';
 import { StrokeIcon } from '../ui/stroke-icon';
 import { findNavigationItemForPath, NAVIGATION_ITEMS } from './navigation-items';
 import styles from './app-sidebar.module.css';
@@ -47,7 +48,7 @@ export function AppSidebar() {
         <h2 id="sidebar-departments" className={styles.sectionLabel}>
           Phòng ban
         </h2>
-        <p className={styles.emptyHint}>Chưa có phòng ban. Tạo phòng ban ở Sơ đồ tổ chức.</p>
+        <SidebarDepartmentList />
       </section>
 
       <ServerStatusCard />
