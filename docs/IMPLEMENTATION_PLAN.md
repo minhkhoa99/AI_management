@@ -262,6 +262,19 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 **Hoàn thành khi:** một task đi đủ chuỗi Manager → PM → Dev → QC theo quy trình mẫu; xoá task giữa chừng thì agent dừng trong vòng 5 giây.
 
+**Quyết định đã chốt (11/2026):**
+
+- **Điều kiện chuyển bước:** `auto` sang bước sau khi agent báo xong. `tests_pass`: nền tảng chạy lệnh test khai báo cho task trong worktree, exit 0 là đạt. `qc_pass`: agent QC phụ trách bước trả kết luận pass/fail dạng JSON cuối lượt. `lead_approval`: mở phiên riêng cho cấp trên của người làm bước, trả pass/fail (người làm là trưởng phòng thì chuyển thành bạn duyệt). `user_approval`: tạo yêu cầu duyệt cho bạn.
+- **Người làm bước:** `workflow_steps.owner_role` là vai trò (`AGENT_ROLES`) hoặc `user` (`STEP_OWNERS`, migration 006); bước của `user` chỉ dùng `user_approval`. Mỗi bước chọn agent đang bật có đúng vai trò trong phòng, ưu tiên cấp dưới trong chuỗi giao việc, ít việc nhất.
+- **Giao việc:** một task đi qua các bước; "Giao xuống" là đổi người nhận sang cấp dưới trực tiếp và ghi vào chuỗi giao việc. Chưa có task con (`waiting_children` để sau).
+- **Việc nhạy cảm:** agent kết thúc lượt bằng khối "cần duyệt" → task `waiting_approval`, phiên dừng; duyệt thì tiếp tục bằng `session_ref`, từ chối thì bước coi như không đạt. Lệnh nguy hiểm vẫn bị chặn như Giai đoạn 2. Không dùng MCP permission prompt.
+- **Tài liệu QA:** mỗi file một request `PUT` thân nhị phân, không thêm `@fastify/multipart`. Chỉ đếm kịch bản cho `.md/.txt/.feature/.csv`; `.pdf/.docx/.xlsx` lưu và đưa đường dẫn để agent tự đọc.
+- **Thư mục cho phép:** là các thư mục bạn đã chọn bằng hộp chọn thư mục của hệ điều hành; đường dẫn gõ tay phải nằm trong một thư mục đã chọn.
+- **Worktree:** thư mục chưa là git repo (hoặc chưa có commit) thì nền tảng tự `git init` và tạo commit ban đầu; bỏ trống thư mục thì tạo thư mục riêng trong `~/.aiteam` rồi làm như trên. Huỷ/xoá task xoá worktree nhưng luôn giữ nhánh `agent/<taskId>`.
+- **Chế độ team:** lưu lựa chọn; chỉ `orchestrator` chạy được (`SUPPORTED_TEAM_MODES`), hai chế độ còn lại hiển thị "chưa hỗ trợ".
+- **Luật chung:** `noSkippingSteps`, `sensitiveActionsNeedApproval`, `allowAgentSubsteps`. "Ghi log mọi bước" không phải luật (luôn ghi); "dừng khi vượt ngân sách" làm cùng ngân sách ở Giai đoạn 5.
+- Giai đoạn 3 chia 3 pull request: (A) quy trình + chế độ team, (B) task CRUD, thư mục, tài liệu QA, kanban, (C) chạy thật: worktree, lập lịch, điều kiện chuyển bước, giao việc, duyệt, huỷ, `engine_snapshot_json`.
+
 ### Giai đoạn 4: Theo dõi và review
 
 - Lưu sự kiện theo lô, SSE theo task và theo phòng.

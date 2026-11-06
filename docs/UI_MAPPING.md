@@ -127,6 +127,8 @@ Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế ch�
 | Luật chung, bắt buộc tuân theo | `PATCH /api/workflows/:id/rules` | `UpdateWorkflowRulesUseCase` · orchestration | 3 |
 | Nhãn "T-142 đang ở bước này" | lấy từ `GET /api/tasks?workflowId=` | đã có ở 4.5 | 3 |
 
+Đã chốt ở Giai đoạn 3: người phụ trách bước là vai trò hoặc "Bạn" (`STEP_OWNERS`); bước quay lại được gửi bằng chỉ số bước đứng trước (`returnToStepIndex`), bước giữ `id` khi sửa; bật/tắt "Bắt buộc tuân theo" và luật chung lưu ngay, chuỗi bước chỉ lưu khi bấm "Lưu quy trình" (nút này nằm trên khung các bước thay vì thanh trên cùng). Luật "Ghi log mọi bước" bỏ (luôn ghi), "Dừng khi vượt ngân sách" để Giai đoạn 5. Chế độ team: `PATCH /api/departments/:id/team-mode`, chỉ Orchestrator chọn được.
+
 ### 4.5 Task `/tasks?dept=&task=`
 
 | Thành phần UI | API | Use case / module | GĐ |
