@@ -12,8 +12,10 @@ import { ProvidersModule } from './modules/providers/providers.module';
 import { TracingModule } from './modules/tracing/tracing.module';
 import { AppExceptionFilter } from './shared/errors/app-exception.filter';
 import { TraceContextMiddleware } from './shared/observability/trace-context.middleware';
-import { LoopbackHostMiddleware } from './shared/security/loopback-host.middleware';
-import { SessionTokenMiddleware } from './shared/security/session-token.middleware';
+import { AllowedHostMiddleware } from './shared/security/allowed-host.middleware';
+import { RequestOriginMiddleware } from './shared/security/request-origin.middleware';
+import { SessionCookieMiddleware } from './shared/security/session-cookie.middleware';
+import { SessionExchangeMiddleware } from './shared/security/session-exchange.middleware';
 import {
   type SharedInfrastructureDependencies,
   SharedInfrastructureModule,
@@ -42,9 +44,16 @@ export class AppModule implements NestModule {
   }
 
   configure(consumer: MiddlewareConsumer): void {
-    // Order matters: trace id first so rejections below are logged with it.
+    // Order matters: trace id first so every rejection below is logged with it; Host before
+    // anything that reads credentials; the session exchange before the cookie check.
     consumer
-      .apply(TraceContextMiddleware, LoopbackHostMiddleware, SessionTokenMiddleware)
+      .apply(
+        TraceContextMiddleware,
+        AllowedHostMiddleware,
+        SessionExchangeMiddleware,
+        RequestOriginMiddleware,
+        SessionCookieMiddleware,
+      )
       .forRoutes(ALL_PATHS);
   }
 }

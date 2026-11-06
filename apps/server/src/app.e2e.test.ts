@@ -6,7 +6,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   apiErrorResponseSchema,
   healthResponseSchema,
-  SESSION_TOKEN_HEADER,
+  SESSION_COOKIE_NAME,
   TRACE_ID_HEADER,
 } from '@aiteam/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -20,7 +20,12 @@ import {
 import { createAppLogger } from './shared/logging/app-logger';
 
 const SESSION_TOKEN = 'test-session-token-0123456789abcdef0123456789';
-const LOOPBACK_HOST = '127.0.0.1:4321';
+const LISTEN_PORT = 7419;
+const ALLOWED_HOST = `127.0.0.1:${LISTEN_PORT}`;
+const ALLOWED_ORIGIN = `http://127.0.0.1:${LISTEN_PORT}`;
+const VALID_SESSION_COOKIE = `${SESSION_COOKIE_NAME}=${SESSION_TOKEN}`;
+
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 describe('aiteam HTTP application (e2e)', () => {
   let application: NestFastifyApplication;
@@ -41,6 +46,7 @@ describe('aiteam HTTP application (e2e)', () => {
         version: '9.9.9-test',
         startedAtEpochMs: Date.now() - 3_000,
         sessionToken: SESSION_TOKEN,
+        listenPort: LISTEN_PORT,
       },
       database,
       logger: createAppLogger({ level: 'silent' }),
@@ -54,92 +60,203 @@ describe('aiteam HTTP application (e2e)', () => {
     rmSync(webRootDirectory, { recursive: true, force: true });
   });
 
-  function sendRequest(url: string, headers: Record<string, string> = {}) {
-    return application.inject({ method: 'GET', url, headers: { host: LOOPBACK_HOST, ...headers } });
+  function sendRequest(
+    url: string,
+    headers: Record<string, string> = {},
+    method: HttpMethod = 'GET',
+  ) {
+    return application.inject({ method, url, headers: { host: ALLOWED_HOST, ...headers } });
   }
 
-  it('GET /api/health answers ok without a session token', async () => {
-    const response = await sendRequest('/api/health');
+  function readErrorCode(response: Awaited<ReturnType<typeof sendRequest>>): string {
+    return apiErrorResponseSchema.parse(response.json()).error.code;
+  }
 
-    expect(response.statusCode).toBe(200);
-    const body = healthResponseSchema.parse(response.json());
-    expect(body.status).toBe('ok');
-    expect(body.version).toBe('9.9.9-test');
-    expect(body.uptimeSeconds).toBeGreaterThanOrEqual(3);
-    expect(response.headers[TRACE_ID_HEADER]).toEqual(expect.any(String));
-  });
+  describe('health', () => {
+    it('answers ok without a session', async () => {
+      const response = await sendRequest('/api/health');
 
-  it('rejects API calls without a session token, with traceId in body and header', async () => {
-    const response = await sendRequest('/api/departments');
-
-    expect(response.statusCode).toBe(403);
-    const body = apiErrorResponseSchema.parse(response.json());
-    expect(body.error.code).toBe('SESSION_TOKEN_INVALID');
-    expect(body.error.traceId).toBe(response.headers[TRACE_ID_HEADER]);
-  });
-
-  it('rejects API calls with a wrong session token', async () => {
-    const response = await sendRequest('/api/departments', {
-      [SESSION_TOKEN_HEADER]: 'wrong-token',
+      expect(response.statusCode).toBe(200);
+      const body = healthResponseSchema.parse(response.json());
+      expect(body).toMatchObject({ status: 'ok', version: '9.9.9-test' });
+      expect(body.uptimeSeconds).toBeGreaterThanOrEqual(3);
+      expect(response.headers[TRACE_ID_HEADER]).toEqual(expect.any(String));
     });
 
-    expect(response.statusCode).toBe(403);
-    expect(apiErrorResponseSchema.parse(response.json()).error.code).toBe('SESSION_TOKEN_INVALID');
+    it('reuses a well-formed incoming trace id', async () => {
+      const response = await sendRequest('/api/health', {
+        [TRACE_ID_HEADER]: 'client-trace-12345',
+      });
+
+      expect(response.headers[TRACE_ID_HEADER]).toBe('client-trace-12345');
+    });
   });
 
-  it.each(['/%61pi/departments', '/api/departments?x=1', '/api/departments/'])(
-    'does not let %s bypass the session token check',
-    async (url) => {
-      const response = await sendRequest(url);
+  describe('session exchange (/?session=<token>)', () => {
+    it('sets an HttpOnly SameSite=Strict cookie and redirects to / with a valid token', async () => {
+      const response = await sendRequest(`/?session=${SESSION_TOKEN}`);
+
+      expect(response.statusCode).toBe(303);
+      expect(response.headers.location).toBe('/');
+      expect(response.headers['set-cookie']).toBe(
+        `${SESSION_COOKIE_NAME}=${SESSION_TOKEN}; HttpOnly; SameSite=Strict; Path=/`,
+      );
+    });
+
+    it('rejects an invalid token without setting a cookie or echoing the token', async () => {
+      const response = await sendRequest('/?session=stale-token-from-old-launch');
 
       expect(response.statusCode).toBe(403);
-    },
-  );
-
-  it('lets a valid session token through to routing (unknown route → JSON 404)', async () => {
-    const response = await sendRequest('/api/departments', {
-      [SESSION_TOKEN_HEADER]: SESSION_TOKEN,
+      expect(readErrorCode(response)).toBe('SESSION_LINK_INVALID');
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(response.body).not.toContain('stale-token-from-old-launch');
     });
 
-    expect(response.statusCode).toBe(404);
-    const body = apiErrorResponseSchema.parse(response.json());
-    expect(body.error.code).toBe('ROUTE_NOT_FOUND');
-    expect(body.error.traceId).toBe(response.headers[TRACE_ID_HEADER]);
+    it('lets the cookie obtained from the exchange call the API', async () => {
+      const exchange = await sendRequest(`/?session=${SESSION_TOKEN}`);
+      const cookiePair = String(exchange.headers['set-cookie']).split(';')[0] ?? '';
+
+      const response = await sendRequest('/api/departments', { cookie: cookiePair });
+
+      // Authenticated: reaches routing (no departments route yet in phase 0).
+      expect(response.statusCode).toBe(404);
+      expect(readErrorCode(response)).toBe('ROUTE_NOT_FOUND');
+    });
   });
 
-  it('never echoes the query string (which may hold the session token) in 404 errors', async () => {
-    const response = await sendRequest('/missing-page?token=leaked-secret-value', {
-      [SESSION_TOKEN_HEADER]: SESSION_TOKEN,
+  describe('session cookie on API and SSE paths', () => {
+    it.each(['/api/departments', '/api/stream/workspace'])(
+      'rejects %s without the cookie',
+      async (url) => {
+        const response = await sendRequest(url);
+
+        expect(response.statusCode).toBe(403);
+        const body = apiErrorResponseSchema.parse(response.json());
+        expect(body.error.code).toBe('SESSION_REQUIRED');
+        expect(body.error.traceId).toBe(response.headers[TRACE_ID_HEADER]);
+      },
+    );
+
+    it.each([
+      ['wrong value', `${SESSION_COOKIE_NAME}=wrong-token`],
+      ['other cookie only', 'unrelated=1'],
+      ['duplicated cookie', `${VALID_SESSION_COOKIE}; ${SESSION_COOKIE_NAME}=other`],
+    ])('rejects a %s', async (_label, cookieHeader) => {
+      const response = await sendRequest('/api/departments', { cookie: cookieHeader });
+
+      expect(response.statusCode).toBe(403);
+      expect(readErrorCode(response)).toBe('SESSION_REQUIRED');
     });
 
-    expect(response.statusCode).toBe(404);
-    expect(response.body).not.toContain('leaked-secret-value');
+    it('ignores the old x-aiteam-token header', async () => {
+      const response = await sendRequest('/api/departments', { 'x-aiteam-token': SESSION_TOKEN });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it.each(['/%61pi/departments', '/api/departments?x=1', '/api/departments/'])(
+      'does not let %s bypass the cookie check',
+      async (url) => {
+        const response = await sendRequest(url);
+
+        expect(response.statusCode).toBe(403);
+      },
+    );
+
+    it('never echoes the query string in 404 errors', async () => {
+      const response = await sendRequest('/missing-page?q=leaked-secret-value', {
+        cookie: VALID_SESSION_COOKIE,
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.body).not.toContain('leaked-secret-value');
+    });
   });
 
-  it('reuses a well-formed incoming trace id', async () => {
-    const response = await sendRequest('/api/health', { [TRACE_ID_HEADER]: 'client-trace-12345' });
+  describe('Host header', () => {
+    it.each([`localhost:${LISTEN_PORT}`, `127.0.0.1:${LISTEN_PORT}`])(
+      'accepts %s',
+      async (host) => {
+        const response = await sendRequest('/api/health', { host });
 
-    expect(response.headers[TRACE_ID_HEADER]).toBe('client-trace-12345');
+        expect(response.statusCode).toBe(200);
+      },
+    );
+
+    it.each([
+      ['a foreign domain (DNS rebinding)', `evil.example:${LISTEN_PORT}`],
+      ['loopback on another port', '127.0.0.1:8080'],
+      ['loopback without port', '127.0.0.1'],
+      ['IPv6 loopback', `[::1]:${LISTEN_PORT}`],
+    ])('rejects %s', async (_label, host) => {
+      const response = await sendRequest('/api/health', { host });
+
+      expect(response.statusCode).toBe(403);
+      expect(readErrorCode(response)).toBe('HOST_NOT_ALLOWED');
+    });
+
+    it('also guards static files', async () => {
+      const response = await sendRequest('/', { host: 'evil.example' });
+
+      expect(response.statusCode).toBe(403);
+    });
   });
 
-  it('blocks DNS-rebinding style requests with a foreign Host header', async () => {
-    const response = await sendRequest('/api/health', { host: 'evil.example:4321' });
+  describe('Origin header on state-changing requests', () => {
+    it.each<HttpMethod>(['POST', 'PUT', 'PATCH', 'DELETE'])(
+      'rejects %s from a foreign origin even with a valid cookie',
+      async (method) => {
+        const response = await sendRequest(
+          '/api/departments',
+          { cookie: VALID_SESSION_COOKIE, origin: 'https://evil.example' },
+          method,
+        );
 
-    expect(response.statusCode).toBe(403);
-    expect(apiErrorResponseSchema.parse(response.json()).error.code).toBe('HOST_NOT_ALLOWED');
+        expect(response.statusCode).toBe(403);
+        expect(readErrorCode(response)).toBe('ORIGIN_NOT_ALLOWED');
+      },
+    );
+
+    it.each([
+      ['missing', undefined],
+      ['null', 'null'],
+      ['another loopback port', 'http://127.0.0.1:8080'],
+    ])('rejects a write with %s Origin', async (_label, origin) => {
+      const headers: Record<string, string> = { cookie: VALID_SESSION_COOKIE };
+      if (origin !== undefined) {
+        headers.origin = origin;
+      }
+      const response = await sendRequest('/api/departments', headers, 'POST');
+
+      expect(response.statusCode).toBe(403);
+      expect(readErrorCode(response)).toBe('ORIGIN_NOT_ALLOWED');
+    });
+
+    it('lets a same-origin write with the cookie reach routing', async () => {
+      const response = await sendRequest(
+        '/api/departments',
+        { cookie: VALID_SESSION_COOKIE, origin: ALLOWED_ORIGIN },
+        'POST',
+      );
+
+      expect(response.statusCode).toBe(404);
+      expect(readErrorCode(response)).toBe('ROUTE_NOT_FOUND');
+    });
+
+    it('does not require Origin on reads', async () => {
+      const response = await sendRequest('/api/health');
+
+      expect(response.statusCode).toBe(200);
+    });
   });
 
-  it('serves the static web build at / without a token', async () => {
-    const response = await sendRequest('/?token=abc');
+  describe('static web build', () => {
+    it('serves / without a session (no data in static files)', async () => {
+      const response = await sendRequest('/');
 
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('text/html');
-    expect(response.body).toContain('<title>AI Team</title>');
-  });
-
-  it('also guards the static files against foreign Host headers', async () => {
-    const response = await sendRequest('/', { host: 'evil.example' });
-
-    expect(response.statusCode).toBe(403);
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toContain('text/html');
+      expect(response.body).toContain('<title>AI Team</title>');
+    });
   });
 });

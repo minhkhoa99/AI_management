@@ -4,6 +4,8 @@ export const APP_RUNTIME_CONFIG = Symbol('APP_RUNTIME_CONFIG');
 export interface AppRuntimeConfig {
   version: string;
   startedAtEpochMs: number;
-  /** Random per-launch secret the browser must send on every API call. */
+  /** Random per-launch secret, exchanged once for the session cookie. */
   sessionToken: string;
+  /** Port the server listens on; Host and Origin checks only accept this port. */
+  listenPort: number;
 }

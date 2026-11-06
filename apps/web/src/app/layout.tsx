@@ -3,7 +3,6 @@ import { Be_Vietnam_Pro, Space_Grotesk } from 'next/font/google';
 import type { ReactNode } from 'react';
 import { AppSidebar } from '../shared/layout/app-sidebar';
 import { AppTopbar } from '../shared/layout/app-topbar';
-import { SessionTokenCapture } from '../shared/layout/session-token-capture';
 import './globals.css';
 import styles from './layout.module.css';
 
@@ -38,7 +37,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="vi" className={`${headingFont.variable} ${bodyFont.variable}`}>
       <body>
-        <SessionTokenCapture />
         <div className={styles.shell}>
           <AppSidebar />
           <main className={styles.main}>
