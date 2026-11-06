@@ -5,12 +5,15 @@ import {
   type AgentSummary,
   agentListQuerySchema,
   type BulkSetAgentsEnabledRequest,
+  type ChangeAgentConfigurationRequest,
+  changeAgentConfigurationRequestSchema,
   bulkSetAgentsEnabledRequestSchema,
   entityIdSchema,
   type SetEnabledRequest,
   setEnabledRequestSchema,
 } from '@aiteam/contracts';
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
+import { ChangeAgentConfigurationUseCase } from '../../application/use-cases/change-agent-configuration.use-case';
 import { GetAgentDetailUseCase } from '../../application/use-cases/get-agent-detail.use-case';
 import { ListAgentsUseCase } from '../../application/use-cases/list-agents.use-case';
 import { ToggleAgentUseCase } from '../../application/use-cases/toggle-agent.use-case';
@@ -25,6 +28,7 @@ export class AgentsController {
     private readonly getAgentDetailUseCase: GetAgentDetailUseCase,
     private readonly toggleAgentUseCase: ToggleAgentUseCase,
     private readonly toggleAgentsInBulkUseCase: ToggleAgentsInBulkUseCase,
+    private readonly changeAgentConfigurationUseCase: ChangeAgentConfigurationUseCase,
   ) {}
 
   @Get()
@@ -56,5 +60,14 @@ export class AgentsController {
     @Body(new ZodRequestPipe(setEnabledRequestSchema)) request: SetEnabledRequest,
   ): AgentDetail {
     return this.toggleAgentUseCase.toggleAgent(agentId, request.enabled);
+  }
+
+  @Patch(':agentId/configuration')
+  changeAgentConfiguration(
+    @Param('agentId', agentIdPipe) agentId: string,
+    @Body(new ZodRequestPipe(changeAgentConfigurationRequestSchema))
+    request: ChangeAgentConfigurationRequest,
+  ): AgentDetail {
+    return this.changeAgentConfigurationUseCase.changeAgentConfiguration(agentId, request);
   }
 }

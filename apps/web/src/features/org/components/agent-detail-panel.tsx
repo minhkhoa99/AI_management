@@ -19,7 +19,8 @@ import {
   setAgentEnabled,
   updateDepartmentMember,
 } from '../../organization/organization-api';
-import { PROVIDER_PRESENTATION, ROLE_LABELS } from '../../organization/organization-labels';
+import { ROLE_LABELS } from '../../organization/organization-labels';
+import { AgentBrainForm } from './agent-brain-form';
 import {
   collectDescendantPositionIds,
   collectFieldErrors,
@@ -148,9 +149,7 @@ function AgentDetailContent({
           </span>
         </div>
       </div>
-      <p className={styles.fieldHint}>
-        {PROVIDER_PRESENTATION[agent.provider].note}. Đổi bộ não và quyền có ở Giai đoạn 2.
-      </p>
+      <AgentBrainForm agent={agent} />
 
       <ToggleSwitch
         pressed={agent.enabled}

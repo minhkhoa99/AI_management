@@ -4,6 +4,7 @@ import {
   AGENT_ROLES,
   AGENT_PROVIDERS,
   API_FORMATS,
+  LOCAL_ENGINES,
   STEP_FAILURE_ACTIONS,
   STEP_GATES,
   STEP_RETRY_LIMITS,
@@ -103,6 +104,17 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
           "INSERT INTO provider_connections (id, name, format, base_url) VALUES (?, 'C', ?, 'http://x')",
         )
         .run(rowId, value),
+  },
+  {
+    table: 'local_engine_settings',
+    column: 'engine',
+    contractValues: LOCAL_ENGINES,
+    invalidValue: 'gemini_cli',
+    insertRowWith: (database, value) => {
+      // Rows for every engine are seeded by migration 004: re-insert after removing the seed.
+      database.prepare('DELETE FROM local_engine_settings WHERE engine = ?').run(value);
+      database.prepare('INSERT INTO local_engine_settings (engine) VALUES (?)').run(value);
+    },
   },
   {
     table: 'tasks',

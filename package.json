@@ -24,7 +24,8 @@
     "test:watch": "vitest",
     "build": "node scripts/build.mjs",
     "start": "node bin/aiteam.mjs",
-    "test:smoke": "node scripts/smoke-test-dist.mjs"
+    "test:smoke": "node scripts/smoke-test-dist.mjs",
+    "check:bundle": "node scripts/check-web-bundle.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

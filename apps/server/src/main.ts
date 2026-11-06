@@ -6,7 +6,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createAiteamApplication } from './app-factory';
 import {
   createNoFreePortError,
-  isAddressInUseError,
+  isPortUnusableError,
   isPortAvailable,
   listCandidatePorts,
 } from './listen-port';
@@ -33,6 +33,8 @@ export interface StartAiteamServerOptions {
   dataDirectory: string;
   /** ~/.aiteam/logs: holds aiteam.log (JSON lines). */
   logDirectory: string;
+  /** Defaults to secret.key next to the data directory (~/.aiteam/secret.key). */
+  secretKeyFilePath?: string;
   webRootDirectory?: string;
   logLevel?: LevelWithSilent;
 }
@@ -76,6 +78,9 @@ export async function startAiteamServer(
           startedAtEpochMs,
           sessionToken: options.sessionToken,
           listenPort: port,
+          secretKeyFilePath:
+            options.secretKeyFilePath ??
+            path.join(path.dirname(options.dataDirectory), 'secret.key'),
         },
         database,
         logger,
@@ -127,7 +132,7 @@ async function listenOnFirstFreePort(
       return { application, listenPort: port };
     } catch (error) {
       await application.close();
-      if (!isAddressInUseError(error)) {
+      if (!isPortUnusableError(error)) {
         throw error;
       }
     }

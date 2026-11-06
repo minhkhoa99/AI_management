@@ -80,12 +80,13 @@ Server được esbuild bundle thành một file; không cần `node_modules` kh
 
 Ngân sách bundle web (gzip, mỗi route):
 
-- Chunk framework Next/React: không giới hạn tuyệt đối; có mốc đo trong repo, CI lỗi nếu tăng > 10%.
-  Mốc 06/11/2026: khoảng 156 KB.
+- Chunk framework Next/React (`rootMainFiles` của build manifest): không giới hạn tuyệt đối; mốc
+  đo ở `scripts/web-bundle-baseline.json` (128,7 KB, Next 16.4.5), CI lỗi nếu tăng > 10%. Polyfill
+  `noModule` không tính (trình duyệt hiện đại không tải). Đổi Next/React: `npm run check:bundle -- --update-baseline`.
 - Code ứng dụng (mọi chunk khác, kể cả zod và contracts): ≤ 70 KB.
 - Tổng tải lần đầu: ≤ 230 KB.
 - Chưa dùng `zod/mini`. Web chỉ import schema mình thật sự dùng.
-- Script đo và bước CI làm ở Giai đoạn 2.
+- Đo và kiểm tra: `npm run check:bundle` (sau `npm run build`), có trong CI.
 
 ## Đổi cấu hình agent khi đang chạy task
 
@@ -99,12 +100,27 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
   (vẫn lưu mốc), chạy lại với quyền mới.
 - Cột `tasks.engine_snapshot_json` thêm bằng migration của Giai đoạn 3, không thêm sớm.
 
+## Engine (Giai đoạn 2)
+
+- Engine hiện thực `AgentEnginePort` (orchestration); module providers đăng ký theo provider.
+- Claude Code: `claude -p --output-format stream-json --verbose --setting-sources project,local
+--strict-mcp-config` (không nạp hook/plugin/MCP cá nhân của người dùng). Codex: `codex exec --json
+--ignore-user-config` gọi thẳng CLI (không dùng `@openai/codex-sdk`).
+- Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
+  đầu bằng `-`.
+- Quyền mỗi lần chạy do agent quyết (`access_level`, `network_access`); cài đặt engine là trần.
+- Khoá Custom API mã hoá AES-256-GCM (`~/.aiteam/secret.key`), API chỉ trả 4 ký tự cuối; đổi host
+  phải nhập lại khoá; fetch tới API từ chối redirect.
+- Định dạng JSONL của CLI có contract test trên bản ghi thật đã làm sạch
+  (`scripts/record-engine-streams.mjs`); CLI đổi định dạng thì ghi lại và chỉ sửa translator.
+
 ## Lệnh
 
 ```
 npm run lint     # eslint + prettier --check + tsc typecheck
 npm test         # vitest
 npm run build    # dist/server (bundle) + dist/web (Next export)
+npm run check:bundle   # ngân sách bundle web (sau build)
 node bin/aiteam.mjs [--port 7419] [--no-open]
 node bin/aiteam.mjs doctor
 ```

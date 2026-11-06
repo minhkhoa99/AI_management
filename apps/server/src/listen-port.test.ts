@@ -4,7 +4,12 @@ import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isPortAvailable, listCandidatePorts, MAX_PORT_ATTEMPTS } from './listen-port';
+import {
+  isPortAvailable,
+  isPortUnusableError,
+  listCandidatePorts,
+  MAX_PORT_ATTEMPTS,
+} from './listen-port';
 import { LISTEN_HOST, startAiteamServer } from './main';
 
 const occupiedServers: Server[] = [];
@@ -55,6 +60,18 @@ describe('listCandidatePorts', () => {
 
   it('never goes past 65535', () => {
     expect(listCandidatePorts(65_534)).toEqual([65_534, 65_535]);
+  });
+});
+
+describe('isPortUnusableError', () => {
+  // Regression: on Windows, ports inside a Hyper-V/WSL excluded range fail with EACCES.
+  it.each([
+    ['EADDRINUSE', true],
+    ['EACCES', true],
+    ['ECONNREFUSED', false],
+    [undefined, false],
+  ])('treats %s as unusable: %s', (code, expected) => {
+    expect(isPortUnusableError(Object.assign(new Error('listen failed'), { code }))).toBe(expected);
   });
 });
 

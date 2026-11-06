@@ -8,4 +8,6 @@ export interface AppRuntimeConfig {
   sessionToken: string;
   /** Port the server listens on; Host and Origin checks only accept this port. */
   listenPort: number;
+  /** AES key file encrypting Custom API keys at rest (~/.aiteam/secret.key). */
+  secretKeyFilePath: string;
 }
