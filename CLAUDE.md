@@ -88,6 +88,20 @@ Ngân sách bundle web (gzip, mỗi route):
 - Chưa dùng `zod/mini`. Web chỉ import schema mình thật sự dùng.
 - Đo và kiểm tra: `npm run check:bundle` (sau `npm run build`), có trong CI.
 
+## Chính sách lỗi (bắt buộc)
+
+- **Theo phiên:** mọi phiên agent chạy trong `AgentSessionSupervisor`
+  (`apps/server/src/shared/runtime/`). Mọi promise/stream/listener của phiên phải được `await` hoặc dẫn
+  lỗi về supervisor; lỗi thành task `failed` (hoặc thử lại nếu `retryable`), không lan ra tiến trình.
+  ESLint `@typescript-eslint/no-floating-promises` và `no-misused-promises` ở mức error; muốn bỏ qua
+  một promise phải viết `void` có chủ ý và promise đó không được reject.
+- **Cấp tiến trình** (`unhandledRejection`, `uncaughtException`): log `fatal` kèm stack và `traceId`,
+  ghi `~/.aiteam/logs/crash-<timestamp>.json`, huỷ mọi phiên và lưu mốc (tối đa 5 giây), flush log,
+  `exit(1)`, in hướng dẫn chạy lại `aiteam`. Không ghi log rồi chạy tiếp. Không thêm tiến trình giám sát.
+- **Khi khởi động:** kill tiến trình CLI còn sống của lần chạy trước chỉ khi PID, tên (claude/codex)
+  và thời điểm bắt đầu đều khớp bản ghi; task `running` → `queued` (giữ `session_ref`),
+  `cancelling` → `cancelled`.
+
 ## Đổi cấu hình agent khi đang chạy task
 
 Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`, Giai đoạn 3 làm phần còn lại.
