@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { type FormEvent, useState } from 'react';
 import {
   AGENT_ROLES,
@@ -131,6 +132,12 @@ function AgentDetailContent({
         </div>
         <StatusPill available={available} />
       </div>
+      <Link
+        className={controlStyles.secondaryButton}
+        href={`/monitor/?agent=${encodeURIComponent(agent.id)}`}
+      >
+        Xem trực tiếp agent này
+      </Link>
 
       <div className={styles.statGrid}>
         <div className={styles.statTile}>
