@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// CI machines have neither CLI installed: only the arguments are under test.
+vi.mock('./cli-process', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./cli-process')>()),
+  resolveCliExecutable: (executableName: string) => ({ command: executableName, leadingArgs: [] }),
+}));
 import type {
   AgentSessionRequest,
   SessionPermissions,
