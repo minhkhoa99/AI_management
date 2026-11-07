@@ -40,7 +40,10 @@ export class AttachQaDocumentUseCase {
       );
     }
     const existing = this.attachmentRepository.listAttachments(taskId);
-    const replaced = existing.find((attachment) => attachment.fileName === fileName);
+    // Case-insensitive: Spec.md and spec.md are the same file in .aiteam-qa on Windows and macOS.
+    const replaced = existing.find(
+      (attachment) => attachment.fileName.toLowerCase() === fileName.toLowerCase(),
+    );
     if (replaced === undefined && existing.length >= QA_DOCUMENTS_PER_TASK_MAX) {
       throw new ConflictError(`Mỗi task tối đa ${QA_DOCUMENTS_PER_TASK_MAX} tài liệu QA.`, {
         code: 'QA_DOCUMENT_LIMIT_REACHED',

@@ -4,6 +4,7 @@ import {
   closeSync,
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -11,6 +12,7 @@ import {
   rmSync,
   statSync,
 } from 'node:fs';
+import { devNull } from 'node:os';
 import path from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../../../app-runtime-config';
@@ -31,6 +33,18 @@ const PLATFORM_IDENTITY = ['-c', 'user.name=AI Team', '-c', 'user.email=aiteam@l
 const QA_FOLDER = '.aiteam-qa';
 const MAX_LISTED_FILES = 5_000;
 const MAX_FILE_BYTES = 512 * 1024;
+/**
+ * Before every git command. The worktree is written by agents (Codex runs sandboxed, git here
+ * does not): no fsmonitor command, no hooks, no signing program, whatever config it points at.
+ */
+const SAFE_GIT_OPTIONS = [
+  '-c',
+  'core.fsmonitor=false',
+  '-c',
+  `core.hooksPath=${devNull}`,
+  '-c',
+  'commit.gpgsign=false',
+];
 
 function requireCommitSha(sha: string): string {
   if (!/^[0-9a-f]{7,64}$/.test(sha)) {
@@ -92,6 +106,8 @@ export class GitTaskWorkspace implements TaskWorkspace {
 
     const agentDirectory = path.join(worktreePath, relativeFolder);
     mkdirSync(agentDirectory, { recursive: true });
+    // An agent could have replaced the folder with a link to somewhere else.
+    if (relativeFolder !== '') resolveInsideWorktree(worktreePath, relativeFolder);
     const qaDocumentPaths = await this.copyQaDocuments(
       worktreePath,
       agentDirectory,
@@ -103,7 +119,12 @@ export class GitTaskWorkspace implements TaskWorkspace {
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
     if (!existsSync(worktreePath)) return null;
     await this.runGit(worktreePath, ['add', '-A']);
-    const hasChanges = !(await this.succeeds(worktreePath, ['diff', '--cached', '--quiet']));
+    const hasChanges = !(await this.succeeds(worktreePath, [
+      'diff',
+      '--no-ext-diff',
+      '--cached',
+      '--quiet',
+    ]));
     if (!hasChanges) return null;
     await this.runGit(worktreePath, [
       ...PLATFORM_IDENTITY,
@@ -114,7 +135,9 @@ export class GitTaskWorkspace implements TaskWorkspace {
       message,
     ]);
     const sha = (await this.runGit(worktreePath, ['rev-parse', 'HEAD'])).trim();
-    const files = (await this.runGit(worktreePath, ['show', '--name-only', '--format=', 'HEAD']))
+    const files = (
+      await this.runGit(worktreePath, ['show', '--no-ext-diff', '--name-only', '--format=', 'HEAD'])
+    )
       .split(/\r?\n/)
       .filter((line) => line.trim() !== '');
     return { sha, files };
@@ -152,7 +175,14 @@ export class GitTaskWorkspace implements TaskWorkspace {
 
   async readWorkspaceFile(worktreePath: string, relativePath: string): Promise<WorkspaceFile> {
     const absolutePath = resolveInsideWorktree(worktreePath, relativePath);
-    const size = statSync(absolutePath).size;
+    const fileStat = statSync(absolutePath);
+    if (!fileStat.isFile()) {
+      // A FIFO or device opened synchronously would block the whole server.
+      throw new ValidationError('Chỉ xem được file thường.', {
+        code: 'WORKSPACE_FILE_NOT_REGULAR',
+      });
+    }
+    const size = fileStat.size;
     const fileDescriptor = openSync(absolutePath, 'r');
     try {
       const buffer = Buffer.alloc(Math.min(size, MAX_FILE_BYTES));
@@ -175,6 +205,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
       '-c',
       'core.quotepath=false',
       'show',
+      '--no-ext-diff',
       '--format=',
       '--patch',
       '--find-renames',
@@ -193,6 +224,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
       '-c',
       'core.quotepath=false',
       'diff',
+      '--no-ext-diff',
       '--find-renames',
       '--no-color',
       `${requireCommitSha(from)}..${requireCommitSha(toSha)}`,
@@ -213,7 +245,8 @@ export class GitTaskWorkspace implements TaskWorkspace {
       `${base}:${gitPath}`,
     ]);
     if (existedAtBase) {
-      await this.runGit(worktreePath, ['checkout', base, '--', gitPath]);
+      // Literal: a name with glob characters must not revert other files.
+      await this.runGit(worktreePath, ['--literal-pathspecs', 'checkout', base, '--', gitPath]);
     } else {
       rmSync(absolutePath, { force: true });
     }
@@ -264,12 +297,15 @@ export class GitTaskWorkspace implements TaskWorkspace {
   ): Promise<string[]> {
     if (documents.length === 0) return [];
     const qaDirectory = path.join(agentDirectory, QA_FOLDER);
+    removeUnlessRealEntry(qaDirectory, 'directory');
     mkdirSync(qaDirectory, { recursive: true });
     await this.excludeFromGit(worktreePath, QA_FOLDER);
     return documents.map((document) => {
       // File names were validated as bare names when uploaded; basename keeps it that way.
       const fileName = path.basename(document.fileName);
-      copyFileSync(document.contentPath, path.join(qaDirectory, fileName));
+      const target = path.join(qaDirectory, fileName);
+      removeUnlessRealEntry(target, 'file');
+      copyFileSync(document.contentPath, target);
       return path.posix.join(QA_FOLDER, fileName);
     });
   }
@@ -304,7 +340,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
     return new Promise((resolve, reject) => {
       execFile(
         'git',
-        ['-C', directory, ...args],
+        [...SAFE_GIT_OPTIONS, '-C', directory, ...args],
         {
           timeout: GIT_TIMEOUT_MS,
           windowsHide: true,
@@ -330,5 +366,24 @@ export class GitTaskWorkspace implements TaskWorkspace {
         },
       );
     });
+  }
+}
+
+/**
+ * The agent can turn `.aiteam-qa` (or a file in it) into a symlink or junction; copying the
+ * user's documents through it would write outside the worktree. Anything that is not a real
+ * entry of the expected kind is removed (a link is removed, not what it points to).
+ */
+function removeUnlessRealEntry(entryPath: string, kind: 'directory' | 'file'): void {
+  let entry;
+  try {
+    entry = lstatSync(entryPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+  const isExpected = kind === 'directory' ? entry.isDirectory() : entry.isFile();
+  if (!isExpected || entry.isSymbolicLink()) {
+    rmSync(entryPath, { recursive: true, force: true });
   }
 }
