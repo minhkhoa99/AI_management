@@ -72,6 +72,19 @@ describe('Claude Code stream (claude -p --output-format stream-json)', () => {
     expect(events.at(-1)?.kind).toBe('completed');
   });
 
+  it('modify: an Edit of an existing file is reported as a file change', () => {
+    // Regression: Edit results carry no "type"; the monitor never saw files the agent edited.
+    const events = translateClaudeFixture('claude-modify', { exitCode: 0, cancelled: false });
+
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'tool_call', toolName: 'Edit' }));
+    expect(events).toContainEqual({
+      kind: 'file_change',
+      path: expect.stringMatching(/README\.md$/),
+      changeKind: 'update',
+    });
+    expect(events.at(-1)?.kind).toBe('completed');
+  });
+
   it('cancelled mid-run: ends with exactly one cancelled event', () => {
     const events = translateClaudeFixture('claude-cancelled', { exitCode: 1, cancelled: true });
 
