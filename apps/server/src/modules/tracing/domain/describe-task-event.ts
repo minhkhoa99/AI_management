@@ -11,6 +11,29 @@ export function describeTaskEvent(event: DescribableTaskEvent): string {
   return clipLine(describeEventText(event));
 }
 
+const DETAIL_LIMIT = 8_000;
+
+/** The longer text behind a log line (command output, full message) and the file it touches. */
+export function describeTaskEventDetail(event: DescribableTaskEvent): {
+  detail: string | null;
+  filePath: string | null;
+} {
+  const field = (key: string) =>
+    typeof event.payload[key] === 'string' ? (event.payload[key] as string) : null;
+  const detail =
+    event.kind === 'command'
+      ? field('output')
+      : event.kind === 'message' || event.kind === 'step_report'
+        ? field(event.kind === 'message' ? 'text' : 'summary')
+        : null;
+  return {
+    detail: detail === null || detail.trim() === '' ? null : detail.slice(0, DETAIL_LIMIT),
+    // Only paths the recorder placed inside the worktree; the monitor opens them as files.
+    filePath:
+      event.kind === 'file_change' && event.payload.insideWorkspace === true ? field('path') : null,
+  };
+}
+
 function describeEventText(event: DescribableTaskEvent): string {
   const payload = event.payload;
   const text = (key: string) => (typeof payload[key] === 'string' ? payload[key] : '');
