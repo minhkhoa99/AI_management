@@ -13,7 +13,9 @@ import { ToggleDepartmentUseCase } from './application/use-cases/toggle-departme
 import { UpdateDepartmentMemberUseCase } from './application/use-cases/update-department-member.use-case';
 import { UpdateDepartmentUseCase } from './application/use-cases/update-department.use-case';
 import { DEPARTMENT_REPOSITORY } from './domain/repositories/department.repository';
+import { DEPARTMENT_WORKLOAD } from './domain/repositories/department-workload.repository';
 import { POSITION_REPOSITORY } from './domain/repositories/position.repository';
+import { SqliteDepartmentWorkload } from './infrastructure/persistence/sqlite-department-workload';
 import { SqliteDepartmentRepository } from './infrastructure/persistence/sqlite-department.repository';
 import { SqlitePositionRepository } from './infrastructure/persistence/sqlite-position.repository';
 import { DepartmentsController } from './presentation/controllers/departments.controller';
@@ -25,6 +27,7 @@ import { DepartmentsController } from './presentation/controllers/departments.co
   providers: [
     { provide: DEPARTMENT_REPOSITORY, useClass: SqliteDepartmentRepository },
     { provide: POSITION_REPOSITORY, useClass: SqlitePositionRepository },
+    { provide: DEPARTMENT_WORKLOAD, useClass: SqliteDepartmentWorkload },
     ListDepartmentsUseCase,
     SummarizeDepartmentsUseCase,
     CreateDepartmentUseCase,
