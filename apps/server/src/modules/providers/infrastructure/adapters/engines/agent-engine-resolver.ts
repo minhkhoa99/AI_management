@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  AGENT_ENGINE_OVERRIDE,
+  type AgentEngineOverride,
+} from '../../../../../shared/runtime/agent-engine-override';
 import type { AgentProvider } from '@aiteam/contracts';
 import type {
   AgentEnginePort,
@@ -15,9 +19,13 @@ export class EngineRegistry implements AgentEngineResolver {
     private readonly claudeCodeEngine: ClaudeCodeCliEngine,
     private readonly codexEngine: CodexCliEngine,
     private readonly customApiEngine: CustomApiEngine,
+    @Inject(AGENT_ENGINE_OVERRIDE) private readonly engineOverride: AgentEngineOverride,
   ) {}
 
   resolveAgentEngine(provider: AgentProvider): AgentEnginePort {
+    if (this.engineOverride !== null) {
+      return this.engineOverride;
+    }
     switch (provider) {
       case 'claude_code':
         return this.claudeCodeEngine;

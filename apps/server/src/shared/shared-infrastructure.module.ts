@@ -8,6 +8,11 @@ import { InProcessDomainEventBus } from './events/in-process-domain-event-bus';
 import { ID_GENERATOR, randomUuidGenerator } from './identifiers/id-generator';
 import { AgentSessionSupervisor } from './runtime/agent-session-supervisor';
 import { CLI_PROCESS_TRACKER, SqliteCliProcessTracker } from './runtime/cli-process-tracker';
+import {
+  AGENT_ENGINE_OVERRIDE,
+  type AgentEngineOverride,
+  TASK_SCHEDULER_ENABLED,
+} from './runtime/agent-engine-override';
 import { DIRECTORY_PICKER, type DirectoryPicker } from './runtime/directory-picker';
 import { NativeDirectoryPicker } from './runtime/native-directory-picker';
 import { OsProcessInspector } from './runtime/os-process-inspector';
@@ -28,6 +33,10 @@ export interface SharedInfrastructureDependencies {
   processTerminator?: ProcessTerminator;
   /** Overridable in tests; defaults to the OS folder dialog. */
   directoryPicker?: DirectoryPicker;
+  /** Tests only: replaces every agent engine. */
+  agentEngineOverride?: AgentEngineOverride;
+  /** false: queued tasks never start (tests that do not script an engine). Default true. */
+  taskSchedulerEnabled?: boolean;
   /** Shared with the launcher so a fatal error can cancel running sessions. */
   sessionSupervisor?: AgentSessionSupervisor;
 }
@@ -75,6 +84,8 @@ export class SharedInfrastructureModule {
         provide: DIRECTORY_PICKER,
         useValue: dependencies.directoryPicker ?? new NativeDirectoryPicker(dependencies.logger),
       },
+      { provide: AGENT_ENGINE_OVERRIDE, useValue: dependencies.agentEngineOverride ?? null },
+      { provide: TASK_SCHEDULER_ENABLED, useValue: dependencies.taskSchedulerEnabled ?? true },
     ];
     return {
       module: SharedInfrastructureModule,
