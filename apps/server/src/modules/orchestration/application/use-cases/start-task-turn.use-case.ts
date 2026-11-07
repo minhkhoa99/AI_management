@@ -160,7 +160,7 @@ export class StartTaskTurnUseCase {
       this.runRegistry.releaseRun(taskId);
       return;
     }
-    current.rememberWorktree(workspace.worktreePath);
+    current.rememberWorktree(workspace.worktreePath, workspace.baseSha);
     this.taskRepository.updateTask(current);
     this.runRegistry.rememberWorkDirectory(taskId, workspace.agentDirectory);
     if (this.runRegistry.stopReasonOf(taskId) !== null) {
@@ -221,6 +221,8 @@ export class StartTaskTurnUseCase {
       receiveSessionEvent: (event) =>
         this.sessionEventRecorder.recordSessionEvent(task.id, snapshot.agentId, event, {
           keepSessionRef: true,
+          worktreePath: state.worktreePath,
+          workDirectory,
         }),
       finishSession: (terminal) => this.finishTaskTurnUseCase.finishTaskTurn(task.id, terminal),
     });

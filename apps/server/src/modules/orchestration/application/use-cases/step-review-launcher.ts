@@ -124,6 +124,8 @@ export class StepReviewLauncher {
       receiveSessionEvent: (event) =>
         this.sessionEventRecorder.recordSessionEvent(task.id, superiorSnapshot.agentId, event, {
           keepSessionRef: false,
+          worktreePath: state.worktreePath,
+          workDirectory,
         }),
       finishSession: (terminal) =>
         this.finishStepReview(task.id, terminal, step, worker, workerSummary, {
@@ -149,6 +151,11 @@ export class StepReviewLauncher {
     if (task === undefined) return;
     if (stopReason === 'delete') {
       await this.taskRemoval.removeTask(task);
+      return;
+    }
+    if (stopReason === 'pause') {
+      task.pause();
+      this.taskRepository.updateTask(task);
       return;
     }
     if (terminal.kind !== 'completed') {

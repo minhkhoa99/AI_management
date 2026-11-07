@@ -102,6 +102,24 @@
   font-weight: 600;
 }
 
+/* Next <Link> styled as a button. */
+a.primaryButton,
+a.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  text-decoration: none;
+}
+
+a.primaryButton:hover {
+  color: #ffffff;
+}
+
+a.secondaryButton {
+  color: var(--color-text);
+}
+
 .primaryButton {
   border: none;
   background: var(--color-primary);

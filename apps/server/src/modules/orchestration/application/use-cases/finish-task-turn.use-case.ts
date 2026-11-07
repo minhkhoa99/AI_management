@@ -54,6 +54,13 @@ export class FinishTaskTurnUseCase {
     }
     const state = task.toState();
 
+    if (stopReason === 'pause') {
+      await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi tạm dừng');
+      task.pause();
+      this.recordEvent(task, 'task_paused', {});
+      this.taskRepository.updateTask(task);
+      return;
+    }
     if (terminal.kind === 'cancelled') {
       await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi dừng lượt');
       task.requeue({
@@ -197,6 +204,11 @@ export class FinishTaskTurnUseCase {
     if (current === undefined) return;
     if (stopReason === 'delete') {
       await this.taskRemoval.removeTask(current);
+      return;
+    }
+    if (stopReason === 'pause') {
+      current.pause();
+      this.taskRepository.updateTask(current);
       return;
     }
     this.applyGate(

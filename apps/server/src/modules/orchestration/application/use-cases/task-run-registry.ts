@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 
 export type TaskRunKind = 'turn' | 'review' | 'tests';
 /** Why a activeRun was stopped on purpose: the task is being deleted, or its agent lost permissions. */
-export type TaskRunStopReason = 'delete' | 'reconfigure';
+export type TaskRunStopReason = 'delete' | 'reconfigure' | 'pause';
 
 interface ActiveTaskRun {
   taskId: string;

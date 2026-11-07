@@ -3,6 +3,7 @@ import { entityIdSchema, TASK_EVENT_LIST_MAX, type TaskEvent } from '@aiteam/con
 import { map, type Observable } from 'rxjs';
 import { z } from 'zod';
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
+import { ListAgentEventsUseCase } from '../../application/use-cases/list-agent-events.use-case';
 import { ListTaskEventsUseCase } from '../../application/use-cases/list-task-events.use-case';
 import {
   type LiveUpdateScope,
@@ -30,6 +31,7 @@ export class LiveStreamsController {
   constructor(
     private readonly streamLiveUpdatesUseCase: StreamLiveUpdatesUseCase,
     private readonly listTaskEventsUseCase: ListTaskEventsUseCase,
+    private readonly listAgentEventsUseCase: ListAgentEventsUseCase,
   ) {}
 
   @Sse('stream/workspace')
@@ -66,6 +68,21 @@ export class LiveStreamsController {
     limit: number,
   ): TaskEvent[] {
     return this.listTaskEventsUseCase.listTaskEvents(taskId, limit);
+  }
+
+  @Get('agents/:agentId/events')
+  listAgentEvents(
+    @Param('agentId', new ZodRequestPipe(entityIdSchema, 'Mã agent')) agentId: string,
+    @Query(
+      'limit',
+      new ZodRequestPipe(
+        z.coerce.number().int().min(1).max(TASK_EVENT_LIST_MAX).default(50),
+        'Số dòng',
+      ),
+    )
+    limit: number,
+  ): TaskEvent[] {
+    return this.listAgentEventsUseCase.listAgentEvents(agentId, limit);
   }
 
   private toSseMessages(scope: LiveUpdateScope, lastEventId: string | undefined) {

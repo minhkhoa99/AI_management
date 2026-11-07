@@ -5,6 +5,7 @@ import { OVERVIEW_QUERY } from './application/ports/overview.query';
 import { AggregateHourlyThroughputUseCase } from './application/use-cases/aggregate-hourly-throughput.use-case';
 import { AggregateUsageByProviderUseCase } from './application/use-cases/aggregate-usage-by-provider.use-case';
 import { CalculateOverviewMetricsUseCase } from './application/use-cases/calculate-overview-metrics.use-case';
+import { ListAgentEventsUseCase } from './application/use-cases/list-agent-events.use-case';
 import { ListRecentActivityUseCase } from './application/use-cases/list-recent-activity.use-case';
 import { ListTaskEventsUseCase } from './application/use-cases/list-task-events.use-case';
 import { StreamLiveUpdatesUseCase } from './application/use-cases/stream-live-updates.use-case';
@@ -23,6 +24,7 @@ import { OverviewController } from './presentation/controllers/overview.controll
     { provide: OVERVIEW_QUERY, useClass: SqliteOverviewQuery },
     { provide: CLOCK, useValue: { currentTime: () => new Date() } },
     ListTaskEventsUseCase,
+    ListAgentEventsUseCase,
     StreamLiveUpdatesUseCase,
     CalculateOverviewMetricsUseCase,
     AggregateHourlyThroughputUseCase,

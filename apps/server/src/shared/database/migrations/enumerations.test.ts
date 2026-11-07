@@ -4,6 +4,7 @@ import {
   APPROVAL_KINDS,
   APPROVAL_STATUSES,
   DELEGATION_REASONS,
+  LINE_COMMENT_STATUSES,
   AGENT_ROLES,
   AGENT_PROVIDERS,
   API_FORMATS,
@@ -38,6 +39,7 @@ function seedParentRows(database: DatabaseSync): void {
     INSERT INTO provider_connections (id, name, format, base_url) VALUES ('conn', 'Local', 'openai', 'http://127.0.0.1:1234');
     INSERT INTO workflows (id, department_id, name) VALUES ('flow', 'dept', 'Default');
     INSERT INTO tasks (id, department_id, title, priority) VALUES ('task', 'dept', 'T', 2);
+    INSERT INTO checkpoints (id, task_id, sha, message) VALUES ('cp', 'task', 'abc', 'm');
   `);
 }
 
@@ -175,6 +177,18 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
     insertRowWith: (database, value, rowId) =>
       database
         .prepare("INSERT INTO approvals (id, task_id, summary, status) VALUES (?, 'task', 'S', ?)")
+        .run(rowId, value),
+  },
+  {
+    table: 'line_comments',
+    column: 'status',
+    contractValues: LINE_COMMENT_STATUSES,
+    invalidValue: 'done',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare(
+          "INSERT INTO line_comments (id, checkpoint_id, file_path, line, body, status) VALUES (?, 'cp', 'a.ts', 1, 'x', ?)",
+        )
         .run(rowId, value),
   },
   {
