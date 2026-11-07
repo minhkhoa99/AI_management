@@ -2,6 +2,9 @@ import { z } from 'zod';
 import {
   agentProviderSchema,
   agentRoleSchema,
+  approvalKindSchema,
+  approvalStatusSchema,
+  delegationReasonSchema,
   stepGateSchema,
   taskPrioritySchema,
   taskStatusSchema,
@@ -204,6 +207,8 @@ export const taskSummarySchema = z.object({
   workflow: z.object({ id: entityIdSchema, name: z.string() }).nullable(),
   currentStep: z.object({ id: entityIdSchema, name: z.string(), gate: stepGateSchema }).nullable(),
   workingDirectory: z.string().nullable(),
+  /** Why the task waits, is retried or failed; null when there is nothing to say. */
+  statusNote: z.string().nullable(),
   attachmentCount: z.number().int().nonnegative(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -219,6 +224,19 @@ export const taskDetailSchema = taskSummarySchema.extend({
   /** Reporting line from the department head down to the assignee. */
   assigneeChain: z.array(taskAgentSchema),
   completionGoal: completionGoalSchema,
+  delegations: z.array(
+    z.object({
+      fromAgentName: z.string().nullable(),
+      toAgentName: z.string().nullable(),
+      reason: delegationReasonSchema,
+      createdAt: z.string(),
+    }),
+  ),
+  /** Direct subordinates of the assignee the task can be handed to (available ones). */
+  delegationTargets: z.array(taskAgentSchema),
+  pendingApprovalId: entityIdSchema.nullable(),
+  /** Steps of the task's workflow, to show where it is. */
+  workflowSteps: z.array(z.object({ id: entityIdSchema, name: z.string(), gate: stepGateSchema })),
 });
 export type TaskDetail = z.infer<typeof taskDetailSchema>;
 
@@ -275,3 +293,58 @@ export const taskDeletionSchema = z.object({
   outcome: z.enum(['deleted', 'cancelling']),
 });
 export type TaskDeletion = z.infer<typeof taskDeletionSchema>;
+
+// ---- Execution: delegation, stage moves, events, approvals ------------------------------------
+
+export const delegateTaskRequestSchema = z.object({ toAgentId: entityIdSchema }).strict();
+export type DelegateTaskRequest = z.infer<typeof delegateTaskRequestSchema>;
+
+/** Kanban arrows: one step back, or one step forward when the workflow allows skipping. */
+export const moveTaskStageRequestSchema = z
+  .object({ direction: z.enum(['back', 'forward']) })
+  .strict();
+export type MoveTaskStageRequest = z.infer<typeof moveTaskStageRequestSchema>;
+
+export const TASK_EVENT_LIST_MAX = 200;
+
+export const taskEventSchema = z.object({
+  id: z.number().int(),
+  kind: z.string(),
+  agentName: z.string().nullable(),
+  /** One line for the task log; the full payload stays on the server. */
+  text: z.string(),
+  createdAt: z.string(),
+});
+export type TaskEvent = z.infer<typeof taskEventSchema>;
+export const taskEventListSchema = z.array(taskEventSchema);
+
+export const approvalSchema = z.object({
+  id: entityIdSchema,
+  kind: approvalKindSchema,
+  status: approvalStatusSchema,
+  task: z.object({
+    id: entityIdSchema,
+    code: z.string(),
+    title: z.string(),
+    departmentId: entityIdSchema,
+  }),
+  summary: z.string(),
+  /** What the agent asks to do, or the step result to approve. Agent text: show as plain text. */
+  request: z.string(),
+  stepName: z.string().nullable(),
+  agentName: z.string().nullable(),
+  createdAt: z.string(),
+  decidedAt: z.string().nullable(),
+  decisionNote: z.string().nullable(),
+});
+export type Approval = z.infer<typeof approvalSchema>;
+export const approvalListSchema = z.array(approvalSchema);
+
+export const approvalListQuerySchema = z
+  .object({ status: approvalStatusSchema.optional() })
+  .strict();
+
+export const decideApprovalRequestSchema = z
+  .object({ approved: z.boolean(), note: z.string().trim().max(2_000).default('') })
+  .strict();
+export type DecideApprovalRequest = z.infer<typeof decideApprovalRequestSchema>;
