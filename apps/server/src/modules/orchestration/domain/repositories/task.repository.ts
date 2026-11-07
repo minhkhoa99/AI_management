@@ -9,4 +9,6 @@ export interface TaskRepository {
   insertTask(task: Task): void;
   updateTask(task: Task): void;
   deleteTask(taskId: string): void;
+  /** Queued tasks of enabled departments whose back-off has passed: priority, then oldest. */
+  listRunnableTaskIds(nowIso: string): string[];
 }
