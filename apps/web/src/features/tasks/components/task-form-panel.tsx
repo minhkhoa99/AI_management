@@ -99,6 +99,7 @@ function TaskForm({
   );
   const [workingDirectory, setWorkingDirectory] = useState(editedTask?.workingDirectory ?? '');
   const [testCommand, setTestCommand] = useState(editedTask?.testCommand ?? '');
+  const [previewCommand, setPreviewCommand] = useState(editedTask?.previewCommand ?? '');
   const [queuedFiles, setQueuedFiles] = useState<QueuedQaFile[]>([]);
   const [removedAttachmentIds, setRemovedAttachmentIds] = useState<string[]>([]);
   const [directoryCheck, setDirectoryCheck] = useState<DirectoryValidation | null>(null);
@@ -191,6 +192,7 @@ function TaskForm({
         ...(workflowId === undefined ? {} : { workflowId }),
         workingDirectory,
         testCommand,
+        previewCommand,
       });
       if (!parsed.success)
         throw new Error(parsed.error.issues[0]?.message ?? 'Dữ liệu chưa hợp lệ.');
@@ -202,6 +204,7 @@ function TaskForm({
       criteria,
       priority,
       testCommand,
+      previewCommand,
       ...(assigneeAgentId === '' ? {} : { assigneeAgentId }),
       ...(hasStarted
         ? {}
@@ -490,6 +493,16 @@ function TaskForm({
               value={testCommand}
               onChange={(event) => setTestCommand(event.target.value)}
               placeholder="npm test"
+              className={`${controlStyles.fieldInput} ${styles.monoInput}`}
+            />
+          </label>
+          <label className={controlStyles.field}>
+            Lệnh chạy giao diện (cho tab “Giao diện”, có {'{port}'})
+            <input
+              type="text"
+              value={previewCommand}
+              onChange={(event) => setPreviewCommand(event.target.value)}
+              placeholder="npm run dev -- --port {port} --host 127.0.0.1"
               className={`${controlStyles.fieldInput} ${styles.monoInput}`}
             />
           </label>

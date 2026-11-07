@@ -125,6 +125,12 @@ export function TaskDetailPanel({
                 <span className={styles.monoValue}>{detail.testCommand}</span>
               </div>
             )}
+            {detail.previewCommand !== null && (
+              <div className={styles.fact}>
+                <span className={styles.factLabel}>Lệnh chạy giao diện</span>
+                <span className={styles.monoValue}>{detail.previewCommand}</span>
+              </div>
+            )}
           </div>
           {detail.assignee !== null && (
             <Link
