@@ -5,6 +5,7 @@ import { SQLITE_DATABASE } from './database/sqlite-connection';
 import { SqliteTransactionRunner, TRANSACTION_RUNNER } from './database/transaction-runner';
 import { DOMAIN_EVENT_PUBLISHER } from './events/domain-event';
 import { InProcessDomainEventBus } from './events/in-process-domain-event-bus';
+import { LiveUpdateHub } from './events/live-update-hub';
 import { ID_GENERATOR, randomUuidGenerator } from './identifiers/id-generator';
 import { AgentSessionSupervisor } from './runtime/agent-session-supervisor';
 import { CLI_PROCESS_TRACKER, SqliteCliProcessTracker } from './runtime/cli-process-tracker';
@@ -65,6 +66,7 @@ export class SharedInfrastructureModule {
       { provide: ID_GENERATOR, useValue: randomUuidGenerator },
       { provide: InProcessDomainEventBus, useValue: domainEventBus },
       { provide: DOMAIN_EVENT_PUBLISHER, useValue: domainEventBus },
+      { provide: LiveUpdateHub, useValue: new LiveUpdateHub() },
       { provide: PROCESS_INSPECTOR, useValue: processInspector },
       {
         provide: PROCESS_TERMINATOR,

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Department, TaskDetail, TaskSummary } from '@aiteam/contracts';
 import { ApiRequestError } from '../../../shared/api/api-client';
 import { useApiQuery } from '../../../shared/api/use-api-query';
-import { useReloadWhile } from '../../../shared/api/use-polling';
+import { useEventStream } from '../../../shared/api/use-event-stream';
 import { controlStyles, StatusNotice } from '../../../shared/ui/controls';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
 import { AgentAvatar } from '../../organization/components/agent-identity';
@@ -13,7 +13,6 @@ import { GATE_PRESENTATION } from '../../workflows/workflow-labels';
 import {
   BOARD_COLUMN_PRESENTATION,
   formatFileSize,
-  isTaskActive,
   PRIORITY_PRESENTATION,
   STATUS_NOTES,
 } from '../task-labels';
@@ -28,8 +27,6 @@ import {
 import { ApprovalActions } from './approval-actions';
 import { CompletionGoalBox } from './completion-goal-box';
 import styles from './tasks.module.css';
-
-const ACTIVE_REFRESH_MS = 2_000;
 
 interface TaskDetailPanelProps {
   taskId: string;
@@ -48,8 +45,14 @@ export function TaskDetailPanel({
   onClose,
 }: TaskDetailPanelProps) {
   const task = useApiQuery(`task:${taskId}`, () => loadTaskDetail(taskId));
-  const active = task.status === 'success' && isTaskActive(task.result.status);
-  useReloadWhile(active, task.reload, ACTIVE_REFRESH_MS);
+  const [logRevision, setLogRevision] = useState(0);
+  // One stream for the whole panel: status changes reload the detail, new lines the log.
+  useEventStream(`/api/stream/tasks/${encodeURIComponent(taskId)}`, (updates) => {
+    if (updates.some((update) => update.type !== 'task.event')) task.reload();
+    if (updates.some((update) => update.type === 'task.event')) {
+      setLogRevision((revision) => revision + 1);
+    }
+  });
 
   if (task.status === 'loading') {
     return <p className={styles.mutedText}>Đang tải task…</p>;
@@ -132,7 +135,7 @@ export function TaskDetailPanel({
         <div className={styles.formStack}>
           <CompletionGoalBox goal={detail.completionGoal} showItems />
           <DelegationChain detail={detail} />
-          <TaskLog taskId={detail.id} active={active} />
+          <TaskLog taskId={detail.id} revision={logRevision} />
         </div>
       </div>
     </section>
@@ -335,9 +338,12 @@ function DelegationChain({ detail }: { detail: TaskDetail }) {
   );
 }
 
-function TaskLog({ taskId, active }: { taskId: string; active: boolean }) {
+function TaskLog({ taskId, revision }: { taskId: string; revision: number }) {
   const events = useApiQuery(`task-events:${taskId}`, () => loadTaskEvents(taskId));
-  useReloadWhile(active, events.reload, ACTIVE_REFRESH_MS);
+  const reloadEvents = events.reload;
+  useEffect(() => {
+    if (revision > 0) reloadEvents();
+  }, [revision, reloadEvents]);
   return (
     <div className={styles.fact}>
       <span className={styles.factLabel}>Nhật ký task</span>

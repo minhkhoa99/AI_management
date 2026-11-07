@@ -2,16 +2,40 @@
 
 import Link from 'next/link';
 import { useApiQuery } from '../../../shared/api/use-api-query';
+import { useEventStream } from '../../../shared/api/use-event-stream';
 import { controlStyles, StatusNotice } from '../../../shared/ui/controls';
 import { loadAgents, loadDepartmentSummaries } from '../../organization/organization-api';
+import { loadPendingApprovals } from '../../tasks/tasks-api';
+import {
+  loadHourlyThroughput,
+  loadOverviewMetrics,
+  loadRecentActivity,
+  loadUsageByProvider,
+} from '../overview-api';
 import { AgentTable } from './agent-table';
+import { HourlyChart, KpiCards, ProviderUsageDonut } from './overview-figures';
+import figureStyles from './overview-figures.module.css';
+import { PendingApprovalsCard, RecentActivityCard } from './overview-side-cards';
 import { DepartmentCards } from './department-cards';
 import styles from './overview.module.css';
 
-/** Phase 1 overview: department cards and the agent table. KPIs and charts arrive in phase 4. */
+/** Overview: KPIs, hourly chart, tokens per engine, approvals, recent activity, agents. */
 export function OverviewScreen() {
   const summaries = useApiQuery('departments:summary', loadDepartmentSummaries);
   const agents = useApiQuery('agents:all', () => loadAgents());
+  const metrics = useApiQuery('overview:metrics', loadOverviewMetrics);
+  const throughput = useApiQuery('overview:throughput', loadHourlyThroughput);
+  const usage = useApiQuery('overview:usage', loadUsageByProvider);
+  const activity = useApiQuery('overview:activity', () => loadRecentActivity());
+  const approvals = useApiQuery('approvals:pending', loadPendingApprovals);
+  // Figures follow the work live: any task or approval change refreshes them.
+  useEventStream('/api/stream/workspace', (updates) => {
+    metrics.reload();
+    throughput.reload();
+    usage.reload();
+    activity.reload();
+    if (updates.some((update) => update.type === 'approval.changed')) approvals.reload();
+  });
 
   if (summaries.status === 'error' || agents.status === 'error') {
     const error =
@@ -39,7 +63,22 @@ export function OverviewScreen() {
 
   return (
     <>
-      <AgentTable agents={agents.result} departments={summaries.result} />
+      {metrics.status === 'success' && <KpiCards metrics={metrics.result} />}
+      <div className={figureStyles.figureRow}>
+        <div className={figureStyles.mainColumn}>
+          <div className={figureStyles.figureRow}>
+            {throughput.status === 'success' && <HourlyChart hours={throughput.result} />}
+            {usage.status === 'success' && <ProviderUsageDonut usage={usage.result} />}
+          </div>
+          <AgentTable agents={agents.result} departments={summaries.result} />
+        </div>
+        <div className={figureStyles.sideColumn}>
+          <PendingApprovalsCard
+            approvals={approvals.status === 'success' ? approvals.result : []}
+          />
+          {activity.status === 'success' && <RecentActivityCard items={activity.result} />}
+        </div>
+      </div>
       <DepartmentCards summaries={summaries.result} />
     </>
   );

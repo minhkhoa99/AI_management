@@ -1,36 +1,17 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { TaskEvent } from '@aiteam/contracts';
-import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
-import {
-  TASK_EVENT_LOG,
-  type TaskEventLog,
-  type TaskEventRecord,
-} from '../ports/task-execution.ports';
-import { requireTaskExists } from './get-task-detail.use-case';
+/** What a log line is made from: the event kind and its stored payload. */
+export interface DescribableTaskEvent {
+  kind: string;
+  payload: Record<string, unknown>;
+}
 
 const LINE_LIMIT = 300;
 
-/** "Nhật ký task": the latest events of a task, one readable line each. */
-@Injectable()
-export class ListTaskEventsUseCase {
-  constructor(
-    @Inject(TASK_REPOSITORY) private readonly taskRepository: TaskRepository,
-    @Inject(TASK_EVENT_LOG) private readonly eventLog: TaskEventLog,
-  ) {}
-
-  listTaskEvents(taskId: string, limit: number): TaskEvent[] {
-    requireTaskExists(this.taskRepository, taskId);
-    return this.eventLog.listTaskEvents(taskId, limit).map((event) => ({
-      id: event.id,
-      kind: event.kind,
-      agentName: event.agentName,
-      text: clip(describeTaskEvent(event)),
-      createdAt: event.createdAt,
-    }));
-  }
+/** One readable line (Vietnamese) for a task log event; agent text is kept as plain text. */
+export function describeTaskEvent(event: DescribableTaskEvent): string {
+  return clipLine(describeEventText(event));
 }
 
-function describeTaskEvent(event: TaskEventRecord): string {
+function describeEventText(event: DescribableTaskEvent): string {
   const payload = event.payload;
   const text = (key: string) => (typeof payload[key] === 'string' ? payload[key] : '');
   switch (event.kind) {
@@ -88,7 +69,7 @@ const STEP_OUTCOME_LABELS: Record<string, string> = {
   task_succeeded: 'task hoàn thành',
 };
 
-function clip(text: string): string {
+function clipLine(text: string): string {
   const line = text.replace(/\s+/g, ' ').trim();
   return line.length <= LINE_LIMIT ? line : `${line.slice(0, LINE_LIMIT)}…`;
 }

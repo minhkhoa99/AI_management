@@ -1,0 +1,309 @@
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.kpiCard {
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kpiLabel,
+.cardSubtitle {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+}
+
+.kpiValueRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kpiValue {
+  font-family: var(--font-heading-stack);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.kpiNote {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 30px;
+}
+
+.sparkBar {
+  width: 5px;
+  border-radius: 2px;
+}
+
+.figureRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.chartCard,
+.donutCard,
+.sideCard {
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chartCard {
+  flex: 2 1 460px;
+}
+
+.donutCard {
+  flex: 1 1 280px;
+}
+
+.sideCard {
+  flex: 1 1 300px;
+}
+
+.chartHeader {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 17px;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendSwatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.chartScroll {
+  overflow-x: auto;
+}
+
+.bars {
+  min-width: 440px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 170px;
+  padding-top: 10px;
+  border-bottom: 1px solid var(--color-border-input);
+  background-image: linear-gradient(#1a2440 1px, transparent 1px);
+  background-size: 100% 42px;
+}
+
+.barColumn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.barTotal {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.barRework,
+.barDone {
+  width: 100%;
+  max-width: 30px;
+}
+
+.barRework {
+  background: var(--color-action);
+  border-radius: 4px 4px 0 0;
+}
+
+.barDone {
+  background: var(--color-primary);
+}
+
+.barLabels {
+  min-width: 440px;
+  display: flex;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.barLabels span {
+  flex: 1;
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.donutRow {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.donut {
+  width: 132px;
+  height: 132px;
+  border-radius: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.donutHole {
+  width: 88px;
+  height: 88px;
+  border-radius: 44px;
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.donutTotal {
+  font-family: var(--font-heading-stack);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.donutLegend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 140px;
+}
+
+.donutLegendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.donutLegendLabel {
+  flex: 1;
+}
+
+.donutLegendValue {
+  font-weight: 600;
+  min-width: 46px;
+  text-align: right;
+}
+
+.sideColumn {
+  flex: 1 1 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.countChip {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #3a2010;
+  color: #fdba8c;
+}
+
+.activityList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.activityItem {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.activityRail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+}
+
+.activityDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  margin-top: 5px;
+  background: var(--color-primary);
+}
+
+.activityLine {
+  width: 1px;
+  flex: 1;
+  background: var(--color-border-input);
+  margin-top: 4px;
+}
+
+.activityText {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.activityAgent {
+  font-weight: 600;
+}
+
+.mainColumn {
+  flex: 3 1 520px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}

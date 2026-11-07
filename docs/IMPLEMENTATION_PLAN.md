@@ -296,6 +296,23 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 **Hoàn thành khi:** theo dõi được một task code từ đầu đến cuối, gửi góp ý theo dòng và thấy agent sửa lại tạo mốc mới.
 
+**Quyết định đã chốt (11/2026):**
+
+- **Markdown:** tự viết renderer tối giản, dựng thẳng React element, không bao giờ chèn HTML, không thêm thư viện. Hỗ trợ tiêu đề, đoạn, danh sách, code, đậm/nghiêng; link chỉ hiện dạng chữ.
+- **Xem trước giao diện:** mỗi task khai báo "Lệnh chạy giao diện", vd `npm run dev -- --port {port}`. Nền tảng cấp cổng trống thay vào `{port}`, chạy trong worktree, chỉ trên 127.0.0.1, dừng khi đóng tab hoặc xoá task. iframe `sandbox` không có `allow-same-origin`.
+- **"Yêu cầu sửa":** góp ý theo dòng trên một mốc đưa task về bước đã tạo mốc đó. Đúng agent đó nhận góp ý (tiếp tục phiên cũ nếu được) và tạo mốc mới; quy trình sau đó đi tiếp như thường (QC, review chạy lại).
+- **Tạm dừng / Tiếp tục:** thêm trạng thái task `paused` (migration + contracts). Tạm dừng thì dừng lượt và lưu mốc; tiếp tục thì về hàng đợi, cùng agent tiếp tục phiên bằng `session_ref`.
+- **Sự kiện và luồng trực tiếp (phần A):**
+  - `task_events` ghi theo lô trong một transaction (200 ms hoặc 100 sự kiện); mọi lần đọc ghi phần đang chờ trước. Sự kiện của task đã xoá bị bỏ.
+  - `LiveUpdateHub` trong tiến trình phát `task.changed`, `task.event`, `approval.changed`.
+  - Các luồng `/api/stream/workspace`, `/api/stream/departments/:id`, `/api/stream/tasks/:id` gộp 200 ms mỗi tin, `id` tăng dần, trả lại phần thiếu theo `Last-Event-ID` (giữ 2.000 cập nhật gần nhất trong bộ nhớ).
+  - Giao diện dùng chung một `EventSource` cho mỗi URL; polling của Giai đoạn 3 đã bỏ.
+- **Tổng quan:**
+  - Thẻ chi phí đổi thành "Token hôm nay" (tiền chỉ tính được cho Custom API).
+  - "Ngân sách hôm nay" ở thanh bên đổi thành "Hạn mức hôm nay" (token, số lượt); giới hạn ngân sách làm ở Giai đoạn 5.
+  - "Ngày" tính theo múi giờ của máy.
+- Giai đoạn 4 chia 3 pull request: (A) sự kiện theo lô, luồng trực tiếp, số liệu Tổng quan; (B) màn Theo dõi trực tiếp; (C) xem trước giao diện.
+
 ### Giai đoạn 5: Hoàn thiện và đóng gói
 
 - Khôi phục sau khi tắt đột ngột: phần nền (kill tiến trình CLI mồ côi, `running` → `queued`, `cancelling` → `cancelled`) đã kéo lên làm trước Giai đoạn 3 (mục 5.6); ở đây chỉ còn tiếp tục phiên bằng `session_ref`.

@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { healthResponseSchema } from '@aiteam/contracts';
 import { fetchApiJson } from '../api/api-client';
 import { useApiQuery } from '../api/use-api-query';
+import { useEventStream } from '../api/use-event-stream';
+import { formatCount, loadUsageToday } from '../../features/overview/overview-api';
 import { SidebarDepartmentList } from '../../features/organization/components/sidebar-department-list';
 import { StrokeIcon } from '../ui/stroke-icon';
 import { findNavigationItemForPath, NAVIGATION_ITEMS } from './navigation-items';
@@ -51,8 +53,27 @@ export function AppSidebar() {
         <SidebarDepartmentList />
       </section>
 
-      <ServerStatusCard />
+      <div className={styles.sidebarFooter}>
+        <UsageTodayCard />
+        <ServerStatusCard />
+      </div>
     </nav>
+  );
+}
+
+/** "Hạn mức hôm nay": tokens and turns used today (a budget limit arrives in phase 5). */
+function UsageTodayCard() {
+  const usage = useApiQuery('overview:usage-today', loadUsageToday);
+  useEventStream('/api/stream/workspace', (updates) => {
+    if (updates.some((update) => update.type === 'task.changed')) usage.reload();
+  });
+  if (usage.status !== 'success') return null;
+  return (
+    <div className={styles.statusCard}>
+      <span className={styles.sectionLabel}>Hạn mức hôm nay</span>
+      <span className={styles.usageValue}>{formatCount(usage.result.tokens)} token</span>
+      <span className={styles.statusText}>{usage.result.turns} lượt agent</span>
+    </div>
   );
 }
 
