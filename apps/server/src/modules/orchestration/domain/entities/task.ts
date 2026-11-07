@@ -59,7 +59,7 @@ export interface TaskContent {
   previewCommand: string | null;
 }
 
-const FEEDBACK_MAX_LENGTH = 8_000;
+export const FEEDBACK_MAX_LENGTH = 8_000;
 
 /** A unit of work for a department: what to do, who does it, where, and how far it got. */
 export class Task {
