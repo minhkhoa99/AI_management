@@ -62,6 +62,36 @@ describe('Claude Code invocation', () => {
     );
   });
 
+  it('loads no settings file, so hooks or apiKeyHelper written into the worktree never run', () => {
+    const { args } = buildClaudeInvocation(request({ accessLevel: 'edit_workspace' }));
+
+    expect(valuesAfter(args, '--setting-sources')).toEqual(['']);
+    expect(JSON.parse(valuesAfter(args, '--settings')[0] ?? '{}')).toEqual({
+      disableAllHooks: true,
+    });
+  });
+
+  it('leaves out --disallowedTools when nothing is denied (a bare flag fails the run)', () => {
+    const { args } = buildClaudeInvocation(
+      request({
+        accessLevel: 'edit_workspace',
+        networkAccess: true,
+        blockDangerousCommands: false,
+      }),
+    );
+
+    expect(args).not.toContain('--disallowedTools');
+  });
+
+  it('puts the project instructions before the task prompt', () => {
+    const { stdinText } = buildClaudeInvocation(request({}), 'Dùng tab.');
+
+    expect(stdinText).toContain('Dùng tab.');
+    expect(stdinText.indexOf('Dùng tab.')).toBeLessThan(stdinText.indexOf('làm việc'));
+    expect(stdinText.endsWith('làm việc')).toBe(true);
+    expect(buildClaudeInvocation(request({})).stdinText).toBe('làm việc');
+  });
+
   it('resumes the earlier session when asked', () => {
     expect(valuesAfter(buildClaudeInvocation(request({}, 'abc')).args, '--resume')).toEqual([
       'abc',
