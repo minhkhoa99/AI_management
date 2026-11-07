@@ -45,6 +45,16 @@ export async function sendApiCommand(
   await requestApi(method, path, requestBody, undefined);
 }
 
+/** Uploads raw file bytes (application/octet-stream); the JSON response is validated. */
+export function sendApiBytes<Schema extends z.ZodType>(
+  method: 'PUT' | 'POST',
+  path: string,
+  content: Blob,
+  responseSchema: Schema,
+): Promise<z.infer<Schema>> {
+  return requestApi(method, path, content, responseSchema);
+}
+
 /**
  * Authentication is the HttpOnly session cookie, sent automatically on same-origin requests;
  * the browser adds the Origin header the server checks on writes.
@@ -56,13 +66,15 @@ async function requestApi<Schema extends z.ZodType>(
   responseSchema: Schema | undefined,
 ): Promise<z.infer<Schema>> {
   const headers: Record<string, string> = { accept: 'application/json' };
+  const isBinary = requestBody instanceof Blob;
   if (requestBody !== undefined) {
-    headers['content-type'] = 'application/json';
+    headers['content-type'] = isBinary ? 'application/octet-stream' : 'application/json';
   }
   const response = await fetch(path, {
     method,
     headers,
-    body: requestBody === undefined ? undefined : JSON.stringify(requestBody),
+    body:
+      requestBody === undefined ? undefined : isBinary ? requestBody : JSON.stringify(requestBody),
     credentials: 'same-origin',
     cache: 'no-store',
   });

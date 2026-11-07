@@ -80,9 +80,11 @@
   background: var(--color-action);
   color: var(--color-on-action);
   font-weight: 600;
+  text-decoration: none;
 }
 
-.primaryAction:not(:disabled):hover {
+.primaryAction:hover {
+  color: var(--color-on-action);
   background: var(--color-action-hover);
 }
 

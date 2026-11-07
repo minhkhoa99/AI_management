@@ -148,6 +148,8 @@ Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế ch�
 | Nhật ký task | `GET /api/tasks/:id/events?limit=`, SSE `/api/stream/tasks/:id` | `ListTaskEventsUseCase` · tracing | 4 |
 | "Xem thay đổi code" | điều hướng `/monitor?agent=…&tab=diff` | — | 4 |
 
+Đã chốt ở Giai đoạn 3 (phần B): mã task dạng `T-<n>` (`tasks.sequence_number`, migration 007); tài liệu QA tải lên bằng `PUT /api/tasks/:id/attachments?fileName=` thân nhị phân, xoá bằng `DELETE /api/tasks/:id/attachments/:attachmentId`; `DELETE /api/tasks/:id` trả `202 { taskId, outcome }` (`deleted` ngay khi task chưa chạy hoặc đã xong, `cancelling` khi phải dừng agent, có ở phần C); task có thêm "Lệnh kiểm thử" cho điều kiện `tests_pass`. Mũi tên chuyển cột, giao xuống cấp dưới và nhật ký task làm ở phần C / Giai đoạn 4. Thư mục cho phép chỉ thêm được qua hộp chọn thư mục (`POST /api/workspace/dir-picker`); `PATCH /api/settings` chỉ bỏ bớt thư mục và đổi số agent song song. Xoá phòng bị chặn khi còn task; xoá thành viên bị chặn khi còn task chưa xong.
+
 ### 4.6 Theo dõi trực tiếp `/monitor?dept=&agent=&tab=`
 
 | Thành phần UI | API | Use case / module | GĐ |
