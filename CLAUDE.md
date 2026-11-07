@@ -122,6 +122,10 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
 --ignore-user-config` gọi thẳng CLI (không dùng `@openai/codex-sdk`).
 - Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
   đầu bằng `-`.
+  Ngoại lệ duy nhất: lệnh kiểm thử của task do người dùng viết chạy qua shell (không bao giờ là
+  dữ liệu từ agent).
+- Agent `edit_workspace` trên Claude Code được Bash/PowerShell trong worktree; luật chặn lệnh nguy
+  hiểm và mạng vẫn áp dụng. Phiên duyệt của cấp trên luôn chỉ đọc.
 - Quyền mỗi lần chạy do agent quyết (`access_level`, `network_access`); cài đặt engine là trần.
 - Khoá Custom API mã hoá AES-256-GCM (`~/.aiteam/secret.key`), API chỉ trả 4 ký tự cuối; đổi host
   phải nhập lại khoá; fetch tới API từ chối redirect.

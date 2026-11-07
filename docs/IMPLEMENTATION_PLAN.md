@@ -275,6 +275,18 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - **Luật chung:** `noSkippingSteps`, `sensitiveActionsNeedApproval`, `allowAgentSubsteps`. "Ghi log mọi bước" không phải luật (luôn ghi); "dừng khi vượt ngân sách" làm cùng ngân sách ở Giai đoạn 5.
 - Giai đoạn 3 chia 3 pull request: (A) quy trình + chế độ team, (B) task CRUD, thư mục, tài liệu QA, kanban, (C) chạy thật: worktree, lập lịch, điều kiện chuyển bước, giao việc, duyệt, huỷ, `engine_snapshot_json`.
 
+**Cách chạy (phần C):**
+
+- **Lập lịch:** mỗi giây lấy task `queued` (ưu tiên cao trước, cũ trước, bỏ qua phòng tắt và task đang chờ `run_after`) khi còn chỗ theo "Số agent chạy cùng lúc". Phiên của agent, phiên duyệt của cấp trên và lệnh kiểm thử đều chiếm chỗ. Bộ lập lịch chỉ bắt đầu sau khi phục hồi khởi động xong.
+- **Một lượt:** chọn bước (task không theo quy trình bắt buộc thì người nhận làm cả task), chọn agent, chụp `engine_snapshot_json`, chuẩn bị worktree, dựng prompt, chạy trong `AgentSessionSupervisor`.
+- **Worktree:** `~/.aiteam/data/worktrees/<taskId>`, nhánh `agent/<taskId>`. Bỏ trống thư mục thì tạo `~/.aiteam/data/task-folders/<taskId>`. Commit của nền tảng ký tên "AI Team <aiteam@localhost>". Tài liệu QA được chép vào `.aiteam-qa/` trong worktree và thêm vào `info/exclude`. Sau mỗi lượt lưu một mốc (commit + bảng `checkpoints`).
+- **Báo cáo của agent:** mỗi lượt kết thúc bằng `<aiteam-report>{"outcome","summary","approvalRequest"}</aiteam-report>`. `outcome`: `done`, `pass`, `fail`, `needs_approval`. Thiếu báo cáo hợp lệ được tính là `done` (không phải `pass`). Ví dụ trong prompt dùng đúng kết luận cần (`pass` cho QC và cấp trên).
+- **Lệnh kiểm thử** do người dùng viết nên chạy qua shell của hệ điều hành trong thư mục agent. Đây là ngoại lệ có chủ đích của quy tắc "spawn không qua shell", vốn áp dụng cho engine và dữ liệu từ agent. Lệnh giới hạn 15 phút và bị huỷ cả cây tiến trình khi xoá task. Task không có lệnh kiểm thử thì bước `tests_pass` dựa vào báo cáo của agent.
+- **Lỗi engine** có `retryable`: thử lại tối đa 3 lần, chờ 30, 60 rồi 120 giây. Không `retryable`: task `failed` kèm ghi chú, có nút "Chạy lại".
+- **Tiếp tục phiên:** chỉ dùng lại `session_ref` khi cùng agent, cùng provider, cùng kết nối (đổi model vẫn giữ). Khác thì bỏ phiên cũ và thêm lời bàn giao. Kết quả các bước trước luôn có trong prompt.
+- **Xoá task đang chạy:** `202 cancelling` → huỷ phiên (kill cả cây tiến trình) → lưu mốc → xoá worktree (giữ nhánh) → xoá task. Chạy thật với Claude Code mất 0,56 giây.
+- **Claude Code với `edit_workspace`** được chạy Bash/PowerShell trong worktree, vì chế độ `-p` không hỏi duyệt được. Luật chặn lệnh nguy hiểm và lệnh ra mạng vẫn áp dụng. Phiên duyệt của cấp trên luôn chỉ đọc.
+
 ### Giai đoạn 4: Theo dõi và review
 
 - Lưu sự kiện theo lô, SSE theo task và theo phòng.
