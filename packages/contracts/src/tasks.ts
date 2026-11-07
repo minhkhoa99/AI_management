@@ -313,6 +313,10 @@ export const taskEventSchema = z.object({
   agentName: z.string().nullable(),
   /** One line for the task log; the full payload stays on the server. */
   text: z.string(),
+  /** Longer plain text when there is one: a command's output, a full agent message. */
+  detail: z.string().nullable(),
+  /** The file a file_change event is about (the monitor reloads it when it is open). */
+  filePath: z.string().nullable(),
   createdAt: z.string(),
 });
 export type TaskEvent = z.infer<typeof taskEventSchema>;

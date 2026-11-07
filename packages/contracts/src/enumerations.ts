@@ -54,6 +54,8 @@ export const TASK_STATUSES = [
   'running',
   'waiting_children',
   'waiting_approval',
+  /** Stopped by the user; the scheduler leaves it alone until resumed. */
+  'paused',
   'succeeded',
   'failed',
   'cancelling',
@@ -109,3 +111,8 @@ export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
 export const DELEGATION_REASONS = ['manual', 'automatic', 'workflow_step'] as const;
 export const delegationReasonSchema = z.enum(DELEGATION_REASONS);
 export type DelegationReason = z.infer<typeof delegationReasonSchema>;
+
+/** Line comments on a checkpoint: written, sent to the agent with "Yêu cầu sửa", resolved. */
+export const LINE_COMMENT_STATUSES = ['open', 'sent', 'resolved'] as const;
+export const lineCommentStatusSchema = z.enum(LINE_COMMENT_STATUSES);
+export type LineCommentStatus = z.infer<typeof lineCommentStatusSchema>;
