@@ -4,6 +4,7 @@ import {
   type SubmitCodeReviewRequest,
   lineCommentListSchema,
   lineCommentSchema,
+  previewStatusSchema,
   taskDetailSchema,
   taskEventListSchema,
   taskSummaryListSchema,
@@ -94,3 +95,10 @@ export const loadAgentEvents = (agentId: string) =>
 
 export const loadDelegatedTasks = (agentId: string) =>
   fetchApiJson(`/api/agents/${encodeId(agentId)}/delegated-tasks`, taskSummaryListSchema);
+
+/** Starts the preview or renews its lease; no screen refresh (it runs every few seconds). */
+export const startPreview = (taskId: string, restart: boolean) =>
+  sendApiJson('POST', `/api/tasks/${encodeId(taskId)}/preview`, { restart }, previewStatusSchema);
+
+export const stopPreview = (taskId: string) =>
+  sendApiJson('DELETE', `/api/tasks/${encodeId(taskId)}/preview`, undefined, previewStatusSchema);

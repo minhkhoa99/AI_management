@@ -50,6 +50,7 @@ export class GetTaskDetailUseCase {
       description: state.description,
       criteria: state.criteria,
       testCommand: state.testCommand,
+      previewCommand: state.previewCommand,
       attachments,
       assigneeChain:
         state.assigneeAgentId === null

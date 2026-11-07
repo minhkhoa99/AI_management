@@ -13,6 +13,16 @@ import { PauseTaskUseCase } from './application/use-cases/pause-task.use-case';
 import { ReadWorkspaceFileUseCase } from './application/use-cases/read-workspace-file.use-case';
 import { ResumeTaskUseCase } from './application/use-cases/resume-task.use-case';
 import { RevertWorkspaceFileUseCase } from './application/use-cases/revert-workspace-file.use-case';
+import { StartTaskPreviewUseCase } from './application/use-cases/start-task-preview.use-case';
+import { StopTaskPreviewUseCase } from './application/use-cases/stop-task-preview.use-case';
+import { TaskPreviewRegistry } from './application/use-cases/task-preview-registry';
+import {
+  LOCAL_PORT_PROBE,
+  PREVIEW_PROCESS_LAUNCHER,
+} from './application/ports/preview-server.ports';
+import { NodeLocalPortProbe } from './infrastructure/adapters/node-local-port-probe';
+import { ShellPreviewProcessLauncher } from './infrastructure/adapters/shell-preview-process-launcher';
+import { PreviewController } from './presentation/controllers/preview.controller';
 import { SubmitCodeReviewUseCase } from './application/use-cases/submit-code-review.use-case';
 import { TaskWorkspaceAccess } from './application/use-cases/task-workspace-access';
 import { SqliteAgentTileQuery } from './infrastructure/persistence/sqlite-agent-tile.query';
@@ -123,6 +133,7 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     WorkspaceController,
     ApprovalsController,
     MonitorController,
+    PreviewController,
   ],
   providers: [
     { provide: TASK_RECOVERY_REPOSITORY, useClass: SqliteTaskRecoveryRepository },
@@ -141,6 +152,8 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     { provide: STAFF_DIRECTORY, useClass: SqliteStaffDirectory },
     { provide: TASK_WORKSPACE, useClass: GitTaskWorkspace },
     { provide: TEST_COMMAND_RUNNER, useClass: ShellTestCommandRunner },
+    { provide: PREVIEW_PROCESS_LAUNCHER, useClass: ShellPreviewProcessLauncher },
+    { provide: LOCAL_PORT_PROBE, useClass: NodeLocalPortProbe },
     { provide: AGENT_TILE_QUERY, useClass: SqliteAgentTileQuery },
     RecoverInterruptedWorkUseCase,
     StartupRecoveryTrigger,
@@ -200,6 +213,9 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     AddLineCommentUseCase,
     SubmitCodeReviewUseCase,
     RevertWorkspaceFileUseCase,
+    TaskPreviewRegistry,
+    StartTaskPreviewUseCase,
+    StopTaskPreviewUseCase,
     PauseTaskUseCase,
     ResumeTaskUseCase,
   ],

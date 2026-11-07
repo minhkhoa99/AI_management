@@ -145,3 +145,29 @@ export const agentTileSchema = z.object({
 });
 export type AgentTile = z.infer<typeof agentTileSchema>;
 export const agentTileListSchema = z.array(agentTileSchema);
+
+// ---- Preview (dev server of the task, shown in a sandboxed iframe) ---------------------------
+
+export const PREVIEW_STATES = ['starting', 'running', 'failed', 'stopped'] as const;
+export type PreviewState = (typeof PREVIEW_STATES)[number];
+
+export const previewStatusSchema = z.object({
+  state: z.enum(PREVIEW_STATES),
+  /** http://127.0.0.1:<port>/ (or [::1]) once the server answers; null otherwise. */
+  url: z.string().nullable(),
+  port: z.number().int().positive().nullable(),
+  /** Why it failed, in Vietnamese; null when there is nothing to say. */
+  message: z.string().nullable(),
+  /** Last part of the server output, plain text (shown as text, never as HTML). */
+  output: z.string(),
+});
+export type PreviewStatus = z.infer<typeof previewStatusSchema>;
+
+/** Starts the preview, or keeps it alive (the page calls this regularly while it is shown). */
+export const startPreviewRequestSchema = z
+  .object({
+    /** Start again after a failure (otherwise a failed preview stays failed). */
+    restart: z.boolean().default(false),
+  })
+  .strict();
+export type StartPreviewRequest = z.infer<typeof startPreviewRequestSchema>;

@@ -21,6 +21,7 @@ interface TaskRow {
   working_dir: string | null;
   session_ref: string | null;
   test_command: string | null;
+  preview_command: string | null;
   engine_snapshot_json: string | null;
   step_attempt: number;
   engine_failures: number;
@@ -34,7 +35,7 @@ interface TaskRow {
 const TASK_COLUMNS = `id, sequence_number, department_id, workflow_id, title, description, criteria,
   priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, test_command,
   engine_snapshot_json, step_attempt, engine_failures, run_after, worktree_path, pending_feedback,
-  status_note, base_sha`;
+  status_note, base_sha, preview_command`;
 
 @Injectable()
 export class SqliteTaskRepository implements TaskRepository {
@@ -54,13 +55,13 @@ export class SqliteTaskRepository implements TaskRepository {
       'SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_number FROM tasks',
     );
     this.insertStatement = database.prepare(
-      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 22 }, () => '?').join(', ')})`,
+      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 23 }, () => '?').join(', ')})`,
     );
     this.updateStatement = database.prepare(
       `UPDATE tasks SET workflow_id = ?, title = ?, description = ?, criteria = ?, priority = ?,
          assignee_agent_id = ?, current_step_id = ?, status = ?, working_dir = ?, session_ref = ?,
          test_command = ?, engine_snapshot_json = ?, step_attempt = ?, engine_failures = ?,
-         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, preview_command = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE id = ?`,
     );
     this.deleteStatement = database.prepare('DELETE FROM tasks WHERE id = ?');
@@ -177,6 +178,7 @@ function restoreTask(row: TaskRow): Task {
     pendingFeedback: row.pending_feedback,
     statusNote: row.status_note,
     baseSha: row.base_sha,
+    previewCommand: row.preview_command,
   });
 }
 
@@ -190,5 +192,6 @@ function executionColumns(state: ReturnType<Task['toState']>) {
     state.pendingFeedback,
     state.statusNote,
     state.baseSha,
+    state.previewCommand,
   ] as const;
 }

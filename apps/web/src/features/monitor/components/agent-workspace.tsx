@@ -12,15 +12,25 @@ import { pauseTask, resumeTask } from '../monitor-api';
 import { DiffTab } from './diff-tab';
 import { DocsTab } from './docs-tab';
 import { FilesTab } from './files-tab';
+import { PreviewTab } from './preview-tab';
 import { ActivityTab, PlanTab, TerminalTab } from './log-tabs';
 import styles from './monitor.module.css';
 
-export const WORKSPACE_TABS = ['code', 'diff', 'terminal', 'activity', 'docs', 'plan'] as const;
+export const WORKSPACE_TABS = [
+  'code',
+  'diff',
+  'preview',
+  'terminal',
+  'activity',
+  'docs',
+  'plan',
+] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
 const TAB_LABELS: Record<WorkspaceTab, string> = {
   code: 'Code & thư mục',
   diff: 'Thay đổi',
+  preview: 'Giao diện',
   terminal: 'Terminal',
   activity: 'Hoạt động',
   docs: 'Tài liệu',
@@ -29,7 +39,7 @@ const TAB_LABELS: Record<WorkspaceTab, string> = {
 
 const DEFAULT_TAB: Record<AgentTile['workType'], WorkspaceTab> = {
   code: 'code',
-  design: 'code',
+  design: 'preview',
   test: 'terminal',
   docs: 'docs',
   plan: 'plan',
@@ -178,6 +188,7 @@ export function AgentWorkspace({
         {task !== null && tab === 'terminal' && (
           <TerminalTab taskId={task.id} revision={revisions.commands} />
         )}
+        {task !== null && tab === 'preview' && <PreviewTab taskId={task.id} />}
         {task !== null && tab === 'docs' && <DocsTab taskId={task.id} revisions={revisions} />}
       </div>
     </section>

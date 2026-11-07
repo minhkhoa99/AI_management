@@ -167,7 +167,7 @@ Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế ch�
 | Hoàn tác file / khôi phục | `POST /api/tasks/:id/workspace/file-reverts` `{ path }` | `RevertWorkspaceFileUseCase` (`git checkout <base> -- path`) · orchestration | 4 |
 | Tab Terminal | `GET /api/tasks/:id/events` (lọc `command`, kèm output) + SSE task | — | 4 |
 | Tab Hoạt động | SSE + `GET /api/agents/:id/events` | `ListAgentEventsUseCase` · tracing | 4 |
-| Tab Giao diện (phần C): chọn thiết bị, xoay, thu phóng | `GET /api/tasks/:id/preview` trả URL dev server của worktree; danh sách thiết bị là hằng số ở client | `StartPreviewServerUseCase` (chạy lệnh dev do người dùng cấu hình cho dự án, cổng riêng) · orchestration | 4 |
+| Tab Giao diện: chọn thiết bị, xoay, thu phóng | `POST /api/tasks/:id/preview` `{ restart }` khởi động hoặc gia hạn (trang gọi lại mỗi 10 giây, 1,5 giây khi đang khởi động), `DELETE /api/tasks/:id/preview` khi rời tab; trả `{ state, url, port, message, output }`; danh sách thiết bị là hằng số ở client | `StartTaskPreviewUseCase`, `StopTaskPreviewUseCase`, `TaskPreviewRegistry` (lệnh “Lệnh chạy giao diện” của task, cổng trống thay `{port}`, chỉ loopback) · orchestration | 4 |
 | Khung "Agent tự kiểm tra responsive" | `GET /api/tasks/:id/responsive-report` | `CaptureResponsiveReportUseCase` (Playwright, chạy khi được yêu cầu) | 5 |
 | Tab Tài liệu | file `.md` trong cây thư mục; render Markdown tự viết (chỉ React element, không HTML) | `ReadWorkspaceFileUseCase` | 4 |
 | Tab Kết quả kiểm thử | đọc báo cáo test dạng JSON (pytest-json, JUnit) agent ghi ra | `ParseTestReportUseCase` · tracing | 5 |
