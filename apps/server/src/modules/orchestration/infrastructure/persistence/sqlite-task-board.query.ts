@@ -22,6 +22,7 @@ interface TaskSummaryRow {
   priority: TaskPriority;
   status: TaskStatus;
   working_dir: string | null;
+  status_note: string | null;
   created_at: string;
   updated_at: string;
   assignee_id: string | null;
@@ -47,6 +48,7 @@ interface TaskAgentRow {
 
 const TASK_SUMMARY_SELECT = `
   SELECT t.id, t.sequence_number, t.department_id, t.title, t.priority, t.status, t.working_dir,
+         t.status_note,
          t.created_at, t.updated_at,
          a.id AS assignee_id, a.name AS assignee_name, a.role AS assignee_role,
          a.provider AS assignee_provider, (a.enabled AND d.enabled) AS assignee_available,
@@ -65,6 +67,7 @@ export class SqliteTaskBoardQuery implements TaskBoardQuery {
   private readonly findStatement: StatementSync;
   private readonly chainStatement: StatementSync;
   private readonly recentDirectoriesStatement: StatementSync;
+  private readonly departmentAgentsStatement: StatementSync;
 
   constructor(@Inject(SQLITE_DATABASE) database: DatabaseSync) {
     this.listStatement = database.prepare(
@@ -90,6 +93,11 @@ export class SqliteTaskBoardQuery implements TaskBoardQuery {
        JOIN departments d ON d.id = p.department_id
        ORDER BY chain.depth DESC`,
     );
+    this.departmentAgentsStatement = database.prepare(
+      `SELECT a.id, a.name, a.role, a.provider, (a.enabled AND d.enabled) AS available
+       FROM positions p JOIN agents a ON a.id = p.agent_id JOIN departments d ON d.id = p.department_id
+       WHERE p.department_id = ? ORDER BY p.rowid`,
+    );
     this.recentDirectoriesStatement = database.prepare(
       `SELECT working_dir FROM tasks WHERE working_dir IS NOT NULL
        GROUP BY working_dir ORDER BY MAX(created_at) DESC LIMIT ?`,
@@ -110,13 +118,13 @@ export class SqliteTaskBoardQuery implements TaskBoardQuery {
   }
 
   listReportingChain(agentId: string): TaskAgent[] {
-    return (this.chainStatement.all(agentId) as unknown as TaskAgentRow[]).map((row) => ({
-      id: row.id,
-      name: row.name,
-      role: row.role,
-      provider: row.provider,
-      available: row.available === 1,
-    }));
+    return (this.chainStatement.all(agentId) as unknown as TaskAgentRow[]).map(toTaskAgent);
+  }
+
+  listDepartmentAgents(departmentId: string): TaskAgent[] {
+    return (this.departmentAgentsStatement.all(departmentId) as unknown as TaskAgentRow[]).map(
+      toTaskAgent,
+    );
   }
 
   listRecentWorkingDirectories(limit: number): string[] {
@@ -124,6 +132,16 @@ export class SqliteTaskBoardQuery implements TaskBoardQuery {
       this.recentDirectoriesStatement.all(limit) as unknown as Array<{ working_dir: string }>
     ).map((row) => row.working_dir);
   }
+}
+
+function toTaskAgent(row: TaskAgentRow): TaskAgent {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    provider: row.provider,
+    available: row.available === 1,
+  };
 }
 
 function toTaskSummary(row: TaskSummaryRow): TaskSummary {
@@ -158,6 +176,7 @@ function toTaskSummary(row: TaskSummaryRow): TaskSummary {
         ? null
         : { id: row.step_id, name: row.step_name, gate: currentStepGate },
     workingDirectory: row.working_dir,
+    statusNote: row.status_note,
     attachmentCount: Number(row.attachment_count),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

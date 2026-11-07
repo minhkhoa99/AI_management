@@ -6,7 +6,17 @@ import {
   type TaskAttachmentRepository,
 } from '../../domain/repositories/task-attachment.repository';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
+import {
+  APPROVAL_REPOSITORY,
+  type ApprovalRepository,
+} from '../../domain/repositories/approval.repository';
+import {
+  TASK_DELEGATION_REPOSITORY,
+  type TaskDelegationRepository,
+} from '../../domain/repositories/task-delegation.repository';
 import { TASK_BOARD_QUERY, type TaskBoardQuery } from '../ports/task-board.query';
+import { TaskHandover } from './task-handover';
+import { TaskProgression } from './task-progression';
 
 @Injectable()
 export class GetTaskDetailUseCase {
@@ -15,6 +25,11 @@ export class GetTaskDetailUseCase {
     @Inject(TASK_ATTACHMENT_REPOSITORY)
     private readonly attachmentRepository: TaskAttachmentRepository,
     @Inject(TASK_BOARD_QUERY) private readonly taskBoardQuery: TaskBoardQuery,
+    @Inject(TASK_DELEGATION_REPOSITORY)
+    private readonly delegationRepository: TaskDelegationRepository,
+    @Inject(APPROVAL_REPOSITORY) private readonly approvalRepository: ApprovalRepository,
+    private readonly taskHandover: TaskHandover,
+    private readonly progression: TaskProgression,
   ) {}
 
   getTaskDetail(taskId: string): TaskDetail {
@@ -45,7 +60,25 @@ export class GetTaskDetailUseCase {
         criteria: state.criteria,
         qaDocuments: attachments,
       }),
+      delegations: this.delegationRepository.listDelegations(taskId),
+      delegationTargets: this.listDelegationTargets(taskId, summary.departmentId),
+      pendingApprovalId: this.approvalRepository.findPendingApprovalOfTask(taskId)?.id ?? null,
+      workflowSteps:
+        this.progression
+          .resolveTaskRoute(state.workflowId)
+          ?.steps.map((step) => ({ id: step.id, name: step.name, gate: step.gate })) ?? [],
     };
+  }
+
+  private listDelegationTargets(taskId: string, departmentId: string) {
+    const task = this.taskRepository.findTaskById(taskId);
+    if (task === undefined) return [];
+    const targetIds = new Set(
+      this.taskHandover.listDelegationTargets(task).map((member) => member.agentId),
+    );
+    return this.taskBoardQuery
+      .listDepartmentAgents(departmentId)
+      .filter((agent) => targetIds.has(agent.id));
   }
 }
 

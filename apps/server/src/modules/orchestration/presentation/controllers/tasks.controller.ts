@@ -13,6 +13,12 @@ import {
 import {
   type CreateTaskRequest,
   createTaskRequestSchema,
+  type DelegateTaskRequest,
+  delegateTaskRequestSchema,
+  type MoveTaskStageRequest,
+  moveTaskStageRequestSchema,
+  TASK_EVENT_LIST_MAX,
+  type TaskEvent,
   entityIdSchema,
   qaDocumentNameSchema,
   type TaskAttachment,
@@ -26,6 +32,12 @@ import {
 } from '@aiteam/contracts';
 import { ValidationError } from '../../../../shared/errors/app-error';
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
+import { z } from 'zod';
+import { AutoDelegateByWorkloadUseCase } from '../../application/use-cases/auto-delegate-task.use-case';
+import { DelegateTaskToSubordinateUseCase } from '../../application/use-cases/delegate-task.use-case';
+import { ListTaskEventsUseCase } from '../../application/use-cases/list-task-events.use-case';
+import { MoveTaskStageUseCase } from '../../application/use-cases/move-task-stage.use-case';
+import { RetryTaskUseCase } from '../../application/use-cases/retry-task.use-case';
 import { AttachQaDocumentUseCase } from '../../application/use-cases/attach-qa-document.use-case';
 import { CreateTaskUseCase } from '../../application/use-cases/create-task.use-case';
 import { DeleteTaskUseCase } from '../../application/use-cases/delete-task.use-case';
@@ -47,6 +59,11 @@ export class TasksController {
     private readonly deleteTaskUseCase: DeleteTaskUseCase,
     private readonly attachQaDocumentUseCase: AttachQaDocumentUseCase,
     private readonly removeQaDocumentUseCase: RemoveQaDocumentUseCase,
+    private readonly delegateTaskUseCase: DelegateTaskToSubordinateUseCase,
+    private readonly autoDelegateTaskUseCase: AutoDelegateByWorkloadUseCase,
+    private readonly moveTaskStageUseCase: MoveTaskStageUseCase,
+    private readonly retryTaskUseCase: RetryTaskUseCase,
+    private readonly listTaskEventsUseCase: ListTaskEventsUseCase,
   ) {}
 
   @Get()
@@ -78,7 +95,7 @@ export class TasksController {
 
   @Delete(':taskId')
   @HttpCode(202)
-  deleteTask(@Param('taskId', taskIdPipe) taskId: string): TaskDeletion {
+  deleteTask(@Param('taskId', taskIdPipe) taskId: string): Promise<TaskDeletion> {
     return this.deleteTaskUseCase.deleteTask(taskId);
   }
 
@@ -104,5 +121,46 @@ export class TasksController {
     @Param('attachmentId', new ZodRequestPipe(entityIdSchema, 'Mã tài liệu')) attachmentId: string,
   ): void {
     this.removeQaDocumentUseCase.removeQaDocument(taskId, attachmentId);
+  }
+
+  @Post(':taskId/delegations')
+  delegateTask(
+    @Param('taskId', taskIdPipe) taskId: string,
+    @Body(new ZodRequestPipe(delegateTaskRequestSchema)) request: DelegateTaskRequest,
+  ): TaskDetail {
+    return this.delegateTaskUseCase.delegateTask(taskId, request.toAgentId);
+  }
+
+  @Post(':taskId/auto-delegations')
+  autoDelegateTask(@Param('taskId', taskIdPipe) taskId: string): TaskDetail {
+    return this.autoDelegateTaskUseCase.autoDelegateTask(taskId);
+  }
+
+  @Patch(':taskId/stage')
+  moveTaskStage(
+    @Param('taskId', taskIdPipe) taskId: string,
+    @Body(new ZodRequestPipe(moveTaskStageRequestSchema)) request: MoveTaskStageRequest,
+  ): TaskDetail {
+    return this.moveTaskStageUseCase.moveTaskStage(taskId, request);
+  }
+
+  @Post(':taskId/retries')
+  retryTask(@Param('taskId', taskIdPipe) taskId: string): TaskDetail {
+    return this.retryTaskUseCase.retryTask(taskId);
+  }
+
+  @Get(':taskId/events')
+  listTaskEvents(
+    @Param('taskId', taskIdPipe) taskId: string,
+    @Query(
+      'limit',
+      new ZodRequestPipe(
+        z.coerce.number().int().min(1).max(TASK_EVENT_LIST_MAX).default(50),
+        'Số dòng',
+      ),
+    )
+    limit: number,
+  ): TaskEvent[] {
+    return this.listTaskEventsUseCase.listTaskEvents(taskId, limit);
   }
 }

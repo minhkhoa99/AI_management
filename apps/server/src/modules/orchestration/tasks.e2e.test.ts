@@ -329,7 +329,8 @@ describe('tasks API', () => {
     const lateFolderChange = await app.callApi('PATCH', `/api/tasks/${task.id}`, {
       workflowId: workflow.id,
     });
-    const runningDeletion = await app.callApi('DELETE', `/api/tasks/${task.id}`);
+    // A stale "running" status without a live session (e.g. right after a crash) is deleted at once.
+    const staleDeletion = await app.callApi('DELETE', `/api/tasks/${task.id}`);
 
     expect(edited).toMatchObject({
       title: 'API đăng nhập v2',
@@ -338,7 +339,7 @@ describe('tasks API', () => {
       assignee: { id: developer.id },
     });
     expect(readErrorCode(lateFolderChange)).toBe('TASK_ALREADY_STARTED');
-    expect(readErrorCode(runningDeletion)).toBe('TASK_IN_PROGRESS');
+    expect(taskDeletionSchema.parse(staleDeletion.body).outcome).toBe('deleted');
   });
 
   it('keeps departments and members that still have tasks', async () => {
