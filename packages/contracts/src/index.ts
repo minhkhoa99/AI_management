@@ -7,3 +7,4 @@ export * from './session';
 export * from './workflows';
 export * from './tasks';
 export * from './workspace';
+export * from './tracing';
