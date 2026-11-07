@@ -104,6 +104,7 @@ export async function startAiteamServer(
           secretKeyFilePath:
             options.secretKeyFilePath ??
             path.join(path.dirname(options.dataDirectory), 'secret.key'),
+          dataDirectory: options.dataDirectory,
         },
         database,
         logger,

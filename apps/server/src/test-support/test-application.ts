@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import type { DirectoryPicker } from '../shared/runtime/directory-picker';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -30,6 +31,10 @@ export interface TestApplication {
   application: NestFastifyApplication;
   /** Sends a request the way the logged-in UI does: session cookie, same-origin Origin, JSON. */
   callApi(method: HttpMethod, url: string, requestBody?: unknown): Promise<TestApiResponse>;
+  /** Sends raw bytes (application/octet-stream), like a file upload from the UI. */
+  uploadBytes(method: HttpMethod, url: string, content: Buffer): Promise<TestApiResponse>;
+  /** Folder used as the data directory (QA documents live under it). */
+  dataDirectory: string;
   closeApplication(): Promise<void>;
 }
 
@@ -37,6 +42,7 @@ export interface TestApplication {
 export interface TestApplicationOverrides {
   processInspector?: ProcessInspector;
   processTerminator?: ProcessTerminator;
+  directoryPicker?: DirectoryPicker;
 }
 
 export async function startTestApplication(
@@ -53,12 +59,15 @@ export async function startTestApplication(
       sessionToken: TEST_SESSION_TOKEN,
       listenPort: TEST_LISTEN_PORT,
       secretKeyFilePath: path.join(secretDirectory, 'secret.key'),
+      dataDirectory: secretDirectory,
     },
     database,
     logger: createAppLogger({ level: 'silent' }),
     // Tests never inspect or kill real processes unless they say so.
     processInspector: overrides.processInspector ?? { inspectProcess: () => Promise.resolve(null) },
     processTerminator: overrides.processTerminator ?? { terminateProcessTree: () => undefined },
+    // Never opens a real dialog: tests behave as if the user cancelled unless they say so.
+    directoryPicker: overrides.directoryPicker ?? { pickDirectory: () => Promise.resolve(null) },
   });
 
   return {
@@ -81,6 +90,24 @@ export async function startTestApplication(
         body: response.body.length === 0 ? undefined : (response.json() as unknown),
       };
     },
+    async uploadBytes(method, url, content) {
+      const response = await application.inject({
+        method,
+        url,
+        headers: {
+          host: `127.0.0.1:${TEST_LISTEN_PORT}`,
+          origin: `http://127.0.0.1:${TEST_LISTEN_PORT}`,
+          cookie: `${SESSION_COOKIE_NAME}=${TEST_SESSION_TOKEN}`,
+          'content-type': 'application/octet-stream',
+        },
+        payload: content,
+      });
+      return {
+        statusCode: response.statusCode,
+        body: response.body.length === 0 ? undefined : (response.json() as unknown),
+      };
+    },
+    dataDirectory: secretDirectory,
     async closeApplication() {
       await application.close();
       database.close();

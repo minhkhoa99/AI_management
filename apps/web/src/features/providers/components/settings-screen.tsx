@@ -5,6 +5,7 @@ import type { ProviderConnection } from '@aiteam/contracts';
 import { useApiQuery } from '../../../shared/api/use-api-query';
 import { controlStyles, StatusNotice } from '../../../shared/ui/controls';
 import { StrokeIcon } from '../../../shared/ui/stroke-icon';
+import { WorkspaceSettingsSection } from '../../tasks/components/workspace-settings-section';
 import { loadLocalEngines, loadProviderConnections } from '../providers-api';
 import { ConnectionCard } from './connection-card';
 import { ConnectionFormPanel } from './connection-form-panel';
@@ -25,7 +26,7 @@ aiteam doctor`;
 type ConnectionPanel =
   { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; connection: ProviderConnection };
 
-/** /settings: local engines (Claude Code, Codex) and Custom API connections. */
+/** /settings: local engines, working folders and parallel agents, Custom API connections. */
 export function SettingsScreen() {
   const engines = useApiQuery('local-engines', loadLocalEngines);
   const connections = useApiQuery('provider-connections', loadProviderConnections);
@@ -69,6 +70,8 @@ export function SettingsScreen() {
           </div>
         )}
       </section>
+
+      <WorkspaceSettingsSection sectionClassName={styles.sectionCard ?? ''} />
 
       <section aria-labelledby="connections-heading" className={styles.sectionCard}>
         <div className={styles.sectionHeader}>

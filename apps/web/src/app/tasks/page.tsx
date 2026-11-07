@@ -1,11 +1,11 @@
-import { EmptyState } from '../../shared/ui/empty-state';
+import { Suspense } from 'react';
+import { TasksScreen } from '../../features/tasks/components/tasks-screen';
 
 export default function TasksPage() {
+  // useSearchParams needs a Suspense boundary in a static export.
   return (
-    <EmptyState
-      heading="Chưa có task"
-      description="Tạo task, giao cho agent và theo dõi qua các giai đoạn trên bảng kanban."
-      deliveredInPhase={3}
-    />
+    <Suspense fallback={null}>
+      <TasksScreen />
+    </Suspense>
   );
 }

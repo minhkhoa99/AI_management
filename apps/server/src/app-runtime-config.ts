@@ -10,4 +10,6 @@ export interface AppRuntimeConfig {
   listenPort: number;
   /** AES key file encrypting Custom API keys at rest (~/.aiteam/secret.key). */
   secretKeyFilePath: string;
+  /** ~/.aiteam/data: database, QA documents and task workspaces created by the platform. */
+  dataDirectory: string;
 }

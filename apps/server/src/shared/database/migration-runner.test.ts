@@ -157,6 +157,7 @@ describe('migration 001 initial schema', () => {
     expect(listTableNames(database)).toEqual(
       [
         'agents',
+        'allowed_directories',
         'approvals',
         'checkpoints',
         'cli_process_records',
@@ -171,6 +172,7 @@ describe('migration 001 initial schema', () => {
         'tasks',
         'workflow_steps',
         'workflows',
+        'workspace_settings',
       ].sort(),
     );
   });

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { StrokeIcon } from '../ui/stroke-icon';
 import { findNavigationItemForPath } from './navigation-items';
@@ -43,15 +44,10 @@ export function AppTopbar() {
         <StrokeIcon path={BELL_ICON} size={18} />
       </button>
 
-      <button
-        type="button"
-        className={styles.primaryAction}
-        disabled
-        title="Tạo task có ở Giai đoạn 3"
-      >
+      <Link href="/tasks/?new=1" className={styles.primaryAction}>
         <StrokeIcon path={PLUS_ICON} size={16} strokeWidth={2.2} />
         Tạo task
-      </button>
+      </Link>
 
       <span className={styles.avatar} role="img" aria-label="Tài khoản của bạn">
         BN

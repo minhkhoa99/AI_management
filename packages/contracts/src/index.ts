@@ -5,3 +5,5 @@ export * from './organization';
 export * from './providers';
 export * from './session';
 export * from './workflows';
+export * from './tasks';
+export * from './workspace';

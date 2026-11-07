@@ -8,6 +8,8 @@ import { InProcessDomainEventBus } from './events/in-process-domain-event-bus';
 import { ID_GENERATOR, randomUuidGenerator } from './identifiers/id-generator';
 import { AgentSessionSupervisor } from './runtime/agent-session-supervisor';
 import { CLI_PROCESS_TRACKER, SqliteCliProcessTracker } from './runtime/cli-process-tracker';
+import { DIRECTORY_PICKER, type DirectoryPicker } from './runtime/directory-picker';
+import { NativeDirectoryPicker } from './runtime/native-directory-picker';
 import { OsProcessInspector } from './runtime/os-process-inspector';
 import { PROCESS_INSPECTOR, type ProcessInspector } from './runtime/process-identity';
 import {
@@ -24,6 +26,8 @@ export interface SharedInfrastructureDependencies {
   /** Overridable in tests; defaults read and kill real OS processes. */
   processInspector?: ProcessInspector;
   processTerminator?: ProcessTerminator;
+  /** Overridable in tests; defaults to the OS folder dialog. */
+  directoryPicker?: DirectoryPicker;
   /** Shared with the launcher so a fatal error can cancel running sessions. */
   sessionSupervisor?: AgentSessionSupervisor;
 }
@@ -67,6 +71,10 @@ export class SharedInfrastructureModule {
         ),
       },
       { provide: AgentSessionSupervisor, useValue: sessionSupervisor },
+      {
+        provide: DIRECTORY_PICKER,
+        useValue: dependencies.directoryPicker ?? new NativeDirectoryPicker(dependencies.logger),
+      },
     ];
     return {
       module: SharedInfrastructureModule,

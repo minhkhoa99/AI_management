@@ -1,0 +1,12 @@
+import type { Task } from '../entities/task';
+
+export const TASK_REPOSITORY = Symbol('TASK_REPOSITORY');
+
+export interface TaskRepository {
+  findTaskById(taskId: string): Task | undefined;
+  /** Next free "T-<n>" number; call inside the transaction that inserts the task. */
+  allocateSequenceNumber(): number;
+  insertTask(task: Task): void;
+  updateTask(task: Task): void;
+  deleteTask(taskId: string): void;
+}
