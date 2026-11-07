@@ -5,6 +5,7 @@ import organizationRulesSql from './003_organization_rules.sql';
 import engineSettingsSql from './004_engine_settings.sql';
 import cliProcessRecordsSql from './005_cli_process_records.sql';
 import workflowStepOwnersSql from './006_workflow_step_owners.sql';
+import tasksAndWorkspaceSql from './007_tasks_and_workspace.sql';
 
 /** Every schema migration, in ascending version order. Append only; never edit a released one. */
 export const ALL_MIGRATIONS: readonly SqlMigration[] = [
@@ -29,4 +30,5 @@ export const ALL_MIGRATIONS: readonly SqlMigration[] = [
     sql: workflowStepOwnersSql,
     rebuildsTables: true,
   },
+  { version: 7, name: 'tasks-and-workspace', sql: tasksAndWorkspaceSql },
 ];
