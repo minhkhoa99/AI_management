@@ -12,6 +12,7 @@ import type {
 } from '../../../../orchestration/application/ports/agent-engine.port';
 import { type CliInvocation, resolveCliExecutable, streamCliOutput } from './cli-process';
 import { readClaudeProjectInstructions } from './claude-project-instructions';
+import { assertEngineSessionRef } from './engine-session-ref';
 import { ClaudeStreamTranslator } from './claude-stream-translator';
 import { toFailedEvent } from './engine-failure';
 
@@ -112,7 +113,7 @@ export function buildClaudeInvocation(
     args.push('--model', request.model);
   }
   if (request.resumeSessionRef !== null) {
-    args.push('--resume', request.resumeSessionRef);
+    args.push('--resume', assertEngineSessionRef(request.resumeSessionRef));
   }
   // In print mode nothing can be approved interactively: an agent allowed to edit the workspace
   // may also run commands there (tests, builds); dangerous and network commands stay denied.

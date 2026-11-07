@@ -19,6 +19,8 @@ const ENGINE_PRESENTATION = {
     commandSafety: {
       kind: 'toggle',
       label: 'Chặn rm -rf, git push, git reset --hard, npm publish khi chạy tự động',
+      /** The rules match how a command starts; another spelling gets through. */
+      hint: 'Lọc theo đầu lệnh, không chặn được mọi cách viết khác. Agent được sửa chạy Bash/PowerShell với quyền của bạn (đọc được cả ~/.aiteam): chỉ cấp quyền sửa cho việc bạn tin.',
     },
     background: '#1C3256',
     foreground: '#B9D3FF',
@@ -134,21 +136,24 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
       )}
 
       {presentation.commandSafety.kind === 'toggle' ? (
-        <ToggleSwitch
-          pressed={engine.settings.blockDangerousCommands}
-          accessibleLabel={presentation.commandSafety.label}
-          visibleLabel={presentation.commandSafety.label}
-          onToggle={() =>
-            void performAction(
-              () =>
-                updateLocalEngineSettings(engine.engine, {
-                  blockDangerousCommands: !engine.settings.blockDangerousCommands,
-                }),
-              () => null,
-            )
-          }
-          disabled={isPending}
-        />
+        <>
+          <ToggleSwitch
+            pressed={engine.settings.blockDangerousCommands}
+            accessibleLabel={presentation.commandSafety.label}
+            visibleLabel={presentation.commandSafety.label}
+            onToggle={() =>
+              void performAction(
+                () =>
+                  updateLocalEngineSettings(engine.engine, {
+                    blockDangerousCommands: !engine.settings.blockDangerousCommands,
+                  }),
+                () => null,
+              )
+            }
+            disabled={isPending}
+          />
+          <p className={styles.fieldHint}>{presentation.commandSafety.hint}</p>
+        </>
       ) : (
         <p className={styles.fieldHint}>{presentation.commandSafety.label}</p>
       )}
