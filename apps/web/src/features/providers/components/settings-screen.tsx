@@ -21,7 +21,7 @@ npm install -g @openai/codex
 codex login
 
 # 3. Kiểm tra cả hai
-aiteam doctor`;
+aimanagement doctor`;
 
 type ConnectionPanel =
   { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; connection: ProviderConnection };

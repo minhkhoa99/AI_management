@@ -87,7 +87,7 @@ describe('shutDownAfterFatalError', () => {
       },
     });
     expect(String(vi.mocked(dependencies.writeToTerminal).mock.calls[0]?.[0])).toContain(
-      'Chạy lại: aiteam',
+      'Chạy lại: aimanagement',
     );
   });
 

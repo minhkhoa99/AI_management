@@ -139,9 +139,13 @@ npm run lint     # eslint + prettier --check + tsc typecheck
 npm test         # vitest
 npm run build    # dist/server (bundle) + dist/web (Next export)
 npm run check:bundle   # ngân sách bundle web (sau build)
-node bin/aiteam.mjs [--port 7419] [--no-open]
+node bin/aiteam.mjs [--port 7419] [--no-open]   # = lệnh aimanagement sau khi cài gói
 node bin/aiteam.mjs doctor
+npm pack         # gói aimanagement-<version>.tgz (prepack: build + smoke + bundle)
 ```
+
+Gói npm và lệnh tên `aimanagement`; tên nội bộ giữ `aiteam` (`~/.aiteam`, `AITEAM_*`, cookie).
+Không thêm `dependencies` vào gói: server phải chạy từ bundle, không cần `node_modules`.
 
 ## Git
 

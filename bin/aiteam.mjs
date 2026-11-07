@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// aiteam launcher. Four jobs only: check Node, prepare ~/.aiteam, load the bundled server
+// Launcher of the `aimanagement` command (AI Team). Four jobs only: check Node, prepare ~/.aiteam, load the bundled server
 // (which applies migrations and listens on 127.0.0.1), open the browser.
-// Sub-command: `aiteam doctor` checks the local toolchain.
+// Sub-command: `aimanagement doctor` checks the local toolchain.
 import { evaluateNodeVersion } from './node-version-policy.mjs';
 
 const nodeVerdict = evaluateNodeVersion(process.version);
 if (!nodeVerdict.accepted && process.argv[2] !== 'doctor') {
-  console.error(`aiteam: ${nodeVerdict.reason}`);
+  console.error(`aimanagement: ${nodeVerdict.reason}`);
   console.error('Tải bản vá tại https://nodejs.org/en/download');
   process.exit(1);
 }
@@ -46,8 +46,8 @@ function readPackageVersion() {
 
 function printUsage() {
   console.log(`Cách dùng:
-  aiteam [--port <số>] [--no-open]   Khởi động AI Team và mở trình duyệt
-  aiteam doctor                      Kiểm tra Node, git, Claude Code, Codex
+  aimanagement [--port <số>] [--no-open]   Khởi động AI Team và mở trình duyệt
+  aimanagement doctor                      Kiểm tra Node, git, Claude Code, Codex
 
 Cổng: --port, nếu không có thì AITEAM_PORT, nếu không có thì 7419.
 Cổng đang bận thì tự thử cổng trống kế tiếp; URL in ra là cổng thật.
@@ -208,7 +208,7 @@ function runDoctorChecks() {
     { label: 'codex login status', outcome: probeCommand('codex login status') },
   ];
 
-  console.log('aiteam doctor');
+  console.log('aimanagement doctor');
   for (const { label, outcome } of checks) {
     console.log(`  ${outcome.passed ? '[ok]  ' : '[lỗi]'} ${label.padEnd(20)} ${outcome.detail}`);
   }
@@ -231,6 +231,6 @@ try {
   }
 } catch (error) {
   const code = error?.code === undefined ? '' : ` [${error.code}]`;
-  console.error(`aiteam: ${error?.message ?? error}${code}`);
+  console.error(`aimanagement: ${error?.message ?? error}${code}`);
   process.exitCode = 1;
 }
