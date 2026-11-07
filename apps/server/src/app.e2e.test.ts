@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { type AddressInfo, connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
@@ -11,6 +12,7 @@ import {
 } from '@aiteam/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAiteamApplication } from './app-factory';
+import { SECURITY_HEADERS } from './shared/security/security-headers.middleware';
 import { applyPendingMigrations } from './shared/database/migration-runner';
 import { ALL_MIGRATIONS } from './shared/database/migrations';
 import {
@@ -175,16 +177,15 @@ describe('aiteam HTTP application (e2e)', () => {
   });
 
   describe('Host header', () => {
-    it.each([`localhost:${LISTEN_PORT}`, `127.0.0.1:${LISTEN_PORT}`])(
-      'accepts %s',
-      async (host) => {
-        const response = await sendRequest('/api/health', { host });
+    it('accepts 127.0.0.1:<port>', async () => {
+      const response = await sendRequest('/api/health', { host: `127.0.0.1:${LISTEN_PORT}` });
 
-        expect(response.statusCode).toBe(200);
-      },
-    );
+      expect(response.statusCode).toBe(200);
+    });
 
     it.each([
+      // Previews run on localhost: the UI must not share their site (cookies ignore ports).
+      ['localhost (reserved for task previews)', `localhost:${LISTEN_PORT}`],
       ['a foreign domain (DNS rebinding)', `evil.example:${LISTEN_PORT}`],
       ['loopback on another port', '127.0.0.1:8080'],
       ['loopback without port', '127.0.0.1'],
@@ -222,6 +223,7 @@ describe('aiteam HTTP application (e2e)', () => {
       ['missing', undefined],
       ['null', 'null'],
       ['another loopback port', 'http://127.0.0.1:8080'],
+      ['localhost (task previews)', `http://localhost:${LISTEN_PORT}`],
     ])('rejects a write with %s Origin', async (_label, origin) => {
       const headers: Record<string, string> = { cookie: VALID_SESSION_COOKIE };
       if (origin !== undefined) {
@@ -260,5 +262,64 @@ describe('aiteam HTTP application (e2e)', () => {
       expect(response.headers['content-type']).toContain('text/html');
       expect(response.body).toContain('<title>AI Team</title>');
     });
+  });
+
+  describe('security headers', () => {
+    it.each([
+      ['a UI page', '/', {}],
+      ['an API response', '/api/departments', { cookie: VALID_SESSION_COOKIE }],
+      ['an error', '/api/departments', {}],
+    ])('are sent with %s (no framing of the UI, no sniffing)', async (_label, url, headers) => {
+      const response = await sendRequest(url, headers);
+
+      for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+        expect(response.headers[name]).toBe(value);
+      }
+      expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+    });
+  });
+
+  describe('request target', () => {
+    const CRLF = String.fromCharCode(13, 10);
+
+    async function listenOnce(): Promise<number> {
+      if (!application.getHttpServer().listening) {
+        await application.listen(0, '127.0.0.1');
+      }
+      return (application.getHttpServer().address() as AddressInfo).port;
+    }
+
+    /** Raw HTTP over a socket: inject() normalises the target before the app sees it. */
+    function sendRawRequest(port: number, requestText: string): Promise<string> {
+      return new Promise((resolve, reject) => {
+        const socket = connect(port, '127.0.0.1', () => socket.end(requestText));
+        let responseText = '';
+        socket.setEncoding('utf8');
+        socket.on('data', (chunk: string) => (responseText += chunk));
+        socket.on('end', () => resolve(responseText));
+        socket.on('error', reject);
+      });
+    }
+
+    it.each([
+      ['an absolute URL', `http://${ALLOWED_HOST}/api/departments`],
+      ['an absolute URL with another host', 'HTTP://evil.example/api/departments'],
+    ])(
+      'rejects %s, which the router would route past the session check',
+      async (_label, target) => {
+        const port = await listenOnce();
+
+        const responseText = await sendRawRequest(
+          port,
+          [`GET ${target} HTTP/1.1`, `Host: ${ALLOWED_HOST}`, 'Connection: close', '', ''].join(
+            CRLF,
+          ),
+        );
+
+        expect(responseText.split(CRLF)[0]).toBe('HTTP/1.1 400 Bad Request');
+        expect(responseText).toContain('REQUEST_TARGET_NOT_ALLOWED');
+        expect(responseText).not.toContain('"departments"');
+      },
+    );
   });
 });

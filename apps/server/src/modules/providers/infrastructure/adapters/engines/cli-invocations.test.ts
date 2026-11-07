@@ -62,6 +62,48 @@ describe('Claude Code invocation', () => {
     );
   });
 
+  it('loads no settings file, so hooks or apiKeyHelper written into the worktree never run', () => {
+    const { args } = buildClaudeInvocation(request({ accessLevel: 'edit_workspace' }));
+
+    expect(valuesAfter(args, '--setting-sources')).toEqual(['']);
+    expect(JSON.parse(valuesAfter(args, '--settings')[0] ?? '{}')).toEqual({
+      disableAllHooks: true,
+    });
+  });
+
+  it('leaves out --disallowedTools when nothing is denied (a bare flag fails the run)', () => {
+    const { args } = buildClaudeInvocation(
+      request({
+        accessLevel: 'edit_workspace',
+        networkAccess: true,
+        blockDangerousCommands: false,
+      }),
+    );
+
+    expect(args).not.toContain('--disallowedTools');
+  });
+
+  it('puts the project instructions before the task prompt', () => {
+    const { stdinText } = buildClaudeInvocation(request({}), 'Dùng tab.');
+
+    expect(stdinText).toContain('Dùng tab.');
+    expect(stdinText.indexOf('Dùng tab.')).toBeLessThan(stdinText.indexOf('làm việc'));
+    expect(stdinText.endsWith('làm việc')).toBe(true);
+    expect(buildClaudeInvocation(request({})).stdinText).toBe('làm việc');
+  });
+
+  it.each([
+    ['Claude', buildClaudeInvocation],
+    ['Codex', buildCodexInvocation],
+  ])('%s refuses a session id that could be read as an option', (_label, buildInvocation) => {
+    expect(() => buildInvocation(request({}, '--dangerously-skip-permissions'))).toThrow(
+      'Mã phiên',
+    );
+    expect(() =>
+      buildInvocation(request({}, '019a3f2e-77aa-7c1d-9a5b-1d2e3f4a5b6c')),
+    ).not.toThrow();
+  });
+
   it('resumes the earlier session when asked', () => {
     expect(valuesAfter(buildClaudeInvocation(request({}, 'abc')).args, '--resume')).toEqual([
       'abc',

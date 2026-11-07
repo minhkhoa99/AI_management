@@ -242,8 +242,9 @@ export class TaskPreviewRegistry implements OnApplicationShutdown {
           }
           if (entry.state !== 'starting') return;
           entry.state = 'running';
-          entry.url =
-            host === '::1' ? `http://[::1]:${entry.port}/` : `http://127.0.0.1:${entry.port}/`;
+          // Never the UI's own host (127.0.0.1): browsers would send it the session cookie.
+          // localhost reaches a server on 127.0.0.1 or ::1, and CSP cannot name [::1].
+          entry.url = `http://localhost:${entry.port}/`;
           return;
         }
         if (Date.now() >= deadline) {

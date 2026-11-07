@@ -1,17 +1,21 @@
 import { timingSafeEqual } from 'node:crypto';
 import { SESSION_COOKIE_NAME } from '@aiteam/contracts';
 
-/** Hostnames the browser may use to reach the server (it only binds 127.0.0.1). */
-const LOOPBACK_HOSTNAMES = ['127.0.0.1', 'localhost'] as const;
+/**
+ * The one hostname of the UI (the server only binds 127.0.0.1). Browsers send cookies to every
+ * port of a host, so the UI never answers on `localhost`: task previews (agent-written dev
+ * servers on other ports) are opened on `localhost` and never receive the session cookie.
+ */
+export const UI_HOSTNAME = '127.0.0.1';
 
 /** Exact Host header values accepted for a server listening on `listenPort`. */
 export function listAllowedHostHeaders(listenPort: number): ReadonlySet<string> {
-  return new Set(LOOPBACK_HOSTNAMES.map((hostname) => `${hostname}:${listenPort}`));
+  return new Set([`${UI_HOSTNAME}:${listenPort}`]);
 }
 
 /** Exact Origin header values accepted on state-changing requests. */
 export function listAllowedOrigins(listenPort: number): ReadonlySet<string> {
-  return new Set(LOOPBACK_HOSTNAMES.map((hostname) => `http://${hostname}:${listenPort}`));
+  return new Set([`http://${UI_HOSTNAME}:${listenPort}`]);
 }
 
 /** Constant-time comparison so the token cannot be guessed byte by byte from response timing. */

@@ -11,6 +11,8 @@ import type {
   SessionPermissions,
 } from '../../../../orchestration/application/ports/agent-engine.port';
 import { type CliInvocation, resolveCliExecutable, streamCliOutput } from './cli-process';
+import { readClaudeProjectInstructions } from './claude-project-instructions';
+import { assertEngineSessionRef } from './engine-session-ref';
 import { ClaudeStreamTranslator } from './claude-stream-translator';
 import { toFailedEvent } from './engine-failure';
 
@@ -38,9 +40,17 @@ const DANGEROUS_COMMAND_RULES = [
 ];
 
 /**
+ * Settings from the command line outrank every settings file. With no settings source loaded this
+ * is a second guard: hooks never run.
+ */
+const FLAG_SETTINGS = JSON.stringify({ disableAllHooks: true });
+
+/**
  * Claude Code with the user's signed-in account: `claude -p --output-format stream-json`.
- * User-level settings (personal hooks, plugins, MCP servers) are not loaded, so agents behave the
- * same on every machine; project settings and CLAUDE.md of the worktree still apply.
+ * No settings file is loaded (`--setting-sources ""`): user settings hold personal hooks, plugins
+ * and MCP servers, and `.claude/` in the worktree is written by agents (a hook or apiKeyHelper
+ * there would run a command with the user's rights, even in a read-only review). The project's
+ * CLAUDE.md files are passed in the prompt instead (readClaudeProjectInstructions).
  */
 @Injectable()
 export class ClaudeCodeCliEngine implements AgentEnginePort {
@@ -52,7 +62,10 @@ export class ClaudeCodeCliEngine implements AgentEnginePort {
   ): AsyncGenerator<AgentEngineEvent> {
     let invocation: CliInvocation;
     try {
-      invocation = buildClaudeInvocation(request);
+      invocation = buildClaudeInvocation(
+        request,
+        readClaudeProjectInstructions(request.workingDirectory),
+      );
     } catch (error) {
       if (error instanceof AppError) {
         yield toFailedEvent(error);
@@ -79,14 +92,19 @@ export class ClaudeCodeCliEngine implements AgentEnginePort {
   }
 }
 
-export function buildClaudeInvocation(request: AgentSessionRequest): CliInvocation {
+export function buildClaudeInvocation(
+  request: AgentSessionRequest,
+  projectInstructions: string | null = null,
+): CliInvocation {
   const args = [
     '-p',
     '--output-format',
     'stream-json',
     '--verbose',
     '--setting-sources',
-    'project,local',
+    '',
+    '--settings',
+    FLAG_SETTINGS,
     '--strict-mcp-config',
     '--permission-mode',
     request.permissions.accessLevel === 'edit_workspace' ? 'acceptEdits' : 'default',
@@ -95,7 +113,7 @@ export function buildClaudeInvocation(request: AgentSessionRequest): CliInvocati
     args.push('--model', request.model);
   }
   if (request.resumeSessionRef !== null) {
-    args.push('--resume', request.resumeSessionRef);
+    args.push('--resume', assertEngineSessionRef(request.resumeSessionRef));
   }
   // In print mode nothing can be approved interactively: an agent allowed to edit the workspace
   // may also run commands there (tests, builds); dangerous and network commands stay denied.
@@ -106,12 +124,24 @@ export function buildClaudeInvocation(request: AgentSessionRequest): CliInvocati
   if (allowedTools.length > 0) {
     args.push('--allowedTools', ...allowedTools);
   }
-  args.push('--disallowedTools', ...listDisallowedClaudeTools(request.permissions));
+  const disallowedTools = listDisallowedClaudeTools(request.permissions);
+  if (disallowedTools.length > 0) {
+    // An empty list would leave a bare flag, which the CLI rejects.
+    args.push('--disallowedTools', ...disallowedTools);
+  }
   return {
     executable: resolveCliExecutable('claude'),
     args,
     workingDirectory: request.workingDirectory,
-    stdinText: request.prompt,
+    stdinText:
+      projectInstructions === null
+        ? request.prompt
+        : [
+            'Hướng dẫn của dự án (các file CLAUDE.md, nền tảng đọc giúp bạn):',
+            projectInstructions,
+            '---',
+            request.prompt,
+          ].join('\n\n'),
   };
 }
 

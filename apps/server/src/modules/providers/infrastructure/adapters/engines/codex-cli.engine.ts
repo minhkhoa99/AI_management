@@ -9,6 +9,7 @@ import type {
   AgentEnginePort,
   AgentSessionRequest,
 } from '../../../../orchestration/application/ports/agent-engine.port';
+import { assertEngineSessionRef } from './engine-session-ref';
 import { type CliInvocation, resolveCliExecutable, streamCliOutput } from './cli-process';
 import { CodexStreamTranslator } from './codex-stream-translator';
 import { toFailedEvent } from './engine-failure';
@@ -74,7 +75,7 @@ export function buildCodexInvocation(request: AgentSessionRequest): CliInvocatio
     args.push('-c', `sandbox_workspace_write.network_access=${request.permissions.networkAccess}`);
   }
   if (request.resumeSessionRef !== null) {
-    args.push('resume', request.resumeSessionRef);
+    args.push('resume', assertEngineSessionRef(request.resumeSessionRef));
   }
   // "-" reads the prompt from stdin.
   args.push('-');

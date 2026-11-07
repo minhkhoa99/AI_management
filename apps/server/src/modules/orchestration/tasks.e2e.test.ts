@@ -265,9 +265,10 @@ describe('tasks API', () => {
       `/api/tasks/${task.id}/attachments?fileName=edge.xlsx`,
       Buffer.from([1, 2, 3]),
     );
+    // Same name in another case: one file in .aiteam-qa on Windows/macOS, so it replaces.
     const replaced = await app.uploadBytes(
       'PUT',
-      `/api/tasks/${task.id}/attachments?fileName=login.feature`,
+      `/api/tasks/${task.id}/attachments?fileName=Login.feature`,
       Buffer.from('Scenario: một\n'),
     );
     const traversal = await app.uploadBytes(
@@ -289,11 +290,11 @@ describe('tasks API', () => {
     const detail = taskDetailSchema.parse((await app.callApi('GET', `/api/tasks/${task.id}`)).body);
     expect(detail.attachments.map((attachment) => attachment.fileName)).toEqual([
       'edge.xlsx',
-      'login.feature',
+      'Login.feature',
     ]);
     expect(detail.completionGoal).toMatchObject({
       source: 'qa',
-      items: ['edge.xlsx', 'login.feature – 1 kịch bản'],
+      items: ['edge.xlsx', 'Login.feature – 1 kịch bản'],
     });
     expect(detail.attachmentCount).toBe(2);
 
