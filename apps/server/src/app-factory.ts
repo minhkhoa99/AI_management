@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { existsSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { QA_DOCUMENT_MAX_BYTES } from '@aiteam/contracts';
 import { AppModule } from './app.module';
 import { NestLoggerAdapter } from './shared/logging/nest-logger.adapter';
 import type { SharedInfrastructureDependencies } from './shared/shared-infrastructure.module';
@@ -22,6 +23,17 @@ export async function createAiteamApplication(
     new FastifyAdapter({ logger: false, bodyLimit: MAX_REQUEST_BODY_BYTES }),
     { logger: new NestLoggerAdapter(options.logger), abortOnError: false },
   );
+
+  // QA documents are uploaded as raw bytes, one file per request (no multipart dependency).
+  application
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser(
+      'application/octet-stream',
+      { parseAs: 'buffer', bodyLimit: QA_DOCUMENT_MAX_BYTES },
+      (_request: unknown, body: Buffer, done: (error: Error | null, body?: Buffer) => void) =>
+        done(null, body),
+    );
 
   if (options.webRootDirectory !== undefined) {
     if (existsSync(options.webRootDirectory)) {

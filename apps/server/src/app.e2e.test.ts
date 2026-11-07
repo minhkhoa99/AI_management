@@ -49,6 +49,7 @@ describe('aiteam HTTP application (e2e)', () => {
 
         secretKeyFilePath: path.join(tmpdir(), `aiteam-test-secret-${process.pid}.key`),
         listenPort: LISTEN_PORT,
+        dataDirectory: tmpdir(),
       },
       database,
       logger: createAppLogger({ level: 'silent' }),
