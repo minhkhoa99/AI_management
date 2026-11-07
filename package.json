@@ -50,6 +50,7 @@
     "start": "node bin/aiteam.mjs",
     "test:smoke": "node scripts/smoke-test-dist.mjs",
     "check:bundle": "node scripts/check-web-bundle.mjs",
+    "measure": "node scripts/measure-runtime.mjs",
     "prepublishOnly": "npm run lint && npm test",
     "prepack": "npm run build && npm run test:smoke && npm run check:bundle"
   },

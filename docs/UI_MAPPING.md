@@ -69,7 +69,7 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 | Thành phần UI | API | Use case / module | GĐ |
 |---|---|---|---|
 | Danh sách phòng ban + số agent | `GET /api/departments` | `ListDepartmentsUseCase` · departments | 1 |
-| Ô ngân sách / hạn mức hôm nay | `GET /api/overview/usage-today` | `SummarizeUsageTodayUseCase` · tracing | 4 |
+| Ô hạn mức hôm nay (token, số lượt; giới hạn ngân sách tạm bỏ ở Giai đoạn 5) | `GET /api/overview/usage-today` | `SummarizeUsageTodayUseCase` · tracing | 4 |
 | Tìm agent hoặc task | lọc phía client trên dữ liệu đã tải; nếu nhiều thì `GET /api/search?q=` | `SearchWorkspaceUseCase` · orchestration | 3 |
 | Chuông + số yêu cầu chờ duyệt | `GET /api/approvals?status=pending`, SSE `approval.*` | `ListPendingApprovalsUseCase` · orchestration | 3 |
 | Nút "Chạy mô phỏng" | bỏ khi làm thật, thay bằng "Tạo task" | — | — |

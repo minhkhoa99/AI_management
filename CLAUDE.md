@@ -139,6 +139,7 @@ npm run lint     # eslint + prettier --check + tsc typecheck
 npm test         # vitest
 npm run build    # dist/server (bundle) + dist/web (Next export)
 npm run check:bundle   # ngân sách bundle web (sau build)
+npm run measure  # khởi động < 2 s, RAM rảnh < 150 MB, gói < 15 MB (sau build)
 node bin/aiteam.mjs [--port 7419] [--no-open]   # = lệnh aimanagement sau khi cài gói
 node bin/aiteam.mjs doctor
 npm pack         # gói minhkhoa-aimanagement-<version>.tgz (prepack: build + smoke + bundle)

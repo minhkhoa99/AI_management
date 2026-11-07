@@ -29,7 +29,7 @@ const workflowDescriptionSchema = z.string().trim().max(WORKFLOW_DESCRIPTION_MAX
 
 /**
  * Department-wide rules of a workflow. "Log every step" from the mockup is not a rule: every
- * step is always logged. A per-task budget rule arrives with budgets (phase 5).
+ * step is always logged. The budget rule waits for budgets (postponed in phase 5).
  */
 export const workflowRulesSchema = z
   .object({

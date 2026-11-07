@@ -319,12 +319,18 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 ### Giai đoạn 5: Hoàn thiện và đóng gói
 
 - Khôi phục sau khi tắt đột ngột: phần nền (kill tiến trình CLI mồ côi, `running` → `queued`, `cancelling` → `cancelled`) đã kéo lên làm trước Giai đoạn 3 (mục 5.6); ở đây chỉ còn tiếp tục phiên bằng `session_ref`.
-- Giới hạn ngân sách theo task/phòng (token, số lượt).
+- ~~Giới hạn ngân sách theo task/phòng (token, số lượt).~~ Tạm bỏ (chốt 11/2026): chưa giới hạn, cứ giao task, điều chỉnh sau. Thanh bên chỉ hiện token và số lượt đã dùng.
 - Script đo RAM, thời gian khởi động, kích thước gói; tối ưu tới khi đạt mục tiêu.
 - Rà soát bảo mật theo mục 5.9.
 - Phát hành npm package `@minhkhoa/aimanagement`, README cài đặt (gói và README đã chuẩn bị sớm; chủ dự án tự `npm publish`).
 
 **Hoàn thành khi:** máy mới chỉ cần `npm i -g @minhkhoa/aimanagement && aimanagement` là dùng được, và các số đo đạt mục tiêu ở mục 1.
+
+**Đã làm (11/2026):**
+
+- Giai đoạn 5 chia 2 pull request: (B) khôi phục phiên + đo hiệu năng, (C) rà soát bảo mật. Gói npm đã phát hành `@minhkhoa/aimanagement@0.1.0`.
+- **Tiếp tục phiên sau crash:** task đang chạy về hàng đợi kèm ghi chú, và lượt sau nhận phản hồi "aiteam bị tắt đột ngột… làm tiếp phần còn dở" (thêm sau góp ý đang chờ, nếu có). Cùng agent và cùng engine thì tiếp tục phiên bằng `session_ref`. Thử thật với Claude Code: kill cứng aiteam giữa lượt, khởi động lại, agent tiếp tục đúng phiên, bỏ qua file đã tạo và làm xong phần còn lại. Tiến trình CLI tự thoát khi aiteam chết (pipe đóng); nếu còn sống thì bước phục hồi kill như cũ. Phiên duyệt của cấp trên hay lệnh kiểm thử bị ngắt thì bước chạy lại từ lượt của agent (công việc đã có mốc, agent chỉ cần xác nhận).
+- **Đo tài nguyên:** `npm run measure` (`scripts/measure-runtime.mjs`, sau `npm run build`) chạy lệnh như bản cài, đo khởi động lần đầu (dữ liệu mới, chạy migration) và khởi động lại (trung vị), RAM sau 10 giây rảnh khi đang mở giao diện (cookie phiên, các API của Tổng quan, luồng SSE), kích thước gói (bin + dist). Lỗi nếu trượt mục tiêu; CI chạy thay cho bước đo `du` cũ. Số đo trên Windows, Node 24.22.1: khởi động 1,0–1,1 giây, RAM 80 MB, gói 3,7 MB. Đạt cả ba nên chưa cần tối ưu.
 
 ## 8. Rủi ro và cách xử lý
 

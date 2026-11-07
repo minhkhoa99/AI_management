@@ -37,8 +37,5 @@ jobs:
       - name: Check web bundle budget (framework +10% max, app <= 70 KB, first load <= 230 KB)
         run: npm run check:bundle
 
-      - name: Check install size (dist < 15 MB)
-        run: |
-          size_kb=$(du -sk dist | cut -f1)
-          echo "dist size: ${size_kb} KB"
-          test "$size_kb" -lt 15360
+      - name: Check resource targets (startup < 2 s, idle RAM < 150 MB, package < 15 MB)
+        run: npm run measure
