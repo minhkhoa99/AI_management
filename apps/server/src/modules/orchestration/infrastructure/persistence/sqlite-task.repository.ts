@@ -2,6 +2,7 @@ import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { Inject, Injectable } from '@nestjs/common';
 import type { TaskPriority, TaskStatus } from '@aiteam/contracts';
 import { SQLITE_DATABASE } from '../../../../shared/database/sqlite-connection';
+import { LiveUpdateHub } from '../../../../shared/events/live-update-hub';
 import { type EngineSnapshot, Task } from '../../domain/entities/task';
 import type { TaskRepository } from '../../domain/repositories/task.repository';
 
@@ -43,7 +44,10 @@ export class SqliteTaskRepository implements TaskRepository {
   private readonly deleteStatement: StatementSync;
   private readonly runnableStatement: StatementSync;
 
-  constructor(@Inject(SQLITE_DATABASE) database: DatabaseSync) {
+  constructor(
+    @Inject(SQLITE_DATABASE) database: DatabaseSync,
+    private readonly liveUpdateHub: LiveUpdateHub,
+  ) {
     this.selectByIdStatement = database.prepare(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`);
     this.nextSequenceStatement = database.prepare(
       'SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_number FROM tasks',
@@ -94,6 +98,7 @@ export class SqliteTaskRepository implements TaskRepository {
       state.testCommand,
       ...executionColumns(state),
     );
+    this.announceTaskChange(state.id, state.departmentId, state.assigneeAgentId);
   }
 
   updateTask(task: Task): void {
@@ -113,10 +118,28 @@ export class SqliteTaskRepository implements TaskRepository {
       ...executionColumns(state),
       state.id,
     );
+    this.announceTaskChange(state.id, state.departmentId, state.assigneeAgentId);
   }
 
   deleteTask(taskId: string): void {
+    const departmentId = this.findTaskById(taskId)?.departmentId ?? null;
     this.deleteStatement.run(taskId);
+    this.announceTaskChange(taskId, departmentId, null);
+  }
+
+  /** Screens showing the task (board, detail, monitor) refresh on this. */
+  private announceTaskChange(
+    taskId: string,
+    departmentId: string | null,
+    agentId: string | null,
+  ): void {
+    this.liveUpdateHub.publishLiveUpdate({
+      type: 'task.changed',
+      taskId,
+      departmentId,
+      agentId,
+      event: null,
+    });
   }
 
   listRunnableTaskIds(nowIso: string): string[] {

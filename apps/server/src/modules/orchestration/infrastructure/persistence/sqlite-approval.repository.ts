@@ -2,6 +2,7 @@ import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { Inject, Injectable } from '@nestjs/common';
 import type { ApprovalKind, ApprovalStatus } from '@aiteam/contracts';
 import { SQLITE_DATABASE } from '../../../../shared/database/sqlite-connection';
+import { LiveUpdateHub } from '../../../../shared/events/live-update-hub';
 import type {
   ApprovalRecord,
   ApprovalRepository,
@@ -32,7 +33,10 @@ export class SqliteApprovalRepository implements ApprovalRepository {
   private readonly selectByStatusStatement: StatementSync;
   private readonly decideStatement: StatementSync;
 
-  constructor(@Inject(SQLITE_DATABASE) database: DatabaseSync) {
+  constructor(
+    @Inject(SQLITE_DATABASE) database: DatabaseSync,
+    private readonly liveUpdateHub: LiveUpdateHub,
+  ) {
     this.insertStatement = database.prepare(
       `INSERT INTO approvals (id, task_id, kind, summary, detail_json, status, created_at)
        VALUES (?, ?, ?, ?, ?, 'pending', ${NOW})`,
@@ -66,6 +70,7 @@ export class SqliteApprovalRepository implements ApprovalRepository {
       approval.summary,
       JSON.stringify(approval.detail),
     );
+    this.announceApprovalChange(approval.taskId);
   }
 
   findApproval(approvalId: string): ApprovalRecord | undefined {
@@ -85,9 +90,21 @@ export class SqliteApprovalRepository implements ApprovalRepository {
     return rows.map(toApprovalRecord);
   }
 
+  private announceApprovalChange(taskId: string | null): void {
+    this.liveUpdateHub.publishLiveUpdate({
+      type: 'approval.changed',
+      taskId,
+      departmentId: null,
+      agentId: null,
+      event: null,
+    });
+  }
+
   recordDecision(approvalId: string, approved: boolean, note: string | null): boolean {
     const result = this.decideStatement.run(approved ? 'approved' : 'rejected', note, approvalId);
-    return Number(result.changes) === 1;
+    const decided = Number(result.changes) === 1;
+    if (decided) this.announceApprovalChange(this.findApproval(approvalId)?.taskId ?? null);
+    return decided;
   }
 }
 

@@ -17,8 +17,6 @@ import {
   delegateTaskRequestSchema,
   type MoveTaskStageRequest,
   moveTaskStageRequestSchema,
-  TASK_EVENT_LIST_MAX,
-  type TaskEvent,
   entityIdSchema,
   qaDocumentNameSchema,
   type TaskAttachment,
@@ -32,10 +30,8 @@ import {
 } from '@aiteam/contracts';
 import { ValidationError } from '../../../../shared/errors/app-error';
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
-import { z } from 'zod';
 import { AutoDelegateByWorkloadUseCase } from '../../application/use-cases/auto-delegate-task.use-case';
 import { DelegateTaskToSubordinateUseCase } from '../../application/use-cases/delegate-task.use-case';
-import { ListTaskEventsUseCase } from '../../application/use-cases/list-task-events.use-case';
 import { MoveTaskStageUseCase } from '../../application/use-cases/move-task-stage.use-case';
 import { RetryTaskUseCase } from '../../application/use-cases/retry-task.use-case';
 import { AttachQaDocumentUseCase } from '../../application/use-cases/attach-qa-document.use-case';
@@ -63,7 +59,6 @@ export class TasksController {
     private readonly autoDelegateTaskUseCase: AutoDelegateByWorkloadUseCase,
     private readonly moveTaskStageUseCase: MoveTaskStageUseCase,
     private readonly retryTaskUseCase: RetryTaskUseCase,
-    private readonly listTaskEventsUseCase: ListTaskEventsUseCase,
   ) {}
 
   @Get()
@@ -147,20 +142,5 @@ export class TasksController {
   @Post(':taskId/retries')
   retryTask(@Param('taskId', taskIdPipe) taskId: string): TaskDetail {
     return this.retryTaskUseCase.retryTask(taskId);
-  }
-
-  @Get(':taskId/events')
-  listTaskEvents(
-    @Param('taskId', taskIdPipe) taskId: string,
-    @Query(
-      'limit',
-      new ZodRequestPipe(
-        z.coerce.number().int().min(1).max(TASK_EVENT_LIST_MAX).default(50),
-        'Số dòng',
-      ),
-    )
-    limit: number,
-  ): TaskEvent[] {
-    return this.listTaskEventsUseCase.listTaskEvents(taskId, limit);
   }
 }
