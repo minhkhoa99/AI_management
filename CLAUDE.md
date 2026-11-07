@@ -22,8 +22,12 @@ Tài liệu gốc: `docs/IMPLEMENTATION_PLAN.md` (kiến trúc, dữ liệu, l�
 - `aiteam` mở `/?session=<token>` → server đổi token lấy cookie `aiteam_session`
   (`HttpOnly; SameSite=Strict; Path=/`) rồi redirect `303` về `/`. Không dùng header token.
 - Mọi `/api/*` (REST và SSE) xác thực bằng cookie; chỉ `/api/health` mở.
-- Mọi request: Host phải là `127.0.0.1:<port>` hoặc `localhost:<port>`.
-- `POST/PATCH/PUT/DELETE`: Origin phải là `http://127.0.0.1:<port>` hoặc `http://localhost:<port>`.
+- Mọi request: Host phải là `127.0.0.1:<port>` (không nhận `localhost`) và đường dẫn dạng `/...`
+  (từ chối URL tuyệt đối `GET http://host/api/...`, router vẫn định tuyến được nó).
+- `POST/PATCH/PUT/DELETE`: Origin phải là `http://127.0.0.1:<port>`.
+- Cookie không phân biệt cổng: bản xem trước (server do agent viết) mở ở `localhost`/`[::1]`, khác
+  site với giao diện nên không nhận cookie. Không bao giờ đưa giao diện lên `localhost`.
+- Mọi phản hồi có `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`.
 - Code ở `apps/server/src/shared/security/`. Không ghi token vào log, không lặp lại query string trong lỗi.
 
 ## Giá trị liệt kê
@@ -117,9 +121,14 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
 ## Engine (Giai đoạn 2)
 
 - Engine hiện thực `AgentEnginePort` (orchestration); module providers đăng ký theo provider.
-- Claude Code: `claude -p --output-format stream-json --verbose --setting-sources project,local
---strict-mcp-config` (không nạp hook/plugin/MCP cá nhân của người dùng). Codex: `codex exec --json
---ignore-user-config` gọi thẳng CLI (không dùng `@openai/codex-sdk`).
+- Claude Code: `claude -p --output-format stream-json --verbose --setting-sources ""
+--settings {"disableAllHooks":true} --strict-mcp-config`. Không nạp file settings nào: settings người
+  dùng có hook/plugin/MCP cá nhân, còn `.claude/` trong worktree do agent ghi (hook, `apiKeyHelper`
+  chạy lệnh với quyền người dùng, kể cả trong phiên duyệt chỉ đọc). CLAUDE.md của dự án do nền tảng
+  đọc (file thường, có giới hạn) và đặt đầu prompt. Codex: `codex exec --json --ignore-user-config`
+  gọi thẳng CLI (không dùng `@openai/codex-sdk`).
+- git trên worktree luôn chạy với `core.fsmonitor=false`, hook trỏ về null device,
+  `commit.gpgsign=false`, diff `--no-ext-diff`. Không mở thứ không phải file thường trong worktree.
 - Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
   đầu bằng `-`.
   Ngoại lệ duy nhất: lệnh kiểm thử và lệnh chạy giao diện (xem trước) của task do người dùng viết

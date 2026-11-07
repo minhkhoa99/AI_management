@@ -35,7 +35,7 @@ Tài liệu liên quan: [mapping giao diện](UI_MAPPING.md) (màn hình → API
 | Truy vấn | SQL viết tay trong repository, migration đánh số | KISS, không kéo ORM nặng |
 | Hàng đợi task | Bảng `tasks` + bộ lập lịch trong tiến trình, giới hạn số agent chạy song song | Một máy, một tiến trình, không cần Redis |
 | Thời gian thực | Server-Sent Events | Một chiều là đủ, nhẹ hơn WebSocket |
-| Gọi Claude Code | `claude -p --output-format stream-json --verbose --setting-sources project,local --strict-mcp-config` | Dùng tài khoản đã đăng nhập; không nạp hook/plugin/MCP cá nhân để agent chạy giống nhau trên mọi máy |
+| Gọi Claude Code | `claude -p --output-format stream-json --verbose --setting-sources "" --settings {"disableAllHooks":true} --strict-mcp-config` | Dùng tài khoản đã đăng nhập; không nạp file settings nào (hook/plugin/MCP cá nhân, hay `.claude/` do agent ghi trong worktree); CLAUDE.md của dự án do nền tảng đưa vào prompt |
 | Gọi Codex | `codex exec --json --ignore-user-config` (gọi thẳng CLI, chốt ở Giai đoạn 2 thay cho `@openai/codex-sdk`) | Dùng chung đăng nhập với Codex app, không thêm dependency |
 | Custom API | `fetch` thuần tới OpenAI-compatible hoặc Anthropic Messages API | Không cần SDK riêng |
 | Không gian làm việc | Mỗi task một git worktree + nhánh `agent/<taskId>`; mỗi mốc là một commit | Diff, hoàn tác, huỷ đều dựa trên git |
@@ -176,8 +176,9 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
 9. **Security by design:**
    - Chỉ lắng nghe `127.0.0.1`.
    - **Phiên đăng nhập bằng cookie:** mỗi lần chạy tạo token ngẫu nhiên (32 byte). `aiteam` mở `/?session=<token>`; server kiểm tra (so sánh constant-time), đặt cookie `aiteam_session` (`HttpOnly; SameSite=Strict; Path=/`) rồi redirect `303` về `/` để xoá token khỏi URL. Mọi API và SSE (`/api/*`) xác thực bằng cookie này; chỉ `/api/health` mở. File giao diện tĩnh không cần phiên (không chứa dữ liệu).
-   - **Kiểm tra Host** cho mọi request: chỉ nhận `127.0.0.1:<port>` hoặc `localhost:<port>` (chống DNS rebinding).
-   - **Kiểm tra Origin** cho `POST/PATCH/PUT/DELETE`: phải là `http://127.0.0.1:<port>` hoặc `http://localhost:<port>`; thiếu Origin cũng bị từ chối.
+   - **Kiểm tra Host** cho mọi request: chỉ nhận `127.0.0.1:<port>` (chống DNS rebinding); đường dẫn phải dạng `/...` (URL tuyệt đối bị từ chối).
+   - **Kiểm tra Origin** cho `POST/PATCH/PUT/DELETE`: phải là `http://127.0.0.1:<port>`; thiếu Origin cũng bị từ chối.
+   - **Tách host với bản xem trước:** cookie không phân biệt cổng, nên giao diện chỉ ở `127.0.0.1`, bản xem trước mở ở `localhost` (hoặc `[::1]`) và không bao giờ nhận cookie. Mọi phản hồi cấm nhúng khung (`frame-ancestors 'none'`, `X-Frame-Options: DENY`).
    - Token không bao giờ được ghi vào log hay lặp lại trong phản hồi lỗi.
    - Mọi DTO kiểm tra bằng zod.
    - API key của Custom API mã hoá AES-256-GCM, khoá lưu trong `~/.aiteam/secret.key` với quyền 600.
@@ -331,6 +332,14 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - Giai đoạn 5 chia 2 pull request: (B) khôi phục phiên + đo hiệu năng, (C) rà soát bảo mật. Gói npm đã phát hành `@minhkhoa/aimanagement@0.1.0`.
 - **Tiếp tục phiên sau crash:** task đang chạy về hàng đợi kèm ghi chú, và lượt sau nhận phản hồi "aiteam bị tắt đột ngột… làm tiếp phần còn dở" (thêm sau góp ý đang chờ, nếu có). Cùng agent và cùng engine thì tiếp tục phiên bằng `session_ref`. Thử thật với Claude Code: kill cứng aiteam giữa lượt, khởi động lại, agent tiếp tục đúng phiên, bỏ qua file đã tạo và làm xong phần còn lại. Tiến trình CLI tự thoát khi aiteam chết (pipe đóng); nếu còn sống thì bước phục hồi kill như cũ. Phiên duyệt của cấp trên hay lệnh kiểm thử bị ngắt thì bước chạy lại từ lượt của agent (công việc đã có mốc, agent chỉ cần xác nhận).
 - **Đo tài nguyên:** `npm run measure` (`scripts/measure-runtime.mjs`, sau `npm run build`) chạy lệnh như bản cài, đo khởi động lần đầu (dữ liệu mới, chạy migration) và khởi động lại (trung vị), RAM sau 10 giây rảnh khi đang mở giao diện (cookie phiên, các API của Tổng quan, luồng SSE), kích thước gói (bin + dist). Lỗi nếu trượt mục tiêu; CI chạy thay cho bước đo `du` cũ. Số đo trên Windows, Node 24.22.1: khởi động 1,0–1,1 giây, RAM 80 MB, gói 3,7 MB. Đạt cả ba nên chưa cần tối ưu.
+- **Rà soát bảo mật (phần C, 11/2026):** rà theo mục 5.9 ở ba mảng (biên HTTP; file và dữ liệu từ agent; tiến trình và khoá bí mật). Đã sửa, mỗi lỗi kèm test hồi quy:
+  - URL tuyệt đối trong dòng request (`GET http://127.0.0.1:<port>/api/...`) qua mặt kiểm tra cookie: router vẫn định tuyến vào API. Nay bị từ chối ở bước kiểm Host.
+  - Cookie phiên bị trình duyệt gửi tới server xem trước (cùng host, khác cổng). Chốt: giao diện chỉ ở `127.0.0.1`, xem trước ở `localhost`.
+  - Không có header chống nhúng khung: trang trên cổng 127.0.0.1 khác (cùng site) nhúng được giao diện. Thêm `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `no-referrer`.
+  - `.claude/settings.json` do agent ghi trong worktree (hook, `apiKeyHelper`) chạy lệnh với quyền người dùng ở phiên Claude sau, kể cả phiên duyệt chỉ đọc (thử thật với claude 2.1.319). Chốt: không nạp settings nào, nền tảng đưa CLAUDE.md vào prompt.
+  - `--disallowedTools` rỗng làm Claude thoát lỗi; mã phiên từ output CLI được kiểm định dạng trước khi thành tham số.
+  - git chạy trên worktree của agent: tắt fsmonitor, hook, ký commit, external diff; hoàn tác dùng `--literal-pathspecs`; không mở FIFO; không chép tài liệu QA qua symlink/junction; tên tài liệu QA so không phân biệt hoa thường.
+- **Giới hạn đã biết (chấp nhận, ghi trên thẻ Claude Code):** agent `edit_workspace` trên Claude Code chạy Bash/PowerShell với quyền người dùng, nên đọc được `~/.aiteam` và lách được luật chặn lệnh (lọc theo đầu lệnh). Chỉ cấp quyền sửa cho việc tin được. Codex dựa vào sandbox của Codex (trên Windows cần kiểm chứng thêm). Agent đổi file `.git` trong worktree sang gitdir giả vẫn là rủi ro còn lại (đã tắt các cấu hình chạy lệnh phổ biến).
 
 ## 8. Rủi ro và cách xử lý
 
