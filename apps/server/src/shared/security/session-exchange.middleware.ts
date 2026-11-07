@@ -22,7 +22,7 @@ export class SessionExchangeMiddleware implements NestMiddleware {
     }
     if (!matchesSessionToken(presentedToken, this.runtimeConfig.sessionToken)) {
       throw new PermissionDeniedError(
-        'Liên kết phiên không hợp lệ hoặc đã cũ. Chạy lại lệnh aiteam để mở liên kết mới.',
+        'Liên kết phiên không hợp lệ hoặc đã cũ. Chạy lại lệnh aimanagement để mở liên kết mới.',
         { code: 'SESSION_LINK_INVALID' },
       );
     }

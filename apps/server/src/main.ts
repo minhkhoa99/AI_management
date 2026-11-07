@@ -22,7 +22,7 @@ import {
   SESSION_SHUTDOWN_TIMEOUT_MS,
 } from './shared/runtime/fatal-error-handler';
 
-// Re-exported for the launcher (bin/aiteam.mjs), which cannot import TypeScript contracts.
+// Re-exported for the launcher (bin/aiteam.mjs, command `aimanagement`), which cannot import TypeScript contracts.
 export { DEFAULT_SERVER_PORT, SESSION_QUERY_PARAM } from '@aiteam/contracts';
 
 /** The server only ever binds the loopback interface. */

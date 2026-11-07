@@ -199,7 +199,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
             new AppError({
               code: missingGit ? 'GIT_UNAVAILABLE' : 'GIT_COMMAND_FAILED',
               message: missingGit
-                ? 'Không tìm thấy git trên máy. Cài git rồi chạy lại (aiteam doctor).'
+                ? 'Không tìm thấy git trên máy. Cài git rồi chạy lại (aimanagement doctor).'
                 : `git ${args[0] ?? ''} thất bại: ${stderr.trim().split('\n').at(-1) ?? ''}`,
               retryable: false,
               cause: error,

@@ -77,14 +77,16 @@ export async function shutDownAfterFatalError(
     }
     await flushLogs(dependencies.logger);
   } catch (shutdownError) {
-    dependencies.writeToTerminal(`aiteam: lỗi khi dừng sau sự cố: ${String(shutdownError)}\n`);
+    dependencies.writeToTerminal(
+      `aimanagement: lỗi khi dừng sau sự cố: ${String(shutdownError)}\n`,
+    );
   } finally {
     dependencies.writeToTerminal(
       [
         '',
         'AI Team gặp lỗi nghiêm trọng và đã dừng để bảo vệ dữ liệu.',
         `  Chi tiết: ${crashReportPath}`,
-        '  Chạy lại: aiteam',
+        '  Chạy lại: aimanagement',
         '  Task đang chạy sẽ được đưa về hàng đợi khi khởi động lại.',
         '',
       ].join('\n'),

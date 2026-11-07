@@ -26,7 +26,7 @@ export class SessionCookieMiddleware implements NestMiddleware {
     const sessionCookie = readCookieValue(request.headers.cookie, SESSION_COOKIE_NAME);
     if (!matchesSessionToken(sessionCookie, this.runtimeConfig.sessionToken)) {
       throw new PermissionDeniedError(
-        'Chưa đăng nhập hoặc phiên đã hết. Chạy lại lệnh aiteam để mở liên kết mới.',
+        'Chưa đăng nhập hoặc phiên đã hết. Chạy lại lệnh aimanagement để mở liên kết mới.',
         { code: 'SESSION_REQUIRED' },
       );
     }
