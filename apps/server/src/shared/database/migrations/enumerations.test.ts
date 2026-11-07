@@ -7,6 +7,7 @@ import {
   LOCAL_ENGINES,
   STEP_FAILURE_ACTIONS,
   STEP_GATES,
+  STEP_OWNERS,
   STEP_RETRY_LIMITS,
   TASK_PRIORITIES,
   TASK_STATUSES,
@@ -149,6 +150,18 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
       database
         .prepare(
           "INSERT INTO workflow_steps (id, workflow_id, position, name, owner_role, gate, on_fail) VALUES (?, 'flow', ?, 'S', 'dev', ?, 'stop')",
+        )
+        .run(rowId, nextStepPosition(), value),
+  },
+  {
+    table: 'workflow_steps',
+    column: 'owner_role',
+    contractValues: STEP_OWNERS,
+    invalidValue: 'Bạn',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare(
+          "INSERT INTO workflow_steps (id, workflow_id, position, name, owner_role, gate, on_fail) VALUES (?, 'flow', ?, 'S', ?, 'user_approval', 'stop')",
         )
         .run(rowId, nextStepPosition(), value),
   },

@@ -8,6 +8,7 @@ import {
   departmentSchema,
   departmentSummaryListSchema,
   orgTreeSchema,
+  type TeamMode,
   type UpdateDepartmentMemberRequest,
   type UpdateDepartmentRequest,
 } from '@aiteam/contracts';
@@ -59,6 +60,16 @@ export const setDepartmentEnabled = (departmentId: string, enabled: boolean) =>
       'PATCH',
       `/api/departments/${encodeId(departmentId)}/enabled`,
       { enabled },
+      departmentSchema,
+    ),
+  );
+
+export const changeTeamMode = (departmentId: string, teamMode: TeamMode) =>
+  refreshAfterWrite(
+    sendApiJson(
+      'PATCH',
+      `/api/departments/${encodeId(departmentId)}/team-mode`,
+      { teamMode },
       departmentSchema,
     ),
   );

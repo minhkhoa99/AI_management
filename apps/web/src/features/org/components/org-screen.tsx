@@ -2,12 +2,13 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
-import { TEAM_MODES, type Department } from '@aiteam/contracts';
+import { SUPPORTED_TEAM_MODES, TEAM_MODES, type Department } from '@aiteam/contracts';
 import { useApiQuery } from '../../../shared/api/use-api-query';
 import { StrokeIcon } from '../../../shared/ui/stroke-icon';
 import { controlStyles, StatusNotice, ToggleSwitch } from '../../../shared/ui/controls';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
 import {
+  changeTeamMode,
   deleteDepartment,
   loadDepartments,
   loadOrgTree,
@@ -15,6 +16,7 @@ import {
   setDepartmentEnabled,
 } from '../../organization/organization-api';
 import { buildOrgHref, TEAM_MODE_PRESENTATION } from '../../organization/organization-labels';
+import { DepartmentTabs } from '../../organization/components/department-tabs';
 import { AddMemberPanel } from './add-member-panel';
 import { AgentDetailPanel } from './agent-detail-panel';
 import { DepartmentFormPanel } from './department-form-panel';
@@ -52,27 +54,14 @@ export function OrgScreen() {
   return (
     <div className={styles.screen}>
       <div className={styles.toolbar}>
-        <div role="tablist" aria-label="Chọn phòng ban" className={styles.departmentTabs}>
-          {departmentList.map((department) => (
-            <button
-              key={department.id}
-              type="button"
-              role="tab"
-              aria-selected={department.id === selectedDepartment?.id}
-              className={styles.departmentTab}
-              onClick={() => {
-                setDepartmentPanel('none');
-                navigateTo(department.id);
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className={styles.colorDot}
-                style={{ background: department.color }}
-              />
-              {department.name}
-            </button>
-          ))}
+        <DepartmentTabs
+          departments={departmentList}
+          selectedDepartmentId={selectedDepartment?.id}
+          onSelectDepartment={(departmentId) => {
+            setDepartmentPanel('none');
+            navigateTo(departmentId);
+          }}
+        >
           <button
             type="button"
             className={styles.addDepartmentButton}
@@ -81,7 +70,7 @@ export function OrgScreen() {
             <StrokeIcon path={PLUS_ICON} size={14} strokeWidth={2} />
             Thêm phòng
           </button>
-        </div>
+        </DepartmentTabs>
         {selectedDepartment !== undefined && (
           <DepartmentToolbar
             department={selectedDepartment}
@@ -254,18 +243,28 @@ function DepartmentOrgChart({
       <section aria-label="Chế độ team" className={styles.teamModeBar}>
         <span className={styles.teamModeLabel}>Chế độ team</span>
         <div role="group" aria-label="Chế độ team" className={styles.teamModeChoices}>
-          {TEAM_MODES.map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              className={controlStyles.pillButton}
-              aria-pressed={department.teamMode === mode}
-              disabled
-              title="Đổi chế độ team có ở Giai đoạn 3"
-            >
-              {TEAM_MODE_PRESENTATION[mode].label}
-            </button>
-          ))}
+          {TEAM_MODES.map((mode) => {
+            const supported = SUPPORTED_TEAM_MODES.includes(mode);
+            return (
+              <button
+                key={mode}
+                type="button"
+                className={controlStyles.pillButton}
+                aria-pressed={department.teamMode === mode}
+                disabled={!supported || isPending}
+                title={supported ? undefined : 'Chưa hỗ trợ: nền tảng chỉ chạy Orchestrator riêng'}
+                onClick={() =>
+                  void performAction(
+                    () => changeTeamMode(department.id, mode),
+                    () => null,
+                  )
+                }
+              >
+                {TEAM_MODE_PRESENTATION[mode].label}
+                {supported ? '' : ' (chưa hỗ trợ)'}
+              </button>
+            );
+          })}
         </div>
         <span className={styles.teamModeHint}>{currentMode.hint}</span>
       </section>

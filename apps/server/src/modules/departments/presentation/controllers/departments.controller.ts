@@ -4,6 +4,8 @@ import {
   addDepartmentMemberRequestSchema,
   type AgentDetail,
   type ChangeReportingLineRequest,
+  type ChangeTeamModeRequest,
+  changeTeamModeRequestSchema,
   changeReportingLineRequestSchema,
   type CreateDepartmentRequest,
   createDepartmentRequestSchema,
@@ -21,6 +23,7 @@ import {
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
 import { AddDepartmentMemberUseCase } from '../../application/use-cases/add-department-member.use-case';
 import { BuildOrgTreeUseCase } from '../../application/use-cases/build-org-tree.use-case';
+import { ChangeTeamModeUseCase } from '../../application/use-cases/change-team-mode.use-case';
 import { ChangeReportingLineUseCase } from '../../application/use-cases/change-reporting-line.use-case';
 import { CreateDepartmentUseCase } from '../../application/use-cases/create-department.use-case';
 import { DeleteDepartmentUseCase } from '../../application/use-cases/delete-department.use-case';
@@ -43,6 +46,7 @@ export class DepartmentsController {
     private readonly updateDepartmentUseCase: UpdateDepartmentUseCase,
     private readonly deleteDepartmentUseCase: DeleteDepartmentUseCase,
     private readonly toggleDepartmentUseCase: ToggleDepartmentUseCase,
+    private readonly changeTeamModeUseCase: ChangeTeamModeUseCase,
     private readonly buildOrgTreeUseCase: BuildOrgTreeUseCase,
     private readonly addDepartmentMemberUseCase: AddDepartmentMemberUseCase,
     private readonly updateDepartmentMemberUseCase: UpdateDepartmentMemberUseCase,
@@ -87,6 +91,14 @@ export class DepartmentsController {
     @Body(new ZodRequestPipe(setEnabledRequestSchema)) request: SetEnabledRequest,
   ): Department {
     return this.toggleDepartmentUseCase.toggleDepartment(departmentId, request.enabled);
+  }
+
+  @Patch(':departmentId/team-mode')
+  changeTeamMode(
+    @Param('departmentId', departmentIdPipe) departmentId: string,
+    @Body(new ZodRequestPipe(changeTeamModeRequestSchema)) request: ChangeTeamModeRequest,
+  ): Department {
+    return this.changeTeamModeUseCase.changeTeamMode(departmentId, request.teamMode);
   }
 
   @Get(':departmentId/org-tree')

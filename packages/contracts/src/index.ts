@@ -4,3 +4,4 @@ export * from './health';
 export * from './organization';
 export * from './providers';
 export * from './session';
+export * from './workflows';

@@ -4,6 +4,7 @@ import {
   agentRoleSchema,
   accessLevelSchema,
   teamModeSchema,
+  type TeamMode,
 } from './enumerations';
 
 // Request and response contracts for departments, agents and the org chart (phase 1).
@@ -70,6 +71,12 @@ export const updateDepartmentRequestSchema = z
     message: 'Cần ít nhất một trường để cập nhật',
   });
 export type UpdateDepartmentRequest = z.infer<typeof updateDepartmentRequestSchema>;
+
+/** Team modes the platform can run today; the others are shown but not selectable yet. */
+export const SUPPORTED_TEAM_MODES: readonly TeamMode[] = ['orchestrator'];
+
+export const changeTeamModeRequestSchema = z.object({ teamMode: teamModeSchema }).strict();
+export type ChangeTeamModeRequest = z.infer<typeof changeTeamModeRequestSchema>;
 
 export const setEnabledRequestSchema = z.object({ enabled: z.boolean() }).strict();
 export type SetEnabledRequest = z.infer<typeof setEnabledRequestSchema>;

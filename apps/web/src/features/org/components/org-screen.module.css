@@ -18,48 +18,21 @@
   gap: 12px;
 }
 
-.departmentTabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-}
-
-.departmentTab,
 .addDepartmentButton {
   min-height: 40px;
   padding: 0 14px;
   border-radius: 9px;
   border: none;
   background: transparent;
-  color: var(--color-text-soft);
+  color: var(--color-link);
   font-weight: 500;
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
 
-.departmentTab[aria-selected='true'] {
-  background: var(--color-brand-chip);
-  color: #ffffff;
-}
-
-.departmentTab:not([aria-selected='true']):hover,
 .addDepartmentButton:hover {
   background: var(--color-hover);
-}
-
-.addDepartmentButton {
-  color: var(--color-link);
-}
-
-.colorDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
 }
 
 .departmentActions {
