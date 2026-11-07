@@ -10,6 +10,7 @@ import {
   departmentSchema,
   lineCommentListSchema,
   lineCommentSchema,
+  previewStatusSchema,
   type TaskDetail,
   taskDetailSchema,
   taskEventListSchema,
@@ -19,6 +20,7 @@ import {
   workflowSchema,
 } from '@aiteam/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { osProcessTerminator } from '../../shared/runtime/process-termination';
 import {
   agentReport,
   ScriptedEngine,
@@ -51,7 +53,11 @@ describe('live monitor and code review', () => {
     mkdirSync(path.join(project, 'app', 'node_modules'));
     writeFileSync(path.join(project, 'app', 'node_modules', 'ignored.js'), '');
     engine = new ScriptedEngine();
-    app = await startTestApplication(':memory:', { agentEngineOverride: engine });
+    app = await startTestApplication(':memory:', {
+      agentEngineOverride: engine,
+      // Real kills: the preview test checks that its dev server is really gone.
+      processTerminator: osProcessTerminator,
+    });
     app.database.prepare('INSERT INTO allowed_directories (path) VALUES (?)').run(project);
     department = departmentSchema.parse(
       (await app.callApi('POST', '/api/departments', { name: 'Dev', color: '#60A5FA' })).body,
@@ -329,5 +335,83 @@ describe('live monitor and code review', () => {
       state: 'idle',
       task: { code: task.code, status: 'succeeded' },
     });
+  }, 30_000);
+
+  async function requestPreview(taskId: string, body: Record<string, unknown> = {}) {
+    const response = await app.callApi('POST', `/api/tasks/${taskId}/preview`, body);
+    expect(response.statusCode, JSON.stringify(response.body)).toBe(200);
+    return previewStatusSchema.parse(response.body);
+  }
+
+  async function waitUntilClosed(url: string): Promise<void> {
+    await waitFor(
+      () =>
+        fetch(url).then(
+          () => 'open',
+          () => 'closed',
+        ),
+      (outcome) => outcome === 'closed',
+      'preview server closed',
+    );
+  }
+
+  it('runs the preview command in the worktree on a free loopback port; leaving or deleting the task stops it', async () => {
+    writeFileSync(
+      path.join(project, 'app', 'serve.js'),
+      "require('node:http').createServer((request, response) => response.end('preview ' + process.cwd())).listen(Number(process.argv[2]), '127.0.0.1');\n",
+    );
+    const task = await createTask({ previewCommand: 'node serve.js {port}' });
+    await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'succeeded',
+      'first run',
+    );
+
+    const started = await requestPreview(task.id);
+    const running = await waitFor(
+      () => requestPreview(task.id),
+      (status) => status.state !== 'starting',
+      'preview running',
+    );
+    const page = await (await fetch(running.url!)).text();
+    const stopResponse = await app.callApi('DELETE', `/api/tasks/${task.id}/preview`);
+    await waitUntilClosed(running.url!);
+    const again = await waitFor(
+      () => requestPreview(task.id),
+      (status) => status.state !== 'starting',
+      'preview running again',
+    );
+    const deleted = await app.callApi('DELETE', `/api/tasks/${task.id}`);
+    await waitUntilClosed(again.url!);
+
+    expect(started).toMatchObject({ state: 'starting', url: null });
+    expect(running, running.output).toMatchObject({ state: 'running', message: null });
+    expect(running.url).toBe(`http://127.0.0.1:${running.port}/`);
+    expect(page).toContain(path.join('worktrees', task.id));
+    expect(stopResponse.statusCode).toBe(200);
+    expect(again.state).toBe('running');
+    expect(deleted.statusCode).toBe(202);
+  }, 40_000);
+
+  it('refuses a preview command without {port}, and a preview for a task without one', async () => {
+    const withoutPort = await app.callApi('POST', '/api/tasks', {
+      departmentId: department.id,
+      title: 'Không có cổng',
+      priority: 1,
+      workingDirectory: path.join(project, 'app'),
+      workflowId: null,
+      previewCommand: 'npm run dev',
+    });
+    const task = await createTask();
+    await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'succeeded',
+      'first run',
+    );
+    const notConfigured = await app.callApi('POST', `/api/tasks/${task.id}/preview`, {});
+
+    expect(withoutPort.statusCode).toBe(400);
+    expect(notConfigured.statusCode).toBe(400);
+    expect(readErrorCode(notConfigured)).toBe('PREVIEW_NOT_CONFIGURED');
   }, 30_000);
 });

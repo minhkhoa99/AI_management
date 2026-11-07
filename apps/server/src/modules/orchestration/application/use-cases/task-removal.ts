@@ -4,6 +4,7 @@ import type { Task } from '../../domain/entities/task';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
 import { QA_DOCUMENT_STORE, type QaDocumentStore } from '../ports/qa-document-store.port';
 import { TASK_WORKSPACE, type TaskWorkspace } from '../ports/task-execution.ports';
+import { TaskPreviewRegistry } from './task-preview-registry';
 
 /**
  * Deletes a task nobody works on any more: commits what the agent left ("lưu mốc" on the kept
@@ -16,11 +17,14 @@ export class TaskRemoval {
     @Inject(TASK_WORKSPACE) private readonly taskWorkspace: TaskWorkspace,
     @Inject(QA_DOCUMENT_STORE) private readonly documentStore: QaDocumentStore,
     @Inject(APP_LOGGER) private readonly logger: AppLogger,
+    private readonly previewRegistry: TaskPreviewRegistry,
   ) {}
 
   /** Never rejects: a git problem is logged, the task is deleted anyway. */
   async removeTask(task: Task): Promise<void> {
     const worktreePath = task.toState().worktreePath;
+    // A dev server running in the worktree would keep its files locked (Windows).
+    await this.previewRegistry.stopPreviewAndWait(task.id);
     if (worktreePath !== null) {
       try {
         await this.taskWorkspace.saveCheckpoint(worktreePath, `aiteam: lưu mốc trước khi xoá task`);
