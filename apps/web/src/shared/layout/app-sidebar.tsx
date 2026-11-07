@@ -61,7 +61,7 @@ export function AppSidebar() {
   );
 }
 
-/** "Hạn mức hôm nay": tokens and turns used today (a budget limit arrives in phase 5). */
+/** "Hạn mức hôm nay": tokens and turns used today (no budget limit: postponed in phase 5). */
 function UsageTodayCard() {
   const usage = useApiQuery('overview:usage-today', loadUsageToday);
   useEventStream('/api/stream/workspace', (updates) => {

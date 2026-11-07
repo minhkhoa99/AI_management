@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { UsageToday } from '@aiteam/contracts';
 import { AggregateUsageByProviderUseCase } from './aggregate-usage-by-provider.use-case';
 
-/** Sidebar meter "Hạn mức hôm nay": tokens and turns (budgets come in phase 5). */
+/** Sidebar meter "Hạn mức hôm nay": tokens and turns (no budget limit: postponed in phase 5). */
 @Injectable()
 export class SummarizeUsageTodayUseCase {
   constructor(private readonly aggregateUsageByProviderUseCase: AggregateUsageByProviderUseCase) {}
