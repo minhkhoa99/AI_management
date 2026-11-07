@@ -242,8 +242,9 @@ export class TaskPreviewRegistry implements OnApplicationShutdown {
           }
           if (entry.state !== 'starting') return;
           entry.state = 'running';
+          // Never the UI's own host (127.0.0.1): browsers would send it the session cookie.
           entry.url =
-            host === '::1' ? `http://[::1]:${entry.port}/` : `http://127.0.0.1:${entry.port}/`;
+            host === '::1' ? `http://[::1]:${entry.port}/` : `http://localhost:${entry.port}/`;
           return;
         }
         if (Date.now() >= deadline) {

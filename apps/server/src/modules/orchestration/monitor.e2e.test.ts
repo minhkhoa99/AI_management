@@ -386,7 +386,8 @@ describe('live monitor and code review', () => {
 
     expect(started).toMatchObject({ state: 'starting', url: null });
     expect(running, running.output).toMatchObject({ state: 'running', message: null });
-    expect(running.url).toBe(`http://127.0.0.1:${running.port}/`);
+    // Not the UI host: the browser must not send the aiteam cookie to the agent's server.
+    expect(running.url).toBe(`http://localhost:${running.port}/`);
     expect(page).toContain(path.join('worktrees', task.id));
     expect(stopResponse.statusCode).toBe(200);
     expect(again.state).toBe('running');
