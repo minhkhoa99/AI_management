@@ -1,4 +1,4 @@
-// The published package (`npm i -g aimanagement`) must run from its bundle alone.
+// The published package (`npm i -g @minhkhoa/aimanagement`, command `aimanagement`) must run from its bundle alone.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,8 @@ const manifest = JSON.parse(readFileSync(path.join(packageRoot, 'package.json'),
 
 describe('published package manifest', () => {
   it('installs the aimanagement command from the launcher', () => {
-    expect(manifest.name).toBe('aimanagement');
+    expect(manifest.name).toBe('@minhkhoa/aimanagement');
+    expect(manifest.publishConfig).toEqual({ access: 'public' });
     expect(manifest.bin).toEqual({ aimanagement: 'bin/aiteam.mjs' });
     expect(existsSync(path.join(packageRoot, manifest.bin.aimanagement))).toBe(true);
     expect(manifest.private).toBeUndefined();

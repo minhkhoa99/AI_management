@@ -8,7 +8,7 @@ Agent dùng Claude Code, Codex (bằng tài khoản đã đăng nhập) hoặc C
 Cần Node LTS đã vá bảo mật: 22.23.4+, 24.22.1+ hoặc 26.12.1+ ([tải Node](https://nodejs.org/en/download)).
 
 ```
-npm i -g aimanagement
+npm i -g @minhkhoa/aimanagement
 aimanagement
 ```
 
@@ -25,7 +25,7 @@ aimanagement doctor           # kiểm tra node, git, Claude Code, Codex
 - Dữ liệu và log nằm ở `~/.aiteam` (đổi bằng biến `AITEAM_HOME`); cổng ưu tiên đổi bằng `AITEAM_PORT`.
 - Server chỉ nghe `127.0.0.1`; chỉ trình duyệt mở bằng liên kết lệnh in ra mới vào được.
 - Agent chạy bằng Claude Code hoặc Codex cần CLI tương ứng đã cài và đăng nhập (`aimanagement doctor`).
-- Cập nhật: `npm i -g aimanagement@latest`. Gỡ: `npm rm -g aimanagement` (dữ liệu ở `~/.aiteam` vẫn giữ).
+- Cập nhật: `npm i -g @minhkhoa/aimanagement@latest`. Gỡ: `npm rm -g @minhkhoa/aimanagement` (dữ liệu ở `~/.aiteam` vẫn giữ).
 
 ## Phát triển
 
