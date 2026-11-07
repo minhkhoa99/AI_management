@@ -11,6 +11,8 @@ import {
 import styles from './tasks.module.css';
 
 const EDIT_ICON = 'M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3';
+const LEFT_ICON = 'M15 6l-6 6 6 6';
+const RIGHT_ICON = 'M9 6l6 6-6 6';
 const DELETE_ICON = 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3';
 
 interface TaskBoardProps {
@@ -20,6 +22,7 @@ interface TaskBoardProps {
   onOpenTask: (taskId: string) => void;
   onEditTask: (taskId: string) => void;
   onDeleteTask: (task: TaskSummary) => void;
+  onMoveTask: (task: TaskSummary, direction: 'back' | 'forward') => void;
 }
 
 /** Kanban: "Cần làm", "Đang làm", "QC đang kiểm", "Hoàn thành". */
@@ -30,6 +33,7 @@ export function TaskBoard({
   onOpenTask,
   onEditTask,
   onDeleteTask,
+  onMoveTask,
 }: TaskBoardProps) {
   const departmentById = new Map(departments.map((department) => [department.id, department]));
   return (
@@ -59,6 +63,7 @@ export function TaskBoard({
                 onOpen={() => onOpenTask(task.id)}
                 onEdit={() => onEditTask(task.id)}
                 onDelete={() => onDeleteTask(task)}
+                onMove={(direction) => onMoveTask(task, direction)}
               />
             ))}
             {columnTasks.length === 0 && (
@@ -78,6 +83,7 @@ function TaskCard({
   onOpen,
   onEdit,
   onDelete,
+  onMove,
 }: {
   task: TaskSummary;
   department: Department | undefined;
@@ -85,9 +91,13 @@ function TaskCard({
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onMove: (direction: 'back' | 'forward') => void;
 }) {
   const priority = PRIORITY_PRESENTATION[task.priority];
-  const statusNote = STATUS_NOTES[task.status];
+  const statusNote = task.statusNote ?? STATUS_NOTES[task.status];
+  // Arrows move a workflow task between steps while nobody works on it (server checks rules).
+  const movable =
+    task.currentStep !== null && (task.status === 'queued' || task.status === 'failed');
   return (
     <article className={selected ? `${styles.card} ${styles.cardSelected}` : styles.card}>
       <div className={styles.cardTitleRow}>
@@ -153,6 +163,26 @@ function TaskCard({
           )}
         </span>
         <span className={styles.cardActions}>
+          {movable && (
+            <>
+              <button
+                type="button"
+                className={styles.iconAction}
+                aria-label={`Đưa ${task.code} về bước trước`}
+                onClick={() => onMove('back')}
+              >
+                <StrokeIcon path={LEFT_ICON} size={15} />
+              </button>
+              <button
+                type="button"
+                className={styles.iconAction}
+                aria-label={`Cho ${task.code} qua bước hiện tại`}
+                onClick={() => onMove('forward')}
+              >
+                <StrokeIcon path={RIGHT_ICON} size={15} />
+              </button>
+            </>
+          )}
           <button
             type="button"
             className={styles.iconAction}
