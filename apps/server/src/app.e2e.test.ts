@@ -12,6 +12,7 @@ import {
 } from '@aiteam/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAiteamApplication } from './app-factory';
+import { SECURITY_HEADERS } from './shared/security/security-headers.middleware';
 import { applyPendingMigrations } from './shared/database/migration-runner';
 import { ALL_MIGRATIONS } from './shared/database/migrations';
 import {
@@ -260,6 +261,21 @@ describe('aiteam HTTP application (e2e)', () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toContain('text/html');
       expect(response.body).toContain('<title>AI Team</title>');
+    });
+  });
+
+  describe('security headers', () => {
+    it.each([
+      ['a UI page', '/', {}],
+      ['an API response', '/api/departments', { cookie: VALID_SESSION_COOKIE }],
+      ['an error', '/api/departments', {}],
+    ])('are sent with %s (no framing of the UI, no sniffing)', async (_label, url, headers) => {
+      const response = await sendRequest(url, headers);
+
+      for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+        expect(response.headers[name]).toBe(value);
+      }
+      expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
     });
   });
 

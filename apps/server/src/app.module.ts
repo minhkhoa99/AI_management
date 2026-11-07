@@ -15,6 +15,7 @@ import { TraceContextMiddleware } from './shared/observability/trace-context.mid
 import { AllowedHostMiddleware } from './shared/security/allowed-host.middleware';
 import { RequestOriginMiddleware } from './shared/security/request-origin.middleware';
 import { SessionCookieMiddleware } from './shared/security/session-cookie.middleware';
+import { SecurityHeadersMiddleware } from './shared/security/security-headers.middleware';
 import { SessionExchangeMiddleware } from './shared/security/session-exchange.middleware';
 import {
   type SharedInfrastructureDependencies,
@@ -48,6 +49,7 @@ export class AppModule implements NestModule {
     // anything that reads credentials; the session exchange before the cookie check.
     consumer
       .apply(
+        SecurityHeadersMiddleware,
         TraceContextMiddleware,
         AllowedHostMiddleware,
         SessionExchangeMiddleware,
