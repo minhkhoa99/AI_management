@@ -99,8 +99,20 @@
   color: var(--color-text-soft);
 }
 
-.statusCard {
+.sidebarFooter {
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.usageValue {
+  font-family: var(--font-heading-stack);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.statusCard {
   padding: 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);

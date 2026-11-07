@@ -38,13 +38,3 @@ export function formatFileSize(bytes: number): string {
   if (kilobytes < 1024) return `${kilobytes.toLocaleString('vi', { maximumFractionDigits: 1 })} KB`;
   return `${(kilobytes / 1024).toLocaleString('vi', { maximumFractionDigits: 1 })} MB`;
 }
-
-/** Statuses the platform is working on; screens refresh while a task is in one of them. */
-export function isTaskActive(status: TaskStatus): boolean {
-  return (
-    status === 'queued' ||
-    status === 'running' ||
-    status === 'cancelling' ||
-    status === 'waiting_children'
-  );
-}
