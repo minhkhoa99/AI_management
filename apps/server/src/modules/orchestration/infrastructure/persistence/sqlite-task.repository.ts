@@ -28,12 +28,13 @@ interface TaskRow {
   worktree_path: string | null;
   pending_feedback: string | null;
   status_note: string | null;
+  base_sha: string | null;
 }
 
 const TASK_COLUMNS = `id, sequence_number, department_id, workflow_id, title, description, criteria,
   priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, test_command,
   engine_snapshot_json, step_attempt, engine_failures, run_after, worktree_path, pending_feedback,
-  status_note`;
+  status_note, base_sha`;
 
 @Injectable()
 export class SqliteTaskRepository implements TaskRepository {
@@ -53,13 +54,13 @@ export class SqliteTaskRepository implements TaskRepository {
       'SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_number FROM tasks',
     );
     this.insertStatement = database.prepare(
-      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 21 }, () => '?').join(', ')})`,
+      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 22 }, () => '?').join(', ')})`,
     );
     this.updateStatement = database.prepare(
       `UPDATE tasks SET workflow_id = ?, title = ?, description = ?, criteria = ?, priority = ?,
          assignee_agent_id = ?, current_step_id = ?, status = ?, working_dir = ?, session_ref = ?,
          test_command = ?, engine_snapshot_json = ?, step_attempt = ?, engine_failures = ?,
-         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE id = ?`,
     );
     this.deleteStatement = database.prepare('DELETE FROM tasks WHERE id = ?');
@@ -175,6 +176,7 @@ function restoreTask(row: TaskRow): Task {
     worktreePath: row.worktree_path,
     pendingFeedback: row.pending_feedback,
     statusNote: row.status_note,
+    baseSha: row.base_sha,
   });
 }
 
@@ -187,5 +189,6 @@ function executionColumns(state: ReturnType<Task['toState']>) {
     state.worktreePath,
     state.pendingFeedback,
     state.statusNote,
+    state.baseSha,
   ] as const;
 }

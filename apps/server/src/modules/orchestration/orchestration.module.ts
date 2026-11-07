@@ -1,5 +1,22 @@
 import { Module } from '@nestjs/common';
 import { DepartmentsModule } from '../departments/departments.module';
+import { AGENT_TILE_QUERY } from './application/ports/agent-tile.query';
+import { AddLineCommentUseCase } from './application/use-cases/add-line-comment.use-case';
+import { BuildCheckpointDiffUseCase } from './application/use-cases/build-checkpoint-diff.use-case';
+import { BuildTaskDiffUseCase } from './application/use-cases/build-task-diff.use-case';
+import { ListAgentTilesUseCase } from './application/use-cases/list-agent-tiles.use-case';
+import { ListCheckpointsUseCase } from './application/use-cases/list-checkpoints.use-case';
+import { ListDelegatedTasksUseCase } from './application/use-cases/list-delegated-tasks.use-case';
+import { ListLineCommentsUseCase } from './application/use-cases/list-line-comments.use-case';
+import { ListWorkspaceTreeUseCase } from './application/use-cases/list-workspace-tree.use-case';
+import { PauseTaskUseCase } from './application/use-cases/pause-task.use-case';
+import { ReadWorkspaceFileUseCase } from './application/use-cases/read-workspace-file.use-case';
+import { ResumeTaskUseCase } from './application/use-cases/resume-task.use-case';
+import { RevertWorkspaceFileUseCase } from './application/use-cases/revert-workspace-file.use-case';
+import { SubmitCodeReviewUseCase } from './application/use-cases/submit-code-review.use-case';
+import { TaskWorkspaceAccess } from './application/use-cases/task-workspace-access';
+import { SqliteAgentTileQuery } from './infrastructure/persistence/sqlite-agent-tile.query';
+import { MonitorController } from './presentation/controllers/monitor.controller';
 import { AgentsModule } from '../agents/agents.module';
 import { ProvidersModule } from '../providers/providers.module';
 import { TracingModule } from '../tracing/tracing.module';
@@ -27,7 +44,10 @@ import {
   TEST_COMMAND_RUNNER,
 } from './application/ports/task-execution.ports';
 import { APPROVAL_REPOSITORY } from './domain/repositories/approval.repository';
-import { CHECKPOINT_REPOSITORY } from './domain/repositories/checkpoint.repository';
+import {
+  CHECKPOINT_REPOSITORY,
+  LINE_COMMENT_REPOSITORY,
+} from './domain/repositories/checkpoint.repository';
 import { TASK_DELEGATION_REPOSITORY } from './domain/repositories/task-delegation.repository';
 import { AgentReconfigurationSubscriber } from './infrastructure/adapters/agent-reconfiguration.subscriber';
 import { GitTaskWorkspace } from './infrastructure/adapters/git-task-workspace';
@@ -36,6 +56,9 @@ import { TaskSchedulerLoop } from './infrastructure/adapters/task-scheduler.loop
 import { SqliteApprovalRepository } from './infrastructure/persistence/sqlite-approval.repository';
 import {
   SqliteCheckpointRepository,
+  SqliteLineCommentRepository,
+} from './infrastructure/persistence/sqlite-checkpoint.repository';
+import {
   SqliteStaffDirectory,
   SqliteTaskDelegationRepository,
 } from './infrastructure/persistence/sqlite-task-execution-records';
@@ -94,7 +117,13 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
  */
 @Module({
   imports: [DepartmentsModule, AgentsModule, ProvidersModule, TracingModule],
-  controllers: [WorkflowsController, TasksController, WorkspaceController, ApprovalsController],
+  controllers: [
+    WorkflowsController,
+    TasksController,
+    WorkspaceController,
+    ApprovalsController,
+    MonitorController,
+  ],
   providers: [
     { provide: TASK_RECOVERY_REPOSITORY, useClass: SqliteTaskRecoveryRepository },
     { provide: WORKFLOW_REPOSITORY, useClass: SqliteWorkflowRepository },
@@ -107,10 +136,12 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     { provide: QA_DOCUMENT_STORE, useClass: FileQaDocumentStore },
     { provide: APPROVAL_REPOSITORY, useClass: SqliteApprovalRepository },
     { provide: CHECKPOINT_REPOSITORY, useClass: SqliteCheckpointRepository },
+    { provide: LINE_COMMENT_REPOSITORY, useClass: SqliteLineCommentRepository },
     { provide: TASK_DELEGATION_REPOSITORY, useClass: SqliteTaskDelegationRepository },
     { provide: STAFF_DIRECTORY, useClass: SqliteStaffDirectory },
     { provide: TASK_WORKSPACE, useClass: GitTaskWorkspace },
     { provide: TEST_COMMAND_RUNNER, useClass: ShellTestCommandRunner },
+    { provide: AGENT_TILE_QUERY, useClass: SqliteAgentTileQuery },
     RecoverInterruptedWorkUseCase,
     StartupRecoveryTrigger,
     WorkflowPresenter,
@@ -157,6 +188,20 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     AutoDelegateByWorkloadUseCase,
     MoveTaskStageUseCase,
     RetryTaskUseCase,
+    TaskWorkspaceAccess,
+    ListAgentTilesUseCase,
+    ListDelegatedTasksUseCase,
+    ListWorkspaceTreeUseCase,
+    ReadWorkspaceFileUseCase,
+    ListCheckpointsUseCase,
+    BuildCheckpointDiffUseCase,
+    BuildTaskDiffUseCase,
+    ListLineCommentsUseCase,
+    AddLineCommentUseCase,
+    SubmitCodeReviewUseCase,
+    RevertWorkspaceFileUseCase,
+    PauseTaskUseCase,
+    ResumeTaskUseCase,
   ],
 })
 export class OrchestrationModule {}

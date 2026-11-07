@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { AgentEngineEvent } from '@aiteam/contracts';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
+import { toWorktreeRelativePath } from '../../domain/workspace-paths';
 import { TASK_EVENT_LOG, type TaskEventLog } from '../ports/task-execution.ports';
 
 const TEXT_LIMIT = 2_000;
@@ -17,7 +18,12 @@ export class SessionEventRecorder {
     taskId: string,
     agentId: string,
     event: AgentEngineEvent,
-    options: { keepSessionRef: boolean },
+    options: {
+      keepSessionRef: boolean;
+      /** Where the agent works: file paths it reports are stored relative to the worktree. */
+      worktreePath: string | null;
+      workDirectory: string;
+    },
   ): void {
     switch (event.kind) {
       case 'text_delta':
@@ -57,6 +63,23 @@ export class SessionEventRecorder {
           },
         });
         return;
+      case 'file_change': {
+        const relativePath =
+          options.worktreePath === null
+            ? null
+            : toWorktreeRelativePath(options.worktreePath, options.workDirectory, event.path);
+        this.eventLog.recordTaskEvent({
+          taskId,
+          agentId,
+          kind: 'file_change',
+          payload: {
+            path: relativePath ?? clip(event.path),
+            changeKind: event.changeKind,
+            insideWorkspace: relativePath !== null,
+          },
+        });
+        return;
+      }
       default:
         this.eventLog.recordTaskEvent({ taskId, agentId, kind: event.kind, payload: { ...event } });
     }

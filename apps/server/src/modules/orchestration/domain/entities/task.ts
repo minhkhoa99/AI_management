@@ -44,6 +44,8 @@ export interface TaskState {
   worktreePath: string | null;
   pendingFeedback: string | null;
   statusNote: string | null;
+  /** Commit the task branch started from (diffs "since start", file reverts). */
+  baseSha: string | null;
 }
 
 export interface TaskContent {
@@ -92,6 +94,7 @@ export class Task {
       worktreePath: null,
       pendingFeedback: null,
       statusNote: null,
+      baseSha: null,
     });
   }
 
@@ -153,8 +156,22 @@ export class Task {
 
   // ---- Execution ----------------------------------------------------------------------------
 
-  rememberWorktree(worktreePath: string): void {
+  rememberWorktree(worktreePath: string, baseSha: string | null): void {
     this.state.worktreePath = worktreePath;
+    this.state.baseSha ??= baseSha;
+  }
+
+  /** Stopped by the user: the scheduler leaves it alone, the engine session is kept. */
+  pause(): void {
+    this.state.status = 'paused';
+    this.state.statusNote = 'Bạn đã tạm dừng task.';
+  }
+
+  /** Back in the queue on the same step; the same agent continues its session. */
+  resume(): void {
+    this.state.status = 'queued';
+    this.state.statusNote = null;
+    this.state.runAfter = null;
   }
 
   /** An agent session starts on `stepId` (null: no workflow) with the agent's current engine. */
