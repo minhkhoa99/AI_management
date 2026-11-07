@@ -83,7 +83,7 @@ describe('TaskPreviewRegistry', () => {
       command: 'npm run dev -- --port 5101',
       directory: '/w',
     });
-    expect(running).toMatchObject({ url: 'http://127.0.0.1:5101/', message: null });
+    expect(running).toMatchObject({ url: 'http://localhost:5101/', message: null });
     expect(launcher.launches).toHaveLength(1);
     registry.stopPreview('t1');
   });
