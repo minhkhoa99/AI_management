@@ -316,7 +316,7 @@ function DeviceViewport({ url, reloadCount }: { url: string | null; reloadCount:
                 height={viewHeight}
                 className={styles.previewIframe}
                 // Agent-written app: scripts and forms run, but in an opaque origin, so it cannot
-                // reach this page. The server gives a `localhost` (or [::1]) URL, another site
+                // reach this page. The server gives a `localhost` URL, another site
                 // than the UI's 127.0.0.1, so the browser never sends it the aiteam cookie.
                 sandbox="allow-scripts allow-forms"
                 referrerPolicy="no-referrer"

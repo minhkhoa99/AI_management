@@ -178,7 +178,7 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
    - **Phiên đăng nhập bằng cookie:** mỗi lần chạy tạo token ngẫu nhiên (32 byte). `aiteam` mở `/?session=<token>`; server kiểm tra (so sánh constant-time), đặt cookie `aiteam_session` (`HttpOnly; SameSite=Strict; Path=/`) rồi redirect `303` về `/` để xoá token khỏi URL. Mọi API và SSE (`/api/*`) xác thực bằng cookie này; chỉ `/api/health` mở. File giao diện tĩnh không cần phiên (không chứa dữ liệu).
    - **Kiểm tra Host** cho mọi request: chỉ nhận `127.0.0.1:<port>` (chống DNS rebinding); đường dẫn phải dạng `/...` (URL tuyệt đối bị từ chối).
    - **Kiểm tra Origin** cho `POST/PATCH/PUT/DELETE`: phải là `http://127.0.0.1:<port>`; thiếu Origin cũng bị từ chối.
-   - **Tách host với bản xem trước:** cookie không phân biệt cổng, nên giao diện chỉ ở `127.0.0.1`, bản xem trước mở ở `localhost` (hoặc `[::1]`) và không bao giờ nhận cookie. Mọi phản hồi cấm nhúng khung (`frame-ancestors 'none'`, `X-Frame-Options: DENY`).
+   - **Tách host với bản xem trước:** cookie không phân biệt cổng, nên giao diện chỉ ở `127.0.0.1`, bản xem trước luôn mở ở `localhost` và không bao giờ nhận cookie. Mọi phản hồi cấm nhúng khung (`frame-ancestors 'none'`, `X-Frame-Options: DENY`).
    - Token không bao giờ được ghi vào log hay lặp lại trong phản hồi lỗi.
    - Mọi DTO kiểm tra bằng zod.
    - API key của Custom API mã hoá AES-256-GCM, khoá lưu trong `~/.aiteam/secret.key` với quyền 600.

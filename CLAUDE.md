@@ -25,7 +25,7 @@ Tài liệu gốc: `docs/IMPLEMENTATION_PLAN.md` (kiến trúc, dữ liệu, l�
 - Mọi request: Host phải là `127.0.0.1:<port>` (không nhận `localhost`) và đường dẫn dạng `/...`
   (từ chối URL tuyệt đối `GET http://host/api/...`, router vẫn định tuyến được nó).
 - `POST/PATCH/PUT/DELETE`: Origin phải là `http://127.0.0.1:<port>`.
-- Cookie không phân biệt cổng: bản xem trước (server do agent viết) mở ở `localhost`/`[::1]`, khác
+- Cookie không phân biệt cổng: bản xem trước (server do agent viết) mở ở `localhost`, khác
   site với giao diện nên không nhận cookie. Không bao giờ đưa giao diện lên `localhost`.
 - Mọi phản hồi có `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`.
 - Code ở `apps/server/src/shared/security/`. Không ghi token vào log, không lặp lại query string trong lỗi.
