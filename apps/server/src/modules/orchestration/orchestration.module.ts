@@ -1,5 +1,47 @@
 import { Module } from '@nestjs/common';
 import { DepartmentsModule } from '../departments/departments.module';
+import { AgentsModule } from '../agents/agents.module';
+import { ProvidersModule } from '../providers/providers.module';
+import { ApprovalPresenter } from './application/use-cases/approval-presenter';
+import { ApprovalRequests } from './application/use-cases/approval-requests';
+import { AutoDelegateByWorkloadUseCase } from './application/use-cases/auto-delegate-task.use-case';
+import { DecideApprovalUseCase } from './application/use-cases/decide-approval.use-case';
+import { DelegateTaskToSubordinateUseCase } from './application/use-cases/delegate-task.use-case';
+import { FinishTaskTurnUseCase } from './application/use-cases/finish-task-turn.use-case';
+import { ListApprovalsUseCase } from './application/use-cases/list-approvals.use-case';
+import { ListTaskEventsUseCase } from './application/use-cases/list-task-events.use-case';
+import { MoveTaskStageUseCase } from './application/use-cases/move-task-stage.use-case';
+import { RetryTaskUseCase } from './application/use-cases/retry-task.use-case';
+import { ScheduleTasksUseCase } from './application/use-cases/schedule-tasks.use-case';
+import { SessionEventRecorder } from './application/use-cases/session-event-recorder';
+import { StartTaskTurnUseCase } from './application/use-cases/start-task-turn.use-case';
+import { StepReviewLauncher } from './application/use-cases/step-review-launcher';
+import { TaskCheckpoints } from './application/use-cases/task-checkpoints';
+import { TaskHandover } from './application/use-cases/task-handover';
+import { TaskProgression } from './application/use-cases/task-progression';
+import { TaskRemoval } from './application/use-cases/task-removal';
+import { TaskRunRegistry } from './application/use-cases/task-run-registry';
+import {
+  STAFF_DIRECTORY,
+  TASK_EVENT_LOG,
+  TASK_WORKSPACE,
+  TEST_COMMAND_RUNNER,
+} from './application/ports/task-execution.ports';
+import { APPROVAL_REPOSITORY } from './domain/repositories/approval.repository';
+import { CHECKPOINT_REPOSITORY } from './domain/repositories/checkpoint.repository';
+import { TASK_DELEGATION_REPOSITORY } from './domain/repositories/task-delegation.repository';
+import { AgentReconfigurationSubscriber } from './infrastructure/adapters/agent-reconfiguration.subscriber';
+import { GitTaskWorkspace } from './infrastructure/adapters/git-task-workspace';
+import { ShellTestCommandRunner } from './infrastructure/adapters/shell-test-command-runner';
+import { TaskSchedulerLoop } from './infrastructure/adapters/task-scheduler.loop';
+import { SqliteApprovalRepository } from './infrastructure/persistence/sqlite-approval.repository';
+import {
+  SqliteCheckpointRepository,
+  SqliteStaffDirectory,
+  SqliteTaskDelegationRepository,
+  SqliteTaskEventLog,
+} from './infrastructure/persistence/sqlite-task-execution-records';
+import { ApprovalsController } from './presentation/controllers/approvals.controller';
 import { AttachQaDocumentUseCase } from './application/use-cases/attach-qa-document.use-case';
 import { CreateTaskUseCase } from './application/use-cases/create-task.use-case';
 import { DeleteTaskUseCase } from './application/use-cases/delete-task.use-case';
@@ -53,8 +95,8 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
  * Also: startup recovery after an abrupt stop (error policy).
  */
 @Module({
-  imports: [DepartmentsModule],
-  controllers: [WorkflowsController, TasksController, WorkspaceController],
+  imports: [DepartmentsModule, AgentsModule, ProvidersModule],
+  controllers: [WorkflowsController, TasksController, WorkspaceController, ApprovalsController],
   providers: [
     { provide: TASK_RECOVERY_REPOSITORY, useClass: SqliteTaskRecoveryRepository },
     { provide: WORKFLOW_REPOSITORY, useClass: SqliteWorkflowRepository },
@@ -65,6 +107,13 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     { provide: TASK_BOARD_QUERY, useClass: SqliteTaskBoardQuery },
     { provide: DIRECTORY_INSPECTOR, useClass: FsDirectoryInspector },
     { provide: QA_DOCUMENT_STORE, useClass: FileQaDocumentStore },
+    { provide: APPROVAL_REPOSITORY, useClass: SqliteApprovalRepository },
+    { provide: CHECKPOINT_REPOSITORY, useClass: SqliteCheckpointRepository },
+    { provide: TASK_DELEGATION_REPOSITORY, useClass: SqliteTaskDelegationRepository },
+    { provide: STAFF_DIRECTORY, useClass: SqliteStaffDirectory },
+    { provide: TASK_EVENT_LOG, useClass: SqliteTaskEventLog },
+    { provide: TASK_WORKSPACE, useClass: GitTaskWorkspace },
+    { provide: TEST_COMMAND_RUNNER, useClass: ShellTestCommandRunner },
     RecoverInterruptedWorkUseCase,
     StartupRecoveryTrigger,
     WorkflowPresenter,
@@ -91,6 +140,27 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     PickLocalDirectoryUseCase,
     ValidateWorkingDirectoryUseCase,
     ListRecentDirectoriesUseCase,
+    TaskRunRegistry,
+    TaskProgression,
+    ApprovalRequests,
+    ApprovalPresenter,
+    TaskRemoval,
+    TaskCheckpoints,
+    TaskHandover,
+    SessionEventRecorder,
+    StepReviewLauncher,
+    FinishTaskTurnUseCase,
+    StartTaskTurnUseCase,
+    ScheduleTasksUseCase,
+    TaskSchedulerLoop,
+    AgentReconfigurationSubscriber,
+    ListApprovalsUseCase,
+    DecideApprovalUseCase,
+    DelegateTaskToSubordinateUseCase,
+    AutoDelegateByWorkloadUseCase,
+    MoveTaskStageUseCase,
+    RetryTaskUseCase,
+    ListTaskEventsUseCase,
   ],
 })
 export class OrchestrationModule {}

@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import type { AgentEnginePort } from '../modules/orchestration/application/ports/agent-engine.port';
 import type { DirectoryPicker } from '../shared/runtime/directory-picker';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -43,6 +44,7 @@ export interface TestApplicationOverrides {
   processInspector?: ProcessInspector;
   processTerminator?: ProcessTerminator;
   directoryPicker?: DirectoryPicker;
+  agentEngineOverride?: AgentEnginePort;
 }
 
 export async function startTestApplication(
@@ -68,6 +70,9 @@ export async function startTestApplication(
     processTerminator: overrides.processTerminator ?? { terminateProcessTree: () => undefined },
     // Never opens a real dialog: tests behave as if the user cancelled unless they say so.
     directoryPicker: overrides.directoryPicker ?? { pickDirectory: () => Promise.resolve(null) },
+    agentEngineOverride: overrides.agentEngineOverride ?? null,
+    // Tasks only run in tests that script the engine: never a real CLI.
+    taskSchedulerEnabled: overrides.agentEngineOverride !== undefined,
   });
 
   return {

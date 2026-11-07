@@ -506,6 +506,140 @@
   background: #1a0f12;
 }
 
+/* ---- Execution ----------------------------------------------------------------------------- */
+
+.approvalBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid #7a4a20;
+  background: #2a1a0c;
+}
+
+.approvalTitle {
+  font-weight: 600;
+  color: #fdba8c;
+}
+
+.approvalRequest {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  max-height: 180px;
+  overflow: auto;
+  color: var(--color-text-soft);
+}
+
+.bellWrapper {
+  position: relative;
+}
+
+.bellBadge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--color-action);
+  color: var(--color-on-action);
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bellPanel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  width: min(420px, calc(100vw - 32px));
+  max-height: 70vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.bellTitle {
+  margin: 0;
+  font-size: 16px;
+}
+
+.bellLink {
+  font-size: 13px;
+}
+
+.stepProgress {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stepProgressItem {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.stepDone {
+  border-color: #1f5a44;
+  color: #86efac;
+}
+
+.stepCurrent {
+  border-color: var(--color-primary);
+  background: var(--color-brand-chip);
+  color: #dce8ff;
+}
+
+.taskLog {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.taskLogItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+.taskLogAgent {
+  font-weight: 600;
+}
+
+.taskLogTime {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+}
+
 @media (max-width: 900px) {
   .board {
     grid-template-columns: minmax(0, 1fr);

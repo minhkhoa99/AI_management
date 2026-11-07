@@ -24,6 +24,8 @@ const WORKSPACE_MUTATING_TOOLS = [
   'PowerShell',
 ];
 const NETWORK_TOOLS = ['WebFetch', 'WebSearch'];
+/** Shell tools pre-approved for agents allowed to edit (deny rules still win). */
+const WORKSPACE_COMMAND_TOOLS = ['Bash', 'PowerShell'];
 /** Shell commands that reach the network, denied with the network tools. */
 const NETWORK_COMMAND_RULES = ['Bash(curl:*)', 'Bash(wget:*)', 'PowerShell(Invoke-WebRequest:*)'];
 /** Denied even for agents allowed to edit, when the engine blocks dangerous commands. */
@@ -95,7 +97,12 @@ export function buildClaudeInvocation(request: AgentSessionRequest): CliInvocati
   if (request.resumeSessionRef !== null) {
     args.push('--resume', request.resumeSessionRef);
   }
-  const allowedTools = request.permissions.networkAccess ? NETWORK_TOOLS : [];
+  // In print mode nothing can be approved interactively: an agent allowed to edit the workspace
+  // may also run commands there (tests, builds); dangerous and network commands stay denied.
+  const allowedTools = [
+    ...(request.permissions.accessLevel === 'edit_workspace' ? WORKSPACE_COMMAND_TOOLS : []),
+    ...(request.permissions.networkAccess ? NETWORK_TOOLS : []),
+  ];
   if (allowedTools.length > 0) {
     args.push('--allowedTools', ...allowedTools);
   }

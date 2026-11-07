@@ -1,30 +1,40 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { TaskDeletion } from '@aiteam/contracts';
-import { ConflictError } from '../../../../shared/errors/app-error';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
-import { QA_DOCUMENT_STORE, type QaDocumentStore } from '../ports/qa-document-store.port';
+import { TASK_EVENT_LOG, type TaskEventLog } from '../ports/task-execution.ports';
 import { requireTaskExists } from './get-task-detail.use-case';
+import { TaskRemoval } from './task-removal';
+import { TaskRunRegistry } from './task-run-registry';
 
 /**
- * Deletes a task that no agent is working on (queued or finished), with its QA documents.
- * Tasks with a live agent session are cancelled first (execution, phase 3 part C).
+ * "Xoá task": with nothing running the task is deleted at once (its branch is kept). With an
+ * agent at work, the task becomes "cancelling" and the agent's process tree is stopped; the
+ * session's end deletes it (cancel signal → engine stops → checkpoint → worktree removed).
  */
 @Injectable()
 export class DeleteTaskUseCase {
   constructor(
     @Inject(TASK_REPOSITORY) private readonly taskRepository: TaskRepository,
-    @Inject(QA_DOCUMENT_STORE) private readonly documentStore: QaDocumentStore,
+    @Inject(TASK_EVENT_LOG) private readonly eventLog: TaskEventLog,
+    private readonly runRegistry: TaskRunRegistry,
+    private readonly taskRemoval: TaskRemoval,
   ) {}
 
-  deleteTask(taskId: string): TaskDeletion {
+  async deleteTask(taskId: string): Promise<TaskDeletion> {
     const task = requireTaskExists(this.taskRepository, taskId);
-    if (task.status !== 'queued' && !task.isFinished) {
-      throw new ConflictError('Task đang được agent thực hiện, chưa xoá được.', {
-        code: 'TASK_IN_PROGRESS',
+    if (this.runRegistry.isRunning(taskId)) {
+      task.beginCancelling();
+      this.taskRepository.updateTask(task);
+      this.eventLog.recordTaskEvent({
+        taskId,
+        agentId: task.assigneeAgentId,
+        kind: 'cancel_requested',
+        payload: {},
       });
+      this.runRegistry.requestStop(taskId, 'delete');
+      return { taskId, outcome: 'cancelling' };
     }
-    this.taskRepository.deleteTask(taskId);
-    this.documentStore.removeTaskDocuments(taskId);
+    await this.taskRemoval.removeTask(task);
     return { taskId, outcome: 'deleted' };
   }
 }

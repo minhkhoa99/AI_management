@@ -1,4 +1,6 @@
 import {
+  approvalListSchema,
+  approvalSchema,
   type CreateTaskRequest,
   directoryPickSchema,
   directoryValidationSchema,
@@ -6,6 +8,7 @@ import {
   taskAttachmentSchema,
   taskDeletionSchema,
   taskDetailSchema,
+  taskEventListSchema,
   taskSummaryListSchema,
   type UpdateTaskRequest,
   type UpdateWorkspaceSettingsRequest,
@@ -84,3 +87,51 @@ export const validateWorkingDirectory = (directoryPath: string) =>
 
 export const loadRecentDirectories = () =>
   fetchApiJson('/api/workspace/recent-dirs', recentDirectoryListSchema);
+
+// ---- Execution ------------------------------------------------------------------------------
+
+export const delegateTask = (taskId: string, toAgentId: string) =>
+  refreshAfterWrite(
+    sendApiJson(
+      'POST',
+      `/api/tasks/${encodeId(taskId)}/delegations`,
+      { toAgentId },
+      taskDetailSchema,
+    ),
+  );
+
+export const autoDelegateTask = (taskId: string) =>
+  refreshAfterWrite(
+    sendApiJson(
+      'POST',
+      `/api/tasks/${encodeId(taskId)}/auto-delegations`,
+      undefined,
+      taskDetailSchema,
+    ),
+  );
+
+export const moveTaskStage = (taskId: string, direction: 'back' | 'forward') =>
+  refreshAfterWrite(
+    sendApiJson('PATCH', `/api/tasks/${encodeId(taskId)}/stage`, { direction }, taskDetailSchema),
+  );
+
+export const retryTask = (taskId: string) =>
+  refreshAfterWrite(
+    sendApiJson('POST', `/api/tasks/${encodeId(taskId)}/retries`, undefined, taskDetailSchema),
+  );
+
+export const loadTaskEvents = (taskId: string, limit = 40) =>
+  fetchApiJson(`/api/tasks/${encodeId(taskId)}/events?limit=${limit}`, taskEventListSchema);
+
+export const loadPendingApprovals = () =>
+  fetchApiJson('/api/approvals?status=pending', approvalListSchema);
+
+export const decideApproval = (approvalId: string, approved: boolean, note: string) =>
+  refreshAfterWrite(
+    sendApiJson(
+      'POST',
+      `/api/approvals/${encodeId(approvalId)}/decision`,
+      { approved, note },
+      approvalSchema,
+    ),
+  );

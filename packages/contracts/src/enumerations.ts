@@ -95,3 +95,17 @@ export const STEP_RETRY_LIMITS = { min: 1, max: 5 } as const;
 export const STEP_OWNERS = [...AGENT_ROLES, 'user'] as const;
 export const stepOwnerSchema = z.enum(STEP_OWNERS);
 export type StepOwner = z.infer<typeof stepOwnerSchema>;
+
+/** Approval requests: a workflow step's gate, or work the agent paused for (sensitive action). */
+export const APPROVAL_KINDS = ['step_gate', 'sensitive_action'] as const;
+export const approvalKindSchema = z.enum(APPROVAL_KINDS);
+export type ApprovalKind = z.infer<typeof approvalKindSchema>;
+
+export const APPROVAL_STATUSES = ['pending', 'approved', 'rejected'] as const;
+export const approvalStatusSchema = z.enum(APPROVAL_STATUSES);
+export type ApprovalStatus = z.infer<typeof approvalStatusSchema>;
+
+/** Why a task changed hands. */
+export const DELEGATION_REASONS = ['manual', 'automatic', 'workflow_step'] as const;
+export const delegationReasonSchema = z.enum(DELEGATION_REASONS);
+export type DelegationReason = z.infer<typeof delegationReasonSchema>;

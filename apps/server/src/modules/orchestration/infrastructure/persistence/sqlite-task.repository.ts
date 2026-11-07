@@ -2,7 +2,7 @@ import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import { Inject, Injectable } from '@nestjs/common';
 import type { TaskPriority, TaskStatus } from '@aiteam/contracts';
 import { SQLITE_DATABASE } from '../../../../shared/database/sqlite-connection';
-import { Task } from '../../domain/entities/task';
+import { type EngineSnapshot, Task } from '../../domain/entities/task';
 import type { TaskRepository } from '../../domain/repositories/task.repository';
 
 interface TaskRow {
@@ -20,10 +20,19 @@ interface TaskRow {
   working_dir: string | null;
   session_ref: string | null;
   test_command: string | null;
+  engine_snapshot_json: string | null;
+  step_attempt: number;
+  engine_failures: number;
+  run_after: string | null;
+  worktree_path: string | null;
+  pending_feedback: string | null;
+  status_note: string | null;
 }
 
 const TASK_COLUMNS = `id, sequence_number, department_id, workflow_id, title, description, criteria,
-  priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, test_command`;
+  priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, test_command,
+  engine_snapshot_json, step_attempt, engine_failures, run_after, worktree_path, pending_feedback,
+  status_note`;
 
 @Injectable()
 export class SqliteTaskRepository implements TaskRepository {
@@ -32,6 +41,7 @@ export class SqliteTaskRepository implements TaskRepository {
   private readonly insertStatement: StatementSync;
   private readonly updateStatement: StatementSync;
   private readonly deleteStatement: StatementSync;
+  private readonly runnableStatement: StatementSync;
 
   constructor(@Inject(SQLITE_DATABASE) database: DatabaseSync) {
     this.selectByIdStatement = database.prepare(`SELECT ${TASK_COLUMNS} FROM tasks WHERE id = ?`);
@@ -39,15 +49,21 @@ export class SqliteTaskRepository implements TaskRepository {
       'SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_number FROM tasks',
     );
     this.insertStatement = database.prepare(
-      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 21 }, () => '?').join(', ')})`,
     );
     this.updateStatement = database.prepare(
       `UPDATE tasks SET workflow_id = ?, title = ?, description = ?, criteria = ?, priority = ?,
          assignee_agent_id = ?, current_step_id = ?, status = ?, working_dir = ?, session_ref = ?,
-         test_command = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         test_command = ?, engine_snapshot_json = ?, step_attempt = ?, engine_failures = ?,
+         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE id = ?`,
     );
     this.deleteStatement = database.prepare('DELETE FROM tasks WHERE id = ?');
+    this.runnableStatement = database.prepare(
+      `SELECT t.id FROM tasks t JOIN departments d ON d.id = t.department_id
+       WHERE t.status = 'queued' AND d.enabled = 1 AND (t.run_after IS NULL OR t.run_after <= ?)
+       ORDER BY t.priority, t.sequence_number`,
+    );
   }
 
   findTaskById(taskId: string): Task | undefined {
@@ -76,6 +92,7 @@ export class SqliteTaskRepository implements TaskRepository {
       state.workingDirectory,
       state.sessionRef,
       state.testCommand,
+      ...executionColumns(state),
     );
   }
 
@@ -93,12 +110,19 @@ export class SqliteTaskRepository implements TaskRepository {
       state.workingDirectory,
       state.sessionRef,
       state.testCommand,
+      ...executionColumns(state),
       state.id,
     );
   }
 
   deleteTask(taskId: string): void {
     this.deleteStatement.run(taskId);
+  }
+
+  listRunnableTaskIds(nowIso: string): string[] {
+    return (this.runnableStatement.all(nowIso) as unknown as Array<{ id: string }>).map(
+      (row) => row.id,
+    );
   }
 }
 
@@ -118,5 +142,27 @@ function restoreTask(row: TaskRow): Task {
     workingDirectory: row.working_dir,
     sessionRef: row.session_ref,
     testCommand: row.test_command,
+    engineSnapshot:
+      row.engine_snapshot_json === null
+        ? null
+        : (JSON.parse(row.engine_snapshot_json) as EngineSnapshot),
+    stepAttempt: Number(row.step_attempt),
+    engineFailures: Number(row.engine_failures),
+    runAfter: row.run_after,
+    worktreePath: row.worktree_path,
+    pendingFeedback: row.pending_feedback,
+    statusNote: row.status_note,
   });
+}
+
+function executionColumns(state: ReturnType<Task['toState']>) {
+  return [
+    state.engineSnapshot === null ? null : JSON.stringify(state.engineSnapshot),
+    state.stepAttempt,
+    state.engineFailures,
+    state.runAfter,
+    state.worktreePath,
+    state.pendingFeedback,
+    state.statusNote,
+  ] as const;
 }

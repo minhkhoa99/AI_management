@@ -14,6 +14,7 @@ export interface TaskBoardQuery {
   findTaskSummary(taskId: string): TaskSummary | undefined;
   /** From the department head down to the agent. */
   listReportingChain(agentId: string): TaskAgent[];
+  listDepartmentAgents(departmentId: string): TaskAgent[];
   /** Working folders of recent tasks, newest first. */
   listRecentWorkingDirectories(limit: number): string[];
 }

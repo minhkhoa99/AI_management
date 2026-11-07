@@ -4,11 +4,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import type { Department, TaskSummary } from '@aiteam/contracts';
 import { useApiQuery } from '../../../shared/api/use-api-query';
+import { useReloadWhile } from '../../../shared/api/use-polling';
 import { controlStyles, StatusNotice } from '../../../shared/ui/controls';
 import { StrokeIcon } from '../../../shared/ui/stroke-icon';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
 import { loadDepartments } from '../../organization/organization-api';
-import { deleteTask, loadTasks } from '../tasks-api';
+import { isTaskActive } from '../task-labels';
+import { deleteTask, loadTasks, moveTaskStage } from '../tasks-api';
 import { TaskBoard } from './task-board';
 import { TaskDetailPanel } from './task-detail-panel';
 import { TaskFormPanel } from './task-form-panel';
@@ -16,6 +18,7 @@ import styles from './tasks.module.css';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const ALL_DEPARTMENTS = 'all';
+const BOARD_REFRESH_MS = 3_000;
 
 interface TasksRoute {
   departmentFilter: string;
@@ -40,6 +43,10 @@ export function TasksScreen() {
   const tasks = useApiQuery('tasks', () => loadTasks());
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<TaskSummary | null>(null);
+  const boardAction = useActionOutcome();
+  const anyTaskActive =
+    tasks.status === 'success' && tasks.result.some((task) => isTaskActive(task.status));
+  useReloadWhile(anyTaskActive, tasks.reload, BOARD_REFRESH_MS);
 
   const route: TasksRoute = {
     departmentFilter: searchParams.get('dept') ?? ALL_DEPARTMENTS,
@@ -60,9 +67,15 @@ export function TasksScreen() {
   }
 
   const departmentList = departments.result;
+  const searchText = (searchParams.get('q') ?? '').toLocaleLowerCase('vi');
   const visibleTasks = tasks.result.filter(
     (task) =>
-      route.departmentFilter === ALL_DEPARTMENTS || task.departmentId === route.departmentFilter,
+      (route.departmentFilter === ALL_DEPARTMENTS ||
+        task.departmentId === route.departmentFilter) &&
+      (searchText === '' ||
+        [task.title, task.code, task.assignee?.name ?? ''].some((text) =>
+          text.toLocaleLowerCase('vi').includes(searchText),
+        )),
   );
   const preferredDepartment = departmentList.find(
     (department) => department.id === route.departmentFilter,
@@ -149,6 +162,7 @@ export function TasksScreen() {
         />
       )}
 
+      <StatusNotice outcome={boardAction.outcome} />
       <TaskBoard
         tasks={visibleTasks}
         departments={departmentList}
@@ -159,6 +173,12 @@ export function TasksScreen() {
           navigate({ creating: false });
         }}
         onDeleteTask={(task) => setPendingDeletion(task)}
+        onMoveTask={(task, direction) =>
+          void boardAction.performAction(
+            () => moveTaskStage(task.id, direction),
+            () => null,
+          )
+        }
       />
     </div>
   );

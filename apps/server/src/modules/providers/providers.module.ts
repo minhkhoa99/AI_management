@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../app-runtime-config';
 import { AgentsModule } from '../agents/agents.module';
 import { AGENT_ENGINE_RESOLVER } from '../orchestration/application/ports/agent-engine.port';
+import { AGENT_RUN_PREPARER } from '../orchestration/application/ports/task-execution.ports';
+import { PrepareAgentRunUseCase } from './application/use-cases/prepare-agent-run.use-case';
 import { EngineTestRunRegistry } from './application/engine-test-run-registry';
 import { LOCAL_ENGINE_PROBE } from './application/ports/local-engine-probe.port';
 import { MODEL_CATALOG } from './application/ports/model-catalog.port';
@@ -74,8 +76,9 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
     StartConnectionTestRunUseCase,
     CancelEngineTestRunUseCase,
     WatchEngineTestRunUseCase,
+    { provide: AGENT_RUN_PREPARER, useClass: PrepareAgentRunUseCase },
   ],
-  // Orchestration (phase 3) starts sessions through this resolver.
-  exports: [AGENT_ENGINE_RESOLVER],
+  // Orchestration starts task sessions through these.
+  exports: [AGENT_ENGINE_RESOLVER, AGENT_RUN_PREPARER],
 })
 export class ProvidersModule {}

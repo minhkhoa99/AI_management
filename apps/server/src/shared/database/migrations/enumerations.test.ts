@@ -1,6 +1,9 @@
 import type { DatabaseSync } from 'node:sqlite';
 import {
   ACCESS_LEVELS,
+  APPROVAL_KINDS,
+  APPROVAL_STATUSES,
+  DELEGATION_REASONS,
   AGENT_ROLES,
   AGENT_PROVIDERS,
   API_FORMATS,
@@ -34,6 +37,7 @@ function seedParentRows(database: DatabaseSync): void {
     INSERT INTO departments (id, name, color) VALUES ('dept', 'Dev', '#3B82F6');
     INSERT INTO provider_connections (id, name, format, base_url) VALUES ('conn', 'Local', 'openai', 'http://127.0.0.1:1234');
     INSERT INTO workflows (id, department_id, name) VALUES ('flow', 'dept', 'Default');
+    INSERT INTO tasks (id, department_id, title, priority) VALUES ('task', 'dept', 'T', 2);
   `);
 }
 
@@ -152,6 +156,36 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
           "INSERT INTO workflow_steps (id, workflow_id, position, name, owner_role, gate, on_fail) VALUES (?, 'flow', ?, 'S', 'dev', ?, 'stop')",
         )
         .run(rowId, nextStepPosition(), value),
+  },
+  {
+    table: 'approvals',
+    column: 'kind',
+    contractValues: APPROVAL_KINDS,
+    invalidValue: 'budget',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare("INSERT INTO approvals (id, task_id, summary, kind) VALUES (?, 'task', 'S', ?)")
+        .run(rowId, value),
+  },
+  {
+    table: 'approvals',
+    column: 'status',
+    contractValues: APPROVAL_STATUSES,
+    invalidValue: 'maybe',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare("INSERT INTO approvals (id, task_id, summary, status) VALUES (?, 'task', 'S', ?)")
+        .run(rowId, value),
+  },
+  {
+    table: 'task_delegations',
+    column: 'reason',
+    contractValues: DELEGATION_REASONS,
+    invalidValue: 'random',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare("INSERT INTO task_delegations (id, task_id, reason) VALUES (?, 'task', ?)")
+        .run(rowId, value),
   },
   {
     table: 'workflow_steps',

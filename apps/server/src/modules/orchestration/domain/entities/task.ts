@@ -1,11 +1,23 @@
 import {
   FINISHED_TASK_STATUSES,
   TASK_TITLE_MAX_LENGTH,
+  type AccessLevel,
+  type AgentProvider,
   type TaskPriority,
   type TaskStatus,
 } from '@aiteam/contracts';
 import { DisplayName } from '../../../../shared/domain/display-name';
 import { ConflictError } from '../../../../shared/errors/app-error';
+
+/** Engine configuration of the agent when its session started; the session keeps using it. */
+export interface EngineSnapshot {
+  agentId: string;
+  provider: AgentProvider;
+  connectionId: string | null;
+  model: string | null;
+  accessLevel: AccessLevel;
+  networkAccess: boolean;
+}
 
 export interface TaskState {
   id: string;
@@ -22,6 +34,16 @@ export interface TaskState {
   workingDirectory: string | null;
   sessionRef: string | null;
   testCommand: string | null;
+  engineSnapshot: EngineSnapshot | null;
+  /** Retries used on the current step (on_fail = retry). */
+  stepAttempt: number;
+  /** Consecutive retryable engine failures; reset by any completed turn. */
+  engineFailures: number;
+  /** ISO time before which the scheduler leaves the task alone (retry back-off). */
+  runAfter: string | null;
+  worktreePath: string | null;
+  pendingFeedback: string | null;
+  statusNote: string | null;
 }
 
 export interface TaskContent {
@@ -31,6 +53,8 @@ export interface TaskContent {
   priority: TaskPriority;
   testCommand: string | null;
 }
+
+const FEEDBACK_MAX_LENGTH = 8_000;
 
 /** A unit of work for a department: what to do, who does it, where, and how far it got. */
 export class Task {
@@ -61,6 +85,13 @@ export class Task {
       workingDirectory: input.workingDirectory,
       sessionRef: null,
       testCommand: normaliseTestCommand(input.testCommand),
+      engineSnapshot: null,
+      stepAttempt: 0,
+      engineFailures: 0,
+      runAfter: null,
+      worktreePath: null,
+      pendingFeedback: null,
+      statusNote: null,
     });
   }
 
@@ -79,6 +110,14 @@ export class Task {
 
   get status(): TaskStatus {
     return this.state.status;
+  }
+
+  get assigneeAgentId(): string | null {
+    return this.state.assigneeAgentId;
+  }
+
+  get currentStepId(): string | null {
+    return this.state.currentStepId;
   }
 
   get isFinished(): boolean {
@@ -112,12 +151,98 @@ export class Task {
     this.state.workingDirectory = workingDirectory;
   }
 
+  // ---- Execution ----------------------------------------------------------------------------
+
+  rememberWorktree(worktreePath: string): void {
+    this.state.worktreePath = worktreePath;
+  }
+
+  /** An agent session starts on `stepId` (null: no workflow) with the agent's current engine. */
+  startTurn(stepId: string | null, snapshot: EngineSnapshot): void {
+    this.state.status = 'running';
+    this.state.currentStepId = stepId;
+    this.state.assigneeAgentId = snapshot.agentId;
+    this.state.engineSnapshot = snapshot;
+    this.state.runAfter = null;
+    this.state.statusNote = null;
+  }
+
+  /** The engine announced its session id (Claude session / Codex thread). */
+  recordSessionRef(sessionRef: string): void {
+    this.state.sessionRef = sessionRef;
+  }
+
+  /** The feedback was handed to an agent; it is not repeated in later turns. */
+  consumeFeedback(): string | null {
+    const feedback = this.state.pendingFeedback;
+    this.state.pendingFeedback = null;
+    return feedback;
+  }
+
+  addFeedback(feedback: string): void {
+    const combined = [this.state.pendingFeedback, feedback.trim()]
+      .filter((part): part is string => part !== null && part !== '')
+      .join('\n\n');
+    this.state.pendingFeedback = combined.slice(-FEEDBACK_MAX_LENGTH);
+  }
+
+  /** Back in the queue on `stepId`; `retriesUsed` counts on_fail retries of that step. */
+  requeue(input: {
+    stepId: string | null;
+    retriesUsed: number;
+    runAfter?: string;
+    note?: string;
+  }): void {
+    this.state.status = 'queued';
+    this.state.currentStepId = input.stepId;
+    this.state.stepAttempt = input.retriesUsed;
+    this.state.runAfter = input.runAfter ?? null;
+    this.state.statusNote = input.note ?? null;
+  }
+
+  /** Returns how many retryable engine failures happened in a row. */
+  countEngineFailure(): number {
+    this.state.engineFailures += 1;
+    return this.state.engineFailures;
+  }
+
+  clearEngineFailures(): void {
+    this.state.engineFailures = 0;
+  }
+
+  waitForApproval(note: string): void {
+    this.state.status = 'waiting_approval';
+    this.state.statusNote = note;
+  }
+
+  succeed(): void {
+    this.state.status = 'succeeded';
+    this.state.statusNote = null;
+    this.state.pendingFeedback = null;
+  }
+
+  fail(note: string): void {
+    this.state.status = 'failed';
+    this.state.statusNote = note;
+  }
+
+  beginCancelling(): void {
+    this.state.status = 'cancelling';
+    this.state.statusNote = 'Đã gửi tín hiệu huỷ, chờ agent dừng…';
+  }
+
+  /** The engine or connection changed: the old engine session cannot be continued. */
+  forgetEngineSession(handoff: string | null): void {
+    this.state.sessionRef = null;
+    if (handoff !== null) this.addFeedback(handoff);
+  }
+
   toState(): TaskState {
     return { ...this.state };
   }
 
   private assertNotStarted(fieldLabel: string): void {
-    if (this.state.status !== 'queued') {
+    if (this.state.status !== 'queued' || this.state.worktreePath !== null) {
       throw new ConflictError(`${fieldLabel} chỉ đổi được khi task chưa bắt đầu.`, {
         code: 'TASK_ALREADY_STARTED',
       });

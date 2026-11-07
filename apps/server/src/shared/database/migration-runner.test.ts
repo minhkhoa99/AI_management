@@ -168,6 +168,7 @@ describe('migration 001 initial schema', () => {
         'provider_connections',
         'schema_migrations',
         'task_attachments',
+        'task_delegations',
         'task_events',
         'tasks',
         'workflow_steps',
