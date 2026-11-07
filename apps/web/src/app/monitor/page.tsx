@@ -1,11 +1,11 @@
-import { EmptyState } from '../../shared/ui/empty-state';
+import { Suspense } from 'react';
+import { MonitorScreen } from '../../features/monitor/components/monitor-screen';
 
 export default function MonitorPage() {
+  // useSearchParams needs a Suspense boundary in a static export.
   return (
-    <EmptyState
-      heading="Chưa có agent nào đang chạy"
-      description="Terminal, cây thư mục, diff theo mốc và xem trước giao diện của từng agent sẽ hiện ở đây."
-      deliveredInPhase={4}
-    />
+    <Suspense fallback={null}>
+      <MonitorScreen />
+    </Suspense>
   );
 }

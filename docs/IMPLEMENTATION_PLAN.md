@@ -302,6 +302,7 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 - **Markdown:** tự viết renderer tối giản, dựng thẳng React element, không bao giờ chèn HTML, không thêm thư viện. Hỗ trợ tiêu đề, đoạn, danh sách, code, đậm/nghiêng; link chỉ hiện dạng chữ.
 - **Xem trước giao diện:** mỗi task khai báo "Lệnh chạy giao diện", vd `npm run dev -- --port {port}`. Nền tảng cấp cổng trống thay vào `{port}`, chạy trong worktree, chỉ trên 127.0.0.1, dừng khi đóng tab hoặc xoá task. iframe `sandbox` không có `allow-same-origin`.
+  - Làm ở phần C: trang giữ bản xem trước bằng lease (gia hạn mỗi 10 giây, quá 45 giây không gia hạn thì dừng), rời tab thì dừng ngay. Tối đa 3 bản chạy cùng lúc. Server phải trả lời trên loopback trong 90 giây; nếu kết nối được từ địa chỉ mạng của máy (nghe `0.0.0.0`) thì bị dừng kèm hướng dẫn thêm `--host 127.0.0.1`. Lệnh chạy qua shell như lệnh kiểm thử, có biến `PORT`, `HOST=127.0.0.1`, `BROWSER=none`. Tắt aiteam (kể cả khi crash) dừng mọi bản xem trước.
 - **"Yêu cầu sửa":** góp ý theo dòng trên một mốc đưa task về bước đã tạo mốc đó. Đúng agent đó nhận góp ý (tiếp tục phiên cũ nếu được) và tạo mốc mới; quy trình sau đó đi tiếp như thường (QC, review chạy lại).
 - **Tạm dừng / Tiếp tục:** thêm trạng thái task `paused` (migration + contracts). Tạm dừng thì dừng lượt và lưu mốc; tiếp tục thì về hàng đợi, cùng agent tiếp tục phiên bằng `session_ref`.
 - **Sự kiện và luồng trực tiếp (phần A):**

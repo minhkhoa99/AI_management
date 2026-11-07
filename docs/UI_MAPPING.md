@@ -146,7 +146,7 @@ Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế ch�
 | Giao xuống cấp dưới | `POST /api/tasks/:id/delegations` `{ toAgentId }` | `DelegateTaskToSubordinateUseCase` · orchestration | 3 |
 | "Để Manager tự giao" | `POST /api/tasks/:id/auto-delegations` | `AutoDelegateByWorkloadUseCase` · orchestration | 3 |
 | Nhật ký task | `GET /api/tasks/:id/events?limit=`, SSE `/api/stream/tasks/:id` | `ListTaskEventsUseCase` · tracing | 4 |
-| "Xem thay đổi code" | điều hướng `/monitor?agent=…&tab=diff` | — | 4 |
+| "Xem thay đổi code" | điều hướng `/monitor?agent=…&task=…&tab=diff` | — | 4 |
 
 Đã chốt ở Giai đoạn 3 (phần B): mã task dạng `T-<n>` (`tasks.sequence_number`, migration 007); tài liệu QA tải lên bằng `PUT /api/tasks/:id/attachments?fileName=` thân nhị phân, xoá bằng `DELETE /api/tasks/:id/attachments/:attachmentId`; `DELETE /api/tasks/:id` trả `202 { taskId, outcome }` (`deleted` ngay khi task chưa chạy hoặc đã xong, `cancelling` khi phải dừng agent, có ở phần C); task có thêm "Lệnh kiểm thử" cho điều kiện `tests_pass`. Phần C: mũi tên trên thẻ chuyển bước (lùi luôn được; tiến khi quy trình tắt luật "Không được bỏ qua bước"), `POST /api/tasks/:id/retries` ("Chạy lại"), nhật ký task cơ bản `GET /api/tasks/:id/events` (làm mới 2 giây khi task đang chạy; SSE ở Giai đoạn 4), chuông duyệt `GET /api/approvals?status=pending` + `POST /api/approvals/:id/decision`, ô tìm kiếm trên thanh trên cùng lọc bảng task theo tiêu đề, mã, người nhận. Thư mục cho phép chỉ thêm được qua hộp chọn thư mục (`POST /api/workspace/dir-picker`); `PATCH /api/settings` chỉ bỏ bớt thư mục và đổi số agent song song. Xoá phòng bị chặn khi còn task; xoá thành viên bị chặn khi còn task chưa xong.
 
@@ -154,28 +154,30 @@ Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế ch�
 
 | Thành phần UI | API | Use case / module | GĐ |
 |---|---|---|---|
-| Lọc phòng + bộ đếm trạng thái | `GET /api/monitor/agents?departmentId=` | `ListAgentActivityTilesUseCase` · tracing + agents | 4 |
+| Lọc phòng + bộ đếm trạng thái | `GET /api/monitor/agents?departmentId=` | `ListAgentTilesUseCase` · orchestration | 4 |
 | Ô agent (task, loại việc, hành động gần nhất, tiến độ bước) | như trên + SSE `/api/stream/departments/:id` | như trên | 4 |
-| Đầu khung: thông tin agent, task, thư mục | `GET /api/agents/:id/workspace` | `GetAgentWorkspaceUseCase` · orchestration | 4 |
-| Tạm dừng / Tiếp tục | `POST /api/agents/:id/pause`, `POST /api/agents/:id/resume` | `PauseAgentSessionUseCase`, `ResumeAgentSessionUseCase` (dùng `sessionRef`) · orchestration | 4 |
+| Đầu khung: thông tin agent, task, thư mục | lấy từ ô agent (không có endpoint riêng); `?task=` ghim một task (`GET /api/tasks/:id`) | — | 4 |
+| Tạm dừng / Tiếp tục | `POST /api/tasks/:id/pause`, `POST /api/tasks/:id/resume` (theo task, không theo agent) | `PauseTaskUseCase` (lưu mốc, trạng thái `paused`), `ResumeTaskUseCase` (tiếp tục phiên qua `sessionRef`) · orchestration | 4 |
 | Tab Code & thư mục: cây thư mục | `GET /api/tasks/:id/workspace/tree` | `ListWorkspaceTreeUseCase` (bỏ `node_modules`, `.git`; chặn đường dẫn ra ngoài worktree) · orchestration | 4 |
 | Xem file | `GET /api/tasks/:id/workspace/file?path=` | `ReadWorkspaceFileUseCase` (giới hạn kích thước) · orchestration | 4 |
-| Dòng code đang viết dần | SSE `file.change` → tải lại file đang mở | — | 4 |
-| Tab Thay đổi (diff): mốc, file, gộp/song song | `GET /api/tasks/:id/checkpoints`, `GET /api/checkpoints/:id/diff`, `GET /api/tasks/:id/diff?base=main` | `ListCheckpointsUseCase`, `BuildCheckpointDiffUseCase` · tracing + orchestration | 4 |
-| Góp ý theo dòng | `POST /api/checkpoints/:id/line-comments` | `AddLineCommentUseCase` → đưa vào prompt lượt sau · tracing + orchestration | 4 |
-| Duyệt thay đổi / Yêu cầu sửa | `POST /api/tasks/:id/reviews` `{ decision }` | `SubmitCodeReviewUseCase` (duyệt → `evaluateStepGate`; yêu cầu sửa → tạo lượt mới kèm góp ý) · orchestration | 4 |
+| Dòng code đang viết dần | SSE `/api/stream/tasks/:id`, sự kiện `file_change` (đường dẫn tương đối worktree) → tải lại file đang mở | — | 4 |
+| Tab Thay đổi (diff): mốc, file, gộp/song song | `GET /api/tasks/:id/checkpoints`, `GET /api/checkpoints/:id/diff`, `GET /api/tasks/:id/diff` (từ lúc task bắt đầu, `tasks.base_sha`) | `ListCheckpointsUseCase`, `BuildCheckpointDiffUseCase`, `BuildTaskDiffUseCase` · orchestration | 4 |
+| Góp ý theo dòng | `GET`/`POST /api/checkpoints/:id/line-comments` | `AddLineCommentUseCase`, `ListLineCommentsUseCase` (trạng thái `open` → `sent` → `resolved`) · orchestration | 4 |
+| Duyệt thay đổi / Yêu cầu sửa | `POST /api/tasks/:id/reviews` `{ decision }` | `SubmitCodeReviewUseCase` (duyệt → quyết định yêu cầu duyệt đang chờ; yêu cầu sửa → trả task về bước đã tạo mốc, cùng agent, kèm góp ý) · orchestration | 4 |
 | Hoàn tác file / khôi phục | `POST /api/tasks/:id/workspace/file-reverts` `{ path }` | `RevertWorkspaceFileUseCase` (`git checkout <base> -- path`) · orchestration | 4 |
-| Tab Terminal | SSE `command` | — | 4 |
+| Tab Terminal | `GET /api/tasks/:id/events` (lọc `command`, kèm output) + SSE task | — | 4 |
 | Tab Hoạt động | SSE + `GET /api/agents/:id/events` | `ListAgentEventsUseCase` · tracing | 4 |
-| Tab Giao diện: chọn thiết bị, xoay, thu phóng | `GET /api/tasks/:id/preview` trả URL dev server của worktree; danh sách thiết bị là hằng số ở client | `StartPreviewServerUseCase` (chạy lệnh dev do người dùng cấu hình cho dự án, cổng riêng) · orchestration | 4 |
+| Tab Giao diện: chọn thiết bị, xoay, thu phóng | `POST /api/tasks/:id/preview` `{ restart }` khởi động hoặc gia hạn (trang gọi lại mỗi 10 giây, 1,5 giây khi đang khởi động), `DELETE /api/tasks/:id/preview` khi rời tab; trả `{ state, url, port, message, output }`; danh sách thiết bị là hằng số ở client | `StartTaskPreviewUseCase`, `StopTaskPreviewUseCase`, `TaskPreviewRegistry` (lệnh “Lệnh chạy giao diện” của task, cổng trống thay `{port}`, chỉ loopback) · orchestration | 4 |
 | Khung "Agent tự kiểm tra responsive" | `GET /api/tasks/:id/responsive-report` | `CaptureResponsiveReportUseCase` (Playwright, chạy khi được yêu cầu) | 5 |
-| Tab Tài liệu | SSE `file.change` cho file `.md`; render Markdown an toàn | `ReadWorkspaceFileUseCase` | 4 |
+| Tab Tài liệu | file `.md` trong cây thư mục; render Markdown tự viết (chỉ React element, không HTML) | `ReadWorkspaceFileUseCase` | 4 |
 | Tab Kết quả kiểm thử | đọc báo cáo test dạng JSON (pytest-json, JUnit) agent ghi ra | `ParseTestReportUseCase` · tracing | 5 |
 | Tab Thiết kế | xem file ảnh/SVG/HTML agent xuất ra trong worktree | `ReadWorkspaceFileUseCase` | 5 |
 | Tab Kế hoạch (Manager) | `GET /api/agents/:id/delegated-tasks` | `ListDelegatedTasksUseCase` · orchestration | 4 |
 | Tab Hội thoại, Bảng dữ liệu | chưa làm, chờ có agent dùng công cụ ngoài (YAGNI) | — | sau |
 
 Loại việc của agent (code, giao diện, tài liệu, kiểm thử…) không cần lưu cứng. Backend suy ra từ vai trò agent và loại file thay đổi trong task, rồi trả về trường `workType` để giao diện chọn tab mặc định.
+
+Ô agent hiện task gấp nhất đang mở (chạy > đang huỷ > chờ duyệt > tạm dừng > chờ chạy); không còn task mở thì hiện task xong gần nhất (trạng thái "Rảnh") để vẫn xem và duyệt được thay đổi.
 
 ### 4.7 Cài đặt `/settings`
 

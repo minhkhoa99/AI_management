@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { Department, TaskDetail, TaskSummary } from '@aiteam/contracts';
 import { ApiRequestError } from '../../../shared/api/api-client';
@@ -124,7 +125,21 @@ export function TaskDetailPanel({
                 <span className={styles.monoValue}>{detail.testCommand}</span>
               </div>
             )}
+            {detail.previewCommand !== null && (
+              <div className={styles.fact}>
+                <span className={styles.factLabel}>Lệnh chạy giao diện</span>
+                <span className={styles.monoValue}>{detail.previewCommand}</span>
+              </div>
+            )}
           </div>
+          {detail.assignee !== null && (
+            <Link
+              className={controlStyles.secondaryButton}
+              href={`/monitor/?agent=${encodeURIComponent(detail.assignee.id)}&task=${encodeURIComponent(detail.id)}&tab=diff`}
+            >
+              Xem thay đổi code
+            </Link>
+          )}
           {detail.pendingApprovalId !== null && (
             <PendingApproval approvalId={detail.pendingApprovalId} />
           )}

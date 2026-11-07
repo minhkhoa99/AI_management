@@ -2,7 +2,7 @@
 // Records real JSONL streams from the local Claude Code and Codex CLIs, sanitises them, and
 // writes them as contract-test fixtures. Re-run when a CLI changes its output format.
 //
-//   node scripts/record-engine-streams.mjs [claude|codex|all]
+//   node scripts/record-engine-streams.mjs [claude|codex|all] [fixture-name]
 //
 // Spends a little of the signed-in accounts' quota (a few tiny prompts, cheapest models).
 // Sanitising removes: personal paths, session/thread ids, account and quota details, hooks.
@@ -21,6 +21,8 @@ const fixtureDirectory = path.join(
 const READ_PROMPT =
   'Đọc README.md trong thư mục hiện tại rồi tóm tắt nội dung trong một câu tiếng Việt.';
 const EDIT_PROMPT = 'Tạo file hello.txt chứa đúng một dòng: xin chào. Không làm gì khác.';
+const MODIFY_PROMPT =
+  'Trong README.md, đổi chữ "TypeScript" thành "JavaScript" bằng công cụ Edit. Không làm gì khác.';
 const LONG_PROMPT = 'Đọc README.md, sau đó viết một bài luận 2000 từ về lịch sử ghi chú.';
 
 // Same isolation flags as ClaudeCodeCliEngine / CodexCliEngine.
@@ -62,6 +64,12 @@ const RECORDINGS = {
       READ_PROMPT,
     ],
     ['claude-edit', 'claude', [...CLAUDE_BASE, '--permission-mode', 'acceptEdits'], EDIT_PROMPT],
+    [
+      'claude-modify',
+      'claude',
+      [...CLAUDE_BASE, '--permission-mode', 'acceptEdits'],
+      MODIFY_PROMPT,
+    ],
     [
       'claude-cancelled',
       'claude',
@@ -196,8 +204,9 @@ function recordOne([fixtureName, command, args, prompt, cancelAfterMs]) {
 }
 
 const selection = process.argv[2] ?? 'all';
+const onlyFixture = process.argv[3];
 for (const engineName of selection === 'all' ? Object.keys(RECORDINGS) : [selection]) {
   for (const recording of RECORDINGS[engineName]) {
-    await recordOne(recording);
+    if (onlyFixture === undefined || recording[0] === onlyFixture) await recordOne(recording);
   }
 }

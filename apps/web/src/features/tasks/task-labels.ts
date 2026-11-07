@@ -21,6 +21,7 @@ export const PRIORITY_PRESENTATION: Record<
 export const STATUS_NOTES: Partial<Record<TaskStatus, string>> = {
   waiting_children: 'Chờ cấp dưới',
   waiting_approval: 'Chờ bạn duyệt',
+  paused: 'Đã tạm dừng',
   failed: 'Thất bại, cần xem lại',
   cancelling: 'Đã gửi tín hiệu huỷ, chờ agent dừng…',
   cancelled: 'Đã huỷ',

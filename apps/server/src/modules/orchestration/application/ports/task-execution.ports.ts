@@ -18,6 +18,17 @@ export interface PreparedTaskWorkspace {
   agentDirectory: string;
   /** QA documents copied into the worktree, relative to agentDirectory. */
   qaDocumentPaths: string[];
+  /** HEAD when the worktree was created now; null when it already existed. */
+  baseSha: string | null;
+}
+
+export interface WorkspaceFile {
+  path: string;
+  size: number;
+  binary: boolean;
+  truncated: boolean;
+  /** null for binary files. */
+  content: string | null;
 }
 
 export interface SavedCheckpoint {
@@ -40,6 +51,22 @@ export interface TaskWorkspace {
   saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null>;
   /** Removes the worktree; the agent/<taskId> branch is always kept. */
   removeTaskWorkspace(worktreePath: string): Promise<void>;
+  /** Folder of the task inside the repository ("" for the root), "/" separated. */
+  locateAgentFolder(workingDirectory: string | null): Promise<string>;
+  /** Files of the worktree (tracked and new, .gitignore respected), relative, "/" separated. */
+  listWorkspaceFiles(worktreePath: string): Promise<string[]>;
+  /** `relativePath` must stay inside the worktree (symlinks resolved); refused otherwise. */
+  readWorkspaceFile(worktreePath: string, relativePath: string): Promise<WorkspaceFile>;
+  /** Unified patch of one commit. */
+  readCommitPatch(worktreePath: string, sha: string): Promise<string>;
+  /** Unified patch between two commits (fromSha null: the repository's first commit). */
+  readRangePatch(worktreePath: string, fromSha: string | null, toSha: string): Promise<string>;
+  /** Puts a file back as it was at `baseSha` (deletes it when it did not exist then). */
+  revertWorkspaceFile(
+    worktreePath: string,
+    baseSha: string | null,
+    relativePath: string,
+  ): Promise<void>;
 }
 
 // ---- Test command (gate "tests_pass") ------------------------------------------------------

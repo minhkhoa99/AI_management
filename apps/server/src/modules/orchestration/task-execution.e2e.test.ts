@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   type AgentDetail,
-  type AgentEngineEvent,
   agentDetailSchema,
   approvalListSchema,
   type Department,
@@ -17,75 +16,13 @@ import {
   workflowSchema,
 } from '@aiteam/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  agentReport as report,
+  ScriptedEngine,
+  stepNameOf,
+  waitFor,
+} from '../../test-support/scripted-engine';
 import { startTestApplication, type TestApplication } from '../../test-support/test-application';
-import type { AgentEnginePort, AgentSessionRequest } from './application/ports/agent-engine.port';
-
-type Respond = (request: AgentSessionRequest, signal: AbortSignal) => Promise<string>;
-
-/** A scripted engine: writes a file per turn and answers with an aiteam-report. */
-class ScriptedEngine implements AgentEnginePort {
-  readonly requests: AgentSessionRequest[] = [];
-  respond: Respond = (request) => Promise.resolve(report(defaultOutcome(request.prompt), 'xong'));
-
-  async *startSession(
-    request: AgentSessionRequest,
-    signal: AbortSignal,
-  ): AsyncGenerator<AgentEngineEvent> {
-    this.requests.push(request);
-    yield { kind: 'session_started', sessionRef: `session-${this.requests.length}`, model: 'fake' };
-    let answer: string;
-    try {
-      answer = await this.respond(request, signal);
-    } catch {
-      yield { kind: 'cancelled' };
-      return;
-    }
-    if (signal.aborted) {
-      yield { kind: 'cancelled' };
-      return;
-    }
-    if (request.permissions.accessLevel === 'edit_workspace') {
-      writeFileSync(
-        path.join(request.workingDirectory, `turn-${this.requests.length}.txt`),
-        answer,
-      );
-    }
-    yield { kind: 'message', text: 'đang làm' };
-    yield { kind: 'completed', summary: answer };
-  }
-}
-
-function report(outcome: string, summary: string, approvalRequest: string | null = null): string {
-  return `Kết quả.\n<aiteam-report>${JSON.stringify({ outcome, summary, approvalRequest })}</aiteam-report>`;
-}
-
-function defaultOutcome(prompt: string): string {
-  return prompt.includes('trả "pass" hoặc "fail"') || prompt.includes('cấp trên duyệt kết quả')
-    ? 'pass'
-    : 'done';
-}
-
-function stepNameOf(prompt: string): string {
-  return (
-    /bước \d+\/\d+ "([^"]+)"/.exec(prompt)?.[1] ??
-    (prompt.includes('cấp trên duyệt') ? 'review' : 'free')
-  );
-}
-
-async function waitFor<T>(
-  read: () => T | Promise<T>,
-  accept: (value: T) => boolean,
-  label: string,
-): Promise<T> {
-  const deadline = Date.now() + 20_000;
-  for (;;) {
-    const value = await read();
-    if (accept(value)) return value;
-    if (Date.now() > deadline)
-      throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(value)}`);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-}
 
 describe('task execution', () => {
   let app: TestApplication;

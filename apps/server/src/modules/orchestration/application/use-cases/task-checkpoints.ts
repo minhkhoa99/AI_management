@@ -37,6 +37,8 @@ export class TaskCheckpoints {
         sha: checkpoint.sha,
         message,
         files: checkpoint.files,
+        stepId: task.currentStepId,
+        agentId: task.assigneeAgentId,
       });
       this.eventLog.recordTaskEvent({
         taskId: task.id,

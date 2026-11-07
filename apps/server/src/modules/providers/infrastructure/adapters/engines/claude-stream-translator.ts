@@ -22,7 +22,8 @@ interface ClaudeStreamLine {
   model?: string;
   error?: string;
   message?: { content?: ClaudeContentBlock[] | string };
-  tool_use_result?: { type?: string; filePath?: string } | string;
+  tool_use_result?:
+    { type?: string; filePath?: string; oldString?: unknown; edits?: unknown } | string;
   result?: string;
   is_error?: boolean;
   api_error_status?: number | null;
@@ -135,7 +136,11 @@ export class ClaudeStreamTranslator {
     }
     const fileResult = line.tool_use_result;
     if (typeof fileResult === 'object' && typeof fileResult.filePath === 'string') {
-      if (fileResult.type === 'create' || fileResult.type === 'update') {
+      // Write reports type create/update; Edit and MultiEdit report no type, only the change.
+      const isEdit =
+        fileResult.type === undefined &&
+        (typeof fileResult.oldString === 'string' || Array.isArray(fileResult.edits));
+      if (fileResult.type === 'create' || fileResult.type === 'update' || isEdit) {
         events.push({
           kind: 'file_change',
           path: fileResult.filePath,

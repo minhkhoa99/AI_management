@@ -19,6 +19,9 @@ export const TASK_TITLE_MAX_LENGTH = 120;
 export const TASK_DESCRIPTION_MAX_LENGTH = 10_000;
 export const TASK_CRITERIA_MAX_LENGTH = 5_000;
 export const TASK_TEST_COMMAND_MAX_LENGTH = 500;
+export const TASK_PREVIEW_COMMAND_MAX_LENGTH = 500;
+/** Replaced by a free port when the preview starts. */
+export const PREVIEW_PORT_PLACEHOLDER = '{port}';
 export const WORKING_DIRECTORY_MAX_LENGTH = 1_000;
 
 // ---- QA documents ---------------------------------------------------------------------------
@@ -220,6 +223,8 @@ export const taskDetailSchema = taskSummarySchema.extend({
   description: z.string(),
   criteria: z.string(),
   testCommand: z.string().nullable(),
+  /** Starts the app's dev server for the preview tab; contains {port}. */
+  previewCommand: z.string().nullable(),
   attachments: z.array(taskAttachmentSchema),
   /** Reporting line from the department head down to the assignee. */
   assigneeChain: z.array(taskAgentSchema),
@@ -245,6 +250,14 @@ const taskDescriptionSchema = z.string().trim().max(TASK_DESCRIPTION_MAX_LENGTH)
 const taskCriteriaSchema = z.string().trim().max(TASK_CRITERIA_MAX_LENGTH);
 /** Run by the platform in the task worktree for the "tests must pass" gate; trusted user input. */
 const testCommandSchema = z.string().trim().max(TASK_TEST_COMMAND_MAX_LENGTH);
+/** Starts the dev server for the preview tab; trusted user input, must contain {port}. */
+const previewCommandSchema = z
+  .string()
+  .trim()
+  .max(TASK_PREVIEW_COMMAND_MAX_LENGTH)
+  .refine((command) => command === '' || command.includes(PREVIEW_PORT_PLACEHOLDER), {
+    message: 'Lệnh chạy giao diện phải có {port} (vd. npm run dev -- --port {port})',
+  });
 const workingDirectoryInputSchema = z.string().trim().max(WORKING_DIRECTORY_MAX_LENGTH);
 
 export const createTaskRequestSchema = z
@@ -261,6 +274,7 @@ export const createTaskRequestSchema = z
     /** Empty: the platform creates a folder for the task. */
     workingDirectory: workingDirectoryInputSchema.default(''),
     testCommand: testCommandSchema.default(''),
+    previewCommand: previewCommandSchema.default(''),
   })
   .strict();
 export type CreateTaskRequest = z.infer<typeof createTaskRequestSchema>;
@@ -275,6 +289,7 @@ export const updateTaskRequestSchema = z
     workflowId: entityIdSchema.nullable().optional(),
     workingDirectory: workingDirectoryInputSchema.optional(),
     testCommand: testCommandSchema.optional(),
+    previewCommand: previewCommandSchema.optional(),
   })
   .strict()
   .refine((request) => Object.values(request).some((value) => value !== undefined), {
@@ -313,6 +328,10 @@ export const taskEventSchema = z.object({
   agentName: z.string().nullable(),
   /** One line for the task log; the full payload stays on the server. */
   text: z.string(),
+  /** Longer plain text when there is one: a command's output, a full agent message. */
+  detail: z.string().nullable(),
+  /** The file a file_change event is about (the monitor reloads it when it is open). */
+  filePath: z.string().nullable(),
   createdAt: z.string(),
 });
 export type TaskEvent = z.infer<typeof taskEventSchema>;

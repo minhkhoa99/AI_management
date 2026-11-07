@@ -1,20 +1,43 @@
 import { execFile } from 'node:child_process';
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import path from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../../../app-runtime-config';
 import { AppError } from '../../../../shared/errors/app-error';
+import { ValidationError } from '../../../../shared/errors/app-error';
 import type {
   PreparedTaskWorkspace,
   SavedCheckpoint,
   TaskWorkspace,
+  WorkspaceFile,
 } from '../../application/ports/task-execution.ports';
+import { resolveInsideWorktree } from '../../domain/workspace-paths';
 
 const GIT_TIMEOUT_MS = 120_000;
 /** Commits made by the platform; the user's own git identity is never needed or changed. */
 const PLATFORM_IDENTITY = ['-c', 'user.name=AI Team', '-c', 'user.email=aiteam@localhost'];
 /** QA documents are copied here inside the worktree and kept out of git. */
 const QA_FOLDER = '.aiteam-qa';
+const MAX_LISTED_FILES = 5_000;
+const MAX_FILE_BYTES = 512 * 1024;
+
+function requireCommitSha(sha: string): string {
+  if (!/^[0-9a-f]{7,64}$/.test(sha)) {
+    throw new ValidationError('Mã commit không hợp lệ.', { code: 'COMMIT_SHA_INVALID' });
+  }
+  return sha;
+}
 
 /**
  * One git worktree per task (branch agent/<taskId>) under ~/.aiteam/data/worktrees, so agents
@@ -42,6 +65,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
     const repositoryRoot = await this.ensureRepository(sourceDirectory);
     const relativeFolder = path.relative(repositoryRoot, sourceDirectory);
     const worktreePath = input.worktreePath ?? path.join(this.worktreesRoot, input.taskId);
+    let baseSha: string | null = null;
 
     if (!existsSync(path.join(worktreePath, '.git'))) {
       mkdirSync(this.worktreesRoot, { recursive: true });
@@ -61,6 +85,9 @@ export class GitTaskWorkspace implements TaskWorkspace {
           ? ['worktree', 'add', worktreePath, branch]
           : ['worktree', 'add', '-b', branch, worktreePath, 'HEAD'],
       );
+      baseSha = branchExists
+        ? null
+        : (await this.runGit(worktreePath, ['rev-parse', 'HEAD'])).trim();
     }
 
     const agentDirectory = path.join(worktreePath, relativeFolder);
@@ -70,7 +97,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
       agentDirectory,
       input.qaDocuments,
     );
-    return { worktreePath, agentDirectory, qaDocumentPaths };
+    return { worktreePath, agentDirectory, qaDocumentPaths, baseSha };
   }
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
@@ -100,6 +127,101 @@ export class GitTaskWorkspace implements TaskWorkspace {
       await this.runGit(worktreePath, ['rev-parse', '--path-format=absolute', '--git-common-dir'])
     ).trim();
     await this.runGit(commonDirectory, ['worktree', 'remove', '--force', worktreePath]);
+  }
+
+  async locateAgentFolder(workingDirectory: string | null): Promise<string> {
+    if (workingDirectory === null || !existsSync(workingDirectory)) return '';
+    const prefix = (await this.runGit(workingDirectory, ['rev-parse', '--show-prefix'])).trim();
+    return prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
+  }
+
+  async listWorkspaceFiles(worktreePath: string): Promise<string[]> {
+    const output = await this.runGit(worktreePath, [
+      '-c',
+      'core.quotepath=false',
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+      '-z',
+    ]);
+    return [...new Set(output.split('\0').filter((file) => file !== ''))]
+      .sort()
+      .slice(0, MAX_LISTED_FILES);
+  }
+
+  async readWorkspaceFile(worktreePath: string, relativePath: string): Promise<WorkspaceFile> {
+    const absolutePath = resolveInsideWorktree(worktreePath, relativePath);
+    const size = statSync(absolutePath).size;
+    const fileDescriptor = openSync(absolutePath, 'r');
+    try {
+      const buffer = Buffer.alloc(Math.min(size, MAX_FILE_BYTES));
+      readSync(fileDescriptor, buffer, 0, buffer.length, 0);
+      const binary = buffer.subarray(0, 8_000).includes(0);
+      return {
+        path: relativePath,
+        size,
+        binary,
+        truncated: size > MAX_FILE_BYTES,
+        content: binary ? null : buffer.toString('utf8'),
+      };
+    } finally {
+      closeSync(fileDescriptor);
+    }
+  }
+
+  readCommitPatch(worktreePath: string, sha: string): Promise<string> {
+    return this.runGit(worktreePath, [
+      '-c',
+      'core.quotepath=false',
+      'show',
+      '--format=',
+      '--patch',
+      '--find-renames',
+      '--no-color',
+      requireCommitSha(sha),
+    ]);
+  }
+
+  async readRangePatch(
+    worktreePath: string,
+    fromSha: string | null,
+    toSha: string,
+  ): Promise<string> {
+    const from = fromSha ?? (await this.findFirstCommit(worktreePath));
+    return this.runGit(worktreePath, [
+      '-c',
+      'core.quotepath=false',
+      'diff',
+      '--find-renames',
+      '--no-color',
+      `${requireCommitSha(from)}..${requireCommitSha(toSha)}`,
+    ]);
+  }
+
+  async revertWorkspaceFile(
+    worktreePath: string,
+    baseSha: string | null,
+    relativePath: string,
+  ): Promise<void> {
+    const absolutePath = resolveInsideWorktree(worktreePath, relativePath, { mayBeMissing: true });
+    const base = requireCommitSha(baseSha ?? (await this.findFirstCommit(worktreePath)));
+    const gitPath = relativePath.split(path.sep).join('/');
+    const existedAtBase = await this.succeeds(worktreePath, [
+      'cat-file',
+      '-e',
+      `${base}:${gitPath}`,
+    ]);
+    if (existedAtBase) {
+      await this.runGit(worktreePath, ['checkout', base, '--', gitPath]);
+    } else {
+      rmSync(absolutePath, { force: true });
+    }
+  }
+
+  private async findFirstCommit(worktreePath: string): Promise<string> {
+    const roots = (await this.runGit(worktreePath, ['rev-list', '--max-parents=0', 'HEAD'])).trim();
+    return roots.split(/\r?\n/).at(-1) ?? '';
   }
 
   /** The repository root of the folder; git init + a first commit when there is none yet. */

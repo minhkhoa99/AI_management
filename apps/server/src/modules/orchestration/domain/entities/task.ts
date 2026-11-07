@@ -1,5 +1,6 @@
 import {
   FINISHED_TASK_STATUSES,
+  PREVIEW_PORT_PLACEHOLDER,
   TASK_TITLE_MAX_LENGTH,
   type AccessLevel,
   type AgentProvider,
@@ -7,7 +8,7 @@ import {
   type TaskStatus,
 } from '@aiteam/contracts';
 import { DisplayName } from '../../../../shared/domain/display-name';
-import { ConflictError } from '../../../../shared/errors/app-error';
+import { ConflictError, ValidationError } from '../../../../shared/errors/app-error';
 
 /** Engine configuration of the agent when its session started; the session keeps using it. */
 export interface EngineSnapshot {
@@ -34,6 +35,7 @@ export interface TaskState {
   workingDirectory: string | null;
   sessionRef: string | null;
   testCommand: string | null;
+  previewCommand: string | null;
   engineSnapshot: EngineSnapshot | null;
   /** Retries used on the current step (on_fail = retry). */
   stepAttempt: number;
@@ -44,6 +46,8 @@ export interface TaskState {
   worktreePath: string | null;
   pendingFeedback: string | null;
   statusNote: string | null;
+  /** Commit the task branch started from (diffs "since start", file reverts). */
+  baseSha: string | null;
 }
 
 export interface TaskContent {
@@ -52,6 +56,7 @@ export interface TaskContent {
   criteria: string;
   priority: TaskPriority;
   testCommand: string | null;
+  previewCommand: string | null;
 }
 
 const FEEDBACK_MAX_LENGTH = 8_000;
@@ -85,6 +90,7 @@ export class Task {
       workingDirectory: input.workingDirectory,
       sessionRef: null,
       testCommand: normaliseTestCommand(input.testCommand),
+      previewCommand: parsePreviewCommand(input.previewCommand),
       engineSnapshot: null,
       stepAttempt: 0,
       engineFailures: 0,
@@ -92,6 +98,7 @@ export class Task {
       worktreePath: null,
       pendingFeedback: null,
       statusNote: null,
+      baseSha: null,
     });
   }
 
@@ -124,7 +131,7 @@ export class Task {
     return (FINISHED_TASK_STATUSES as readonly TaskStatus[]).includes(this.state.status);
   }
 
-  /** Title, description, criteria, priority and test command can change at any time. */
+  /** Title, description, criteria, priority and commands can change at any time. */
   editContent(changes: Partial<TaskContent>): void {
     if (changes.title !== undefined) this.state.title = parseTaskTitle(changes.title);
     if (changes.description !== undefined) this.state.description = changes.description.trim();
@@ -132,6 +139,9 @@ export class Task {
     if (changes.priority !== undefined) this.state.priority = changes.priority;
     if (changes.testCommand !== undefined) {
       this.state.testCommand = normaliseTestCommand(changes.testCommand);
+    }
+    if (changes.previewCommand !== undefined) {
+      this.state.previewCommand = parsePreviewCommand(changes.previewCommand);
     }
   }
 
@@ -153,8 +163,22 @@ export class Task {
 
   // ---- Execution ----------------------------------------------------------------------------
 
-  rememberWorktree(worktreePath: string): void {
+  rememberWorktree(worktreePath: string, baseSha: string | null): void {
     this.state.worktreePath = worktreePath;
+    this.state.baseSha ??= baseSha;
+  }
+
+  /** Stopped by the user: the scheduler leaves it alone, the engine session is kept. */
+  pause(): void {
+    this.state.status = 'paused';
+    this.state.statusNote = 'Bạn đã tạm dừng task.';
+  }
+
+  /** Back in the queue on the same step; the same agent continues its session. */
+  resume(): void {
+    this.state.status = 'queued';
+    this.state.statusNote = null;
+    this.state.runAfter = null;
   }
 
   /** An agent session starts on `stepId` (null: no workflow) with the agent's current engine. */
@@ -257,6 +281,17 @@ function parseTaskTitle(rawTitle: string): string {
 function normaliseTestCommand(rawCommand: string | null): string | null {
   const command = rawCommand?.trim() ?? '';
   return command === '' ? null : command;
+}
+
+/** Empty means no preview; otherwise the platform needs {port} to give the server a free port. */
+function parsePreviewCommand(rawCommand: string | null): string | null {
+  const command = normaliseTestCommand(rawCommand);
+  if (command !== null && !command.includes(PREVIEW_PORT_PLACEHOLDER)) {
+    throw new ValidationError('Lệnh chạy giao diện phải có {port}.', {
+      code: 'PREVIEW_COMMAND_NEEDS_PORT',
+    });
+  }
+  return command;
 }
 
 export function formatTaskCode(sequenceNumber: number): string {

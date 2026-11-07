@@ -5,7 +5,7 @@ import {
   TASK_EVENT_LOG,
   type TaskEventLog,
 } from '../../../orchestration/application/ports/task-execution.ports';
-import { describeTaskEvent } from '../../domain/describe-task-event';
+import { describeTaskEvent, describeTaskEventDetail } from '../../domain/describe-task-event';
 
 /** "Nhật ký task": the latest events of a task, one readable line each. */
 @Injectable()
@@ -21,6 +21,7 @@ export class ListTaskEventsUseCase {
       kind: event.kind,
       agentName: event.agentName,
       text: describeTaskEvent(event),
+      ...describeTaskEventDetail(event),
       createdAt: event.createdAt,
     }));
   }

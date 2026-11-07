@@ -12,7 +12,7 @@ import type {
   TaskEventLog,
   TaskEventRecord,
 } from '../../../orchestration/application/ports/task-execution.ports';
-import { describeTaskEvent } from '../../domain/describe-task-event';
+import { describeTaskEvent, describeTaskEventDetail } from '../../domain/describe-task-event';
 
 /** Plan §5.10: events are written in one transaction every 200 ms or every 100 events. */
 export const EVENT_FLUSH_INTERVAL_MS = 200;
@@ -43,6 +43,7 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
   private readonly listStatement: StatementSync;
   private readonly taskStatement: StatementSync;
   private readonly agentNameStatement: StatementSync;
+  private readonly agentEventsStatement: StatementSync;
 
   constructor(
     @Inject(SQLITE_DATABASE) database: DatabaseSync,
@@ -69,6 +70,15 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
     );
     this.taskStatement = database.prepare('SELECT department_id FROM tasks WHERE id = ?');
     this.agentNameStatement = database.prepare('SELECT name FROM agents WHERE id = ?');
+    this.agentEventsStatement = database.prepare(
+      `SELECT e.id, e.kind, a.name AS agent_name, e.payload_json, e.created_at, e.task_id,
+              t.sequence_number
+       FROM task_events e
+       JOIN tasks t ON t.id = e.task_id
+       LEFT JOIN agents a ON a.id = e.agent_id
+       WHERE e.agent_id = ? AND e.kind NOT IN ('usage', 'session_started')
+       ORDER BY e.id DESC LIMIT ?`,
+    );
   }
 
   recordTaskEvent(event: PendingTaskEvent): void {
@@ -119,6 +129,32 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
     }));
   }
 
+  /** "Hoạt động" of an agent across all its tasks, newest first. */
+  listAgentEvents(
+    agentId: string,
+    limit: number,
+  ): Array<TaskEventRecord & { taskId: string; taskSequenceNumber: number }> {
+    this.flushPendingEvents();
+    const rows = this.agentEventsStatement.all(agentId, limit) as unknown as Array<{
+      id: number;
+      kind: string;
+      agent_name: string | null;
+      payload_json: string;
+      created_at: string;
+      task_id: string;
+      sequence_number: number;
+    }>;
+    return rows.map((row) => ({
+      id: Number(row.id),
+      kind: row.kind,
+      agentName: row.agent_name,
+      payload: JSON.parse(row.payload_json) as Record<string, unknown>,
+      createdAt: row.created_at,
+      taskId: row.task_id,
+      taskSequenceNumber: Number(row.sequence_number),
+    }));
+  }
+
   hasTask(taskId: string): boolean {
     return this.taskStatement.get(taskId) !== undefined;
   }
@@ -160,6 +196,7 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
           kind: event.kind,
           agentName: agent?.name ?? null,
           text: describeTaskEvent(event),
+          ...describeTaskEventDetail(event),
           createdAt: event.createdAt,
         },
       });

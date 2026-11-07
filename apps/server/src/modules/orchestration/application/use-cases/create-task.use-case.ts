@@ -51,6 +51,7 @@ export class CreateTaskUseCase {
         criteria: request.criteria,
         priority: request.priority,
         testCommand: request.testCommand,
+        previewCommand: request.previewCommand,
       });
       this.taskRepository.insertTask(task);
       return task.id;

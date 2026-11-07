@@ -4,7 +4,6 @@ import type { AccessLevel, AgentProvider, AgentRole, DelegationReason } from '@a
 import { SQLITE_DATABASE } from '../../../../shared/database/sqlite-connection';
 import type { StaffAgent, StaffDirectory } from '../../application/ports/task-execution.ports';
 import type { EngineSnapshot } from '../../domain/entities/task';
-import type { CheckpointRepository } from '../../domain/repositories/checkpoint.repository';
 import type {
   TaskDelegationRecord,
   TaskDelegationRepository,
@@ -60,33 +59,6 @@ export class SqliteTaskDelegationRepository implements TaskDelegationRepository 
   }
 }
 
-@Injectable()
-export class SqliteCheckpointRepository implements CheckpointRepository {
-  private readonly insertStatement: StatementSync;
-
-  constructor(@Inject(SQLITE_DATABASE) database: DatabaseSync) {
-    this.insertStatement = database.prepare(
-      'INSERT INTO checkpoints (id, task_id, sha, message, files_json) VALUES (?, ?, ?, ?, ?)',
-    );
-  }
-
-  insertCheckpoint(input: {
-    id: string;
-    taskId: string;
-    sha: string;
-    message: string;
-    files: readonly string[];
-  }): void {
-    this.insertStatement.run(
-      input.id,
-      input.taskId,
-      input.sha,
-      input.message,
-      JSON.stringify(input.files),
-    );
-  }
-}
-
 interface StaffRow {
   agent_id: string;
   name: string;
@@ -95,7 +67,6 @@ interface StaffRow {
   position_id: string;
   reports_to_position_id: string | null;
 }
-
 interface EngineRow {
   id: string;
   name: string;
