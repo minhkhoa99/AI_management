@@ -1,5 +1,5 @@
 {
-  "name": "aimanagement",
+  "name": "@minhkhoa/aimanagement",
   "version": "0.1.0",
   "description": "AI Team: nền tảng điều phối nhiều agent AI (Claude Code, Codex, Custom API) theo phòng ban, chạy hoàn toàn trên máy.",
   "keywords": [
@@ -29,6 +29,9 @@
     "bin/node-version-policy.mjs",
     "dist/"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },

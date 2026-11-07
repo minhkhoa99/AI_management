@@ -141,10 +141,10 @@ npm run build    # dist/server (bundle) + dist/web (Next export)
 npm run check:bundle   # ngân sách bundle web (sau build)
 node bin/aiteam.mjs [--port 7419] [--no-open]   # = lệnh aimanagement sau khi cài gói
 node bin/aiteam.mjs doctor
-npm pack         # gói aimanagement-<version>.tgz (prepack: build + smoke + bundle)
+npm pack         # gói minhkhoa-aimanagement-<version>.tgz (prepack: build + smoke + bundle)
 ```
 
-Gói npm và lệnh tên `aimanagement`; tên nội bộ giữ `aiteam` (`~/.aiteam`, `AITEAM_*`, cookie).
+Gói npm `@minhkhoa/aimanagement` (tên không scope bị npm chặn vì giống `ai-management`), lệnh `aimanagement`; tên nội bộ giữ `aiteam` (`~/.aiteam`, `AITEAM_*`, cookie).
 Không thêm `dependencies` vào gói: server phải chạy từ bundle, không cần `node_modules`.
 
 ## Git

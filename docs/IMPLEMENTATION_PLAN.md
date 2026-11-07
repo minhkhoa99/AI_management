@@ -42,7 +42,7 @@ Tài liệu liên quan: [mapping giao diện](UI_MAPPING.md) (màn hình → API
 | Kiểm tra đầu vào | `zod` dùng chung cho backend và frontend | Một nguồn định nghĩa, nhẹ |
 | Log | `pino`, JSON có `traceId` | Nhanh, có cấu trúc |
 | Test | Vitest + SWC | Nhanh, ít bộ nhớ hơn Jest |
-| Đóng gói | Bundle backend bằng esbuild thành một file; giao diện build tĩnh; phát hành npm package `aimanagement` | `npm i -g aimanagement` rồi gõ `aimanagement` |
+| Đóng gói | Bundle backend bằng esbuild thành một file; giao diện build tĩnh; phát hành npm package `@minhkhoa/aimanagement` | `npm i -g @minhkhoa/aimanagement` rồi gõ `aimanagement` |
 
 ### Luồng chạy một task
 
@@ -206,13 +206,13 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
 ## 6. Lệnh `aimanagement`
 
 ```
-npm i -g aimanagement        # một lần
+npm i -g @minhkhoa/aimanagement   # một lần
 aimanagement                 # mở ứng dụng: tạo ~/.aiteam, chạy migration, bật server, mở trình duyệt
 aimanagement doctor          # kiểm tra Node, git, claude, codex và trạng thái đăng nhập
 aimanagement --port 8000     # đổi cổng ưu tiên (hoặc biến môi trường AITEAM_PORT)
 ```
 
-Tên gói và tên lệnh là `aimanagement` (chốt 11/2026); tên bên trong giữ `aiteam` (thư mục `~/.aiteam`, biến `AITEAM_*`, cookie `aiteam_session`, `bin/aiteam.mjs`). Gói chỉ chứa `bin/` và `dist/`, không có dependency; `npm pack`/`npm publish` tự build, chạy smoke test và kiểm ngân sách bundle (`prepack`), lint và test chạy ở `prepublishOnly`. Giấy phép MIT.
+Tên lệnh là `aimanagement`, tên gói npm là `@minhkhoa/aimanagement` (chốt 11/2026; npm chặn tên không scope `aimanagement` vì giống gói `ai-management`, gói scoped publish với `access: public`); tên bên trong giữ `aiteam` (thư mục `~/.aiteam`, biến `AITEAM_*`, cookie `aiteam_session`, `bin/aiteam.mjs`). Gói chỉ chứa `bin/` và `dist/`, không có dependency; `npm pack`/`npm publish` tự build, chạy smoke test và kiểm ngân sách bundle (`prepack`), lint và test chạy ở `prepublishOnly`. Giấy phép MIT.
 
 Cổng mặc định `7419`. Thứ tự ưu tiên: `--port` > `AITEAM_PORT` > `7419`. Nếu cổng đang bận, server thử các cổng kế tiếp (tối đa 20 cổng) và in URL của cổng thật sự dùng.
 
@@ -322,9 +322,9 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - Giới hạn ngân sách theo task/phòng (token, số lượt).
 - Script đo RAM, thời gian khởi động, kích thước gói; tối ưu tới khi đạt mục tiêu.
 - Rà soát bảo mật theo mục 5.9.
-- Phát hành npm package `aimanagement`, README cài đặt (gói và README đã chuẩn bị sớm; chủ dự án tự `npm publish`).
+- Phát hành npm package `@minhkhoa/aimanagement`, README cài đặt (gói và README đã chuẩn bị sớm; chủ dự án tự `npm publish`).
 
-**Hoàn thành khi:** máy mới chỉ cần `npm i -g aimanagement && aimanagement` là dùng được, và các số đo đạt mục tiêu ở mục 1.
+**Hoàn thành khi:** máy mới chỉ cần `npm i -g @minhkhoa/aimanagement && aimanagement` là dùng được, và các số đo đạt mục tiêu ở mục 1.
 
 ## 8. Rủi ro và cách xử lý
 
