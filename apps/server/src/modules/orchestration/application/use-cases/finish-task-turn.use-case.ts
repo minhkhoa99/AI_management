@@ -18,6 +18,7 @@ import { TaskCheckpoints } from './task-checkpoints';
 import { TaskProgression } from './task-progression';
 import { TaskRemoval } from './task-removal';
 import { TaskRunRegistry } from './task-run-registry';
+import { TaskSplitter } from './task-splitter';
 
 /** Retryable engine failures (rate limit, CLI not reachable) in a row before the task fails. */
 export const MAX_ENGINE_FAILURES = 3;
@@ -41,6 +42,7 @@ export class FinishTaskTurnUseCase {
     private readonly checkpoints: TaskCheckpoints,
     private readonly reviewLauncher: StepReviewLauncher,
     private readonly taskRemoval: TaskRemoval,
+    private readonly taskSplitter: TaskSplitter,
   ) {}
 
   async finishTaskTurn(taskId: string, terminal: TerminalEngineEvent): Promise<void> {
@@ -107,6 +109,10 @@ export class FinishTaskTurnUseCase {
       `${formatTaskCode(state.sequenceNumber)} ${step?.name ?? state.title}: ${firstLine(report.summary)}`,
     );
 
+    // The agent handed parts of its step to subordinates: the step is judged when they are done.
+    if (this.taskSplitter.splitTaskIfRequested(task, report, state.assigneeAgentId ?? '')) {
+      return;
+    }
     if (report.outcome === 'needs_approval') {
       this.approvalRequests.requestApproval(task, {
         kind: 'sensitive_action',

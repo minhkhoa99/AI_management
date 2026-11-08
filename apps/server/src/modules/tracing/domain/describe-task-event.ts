@@ -73,6 +73,12 @@ function describeEventText(event: DescribableTaskEvent): string {
       return 'lượt bị dừng';
     case 'cancel_requested':
       return 'đã gửi tín hiệu huỷ';
+    case 'subtasks_created':
+      return `tách ${Array.isArray(payload.subtasks) ? payload.subtasks.length : 0} task con: ${describeSubtasks(payload.subtasks)}`;
+    case 'subtasks_finished':
+      return 'các task con đã xong, tiếp tục bước';
+    case 'subtasks_ignored':
+      return `không tách task con: ${text('detail')}`;
     case 'step_passed':
     case 'step_retried':
     case 'step_returned':
@@ -82,6 +88,22 @@ function describeEventText(event: DescribableTaskEvent): string {
     default:
       return event.kind;
   }
+}
+
+/** "T-5 API đăng nhập → Dev backend, T-6 …" from the subtasks_created payload. */
+function describeSubtasks(subtasks: unknown): string {
+  if (!Array.isArray(subtasks)) return '';
+  return subtasks
+    .map((subtask: unknown) => {
+      const fields = (typeof subtask === 'object' && subtask !== null ? subtask : {}) as Record<
+        string,
+        unknown
+      >;
+      const field = (key: string) => (typeof fields[key] === 'string' ? fields[key] : '');
+      const assignee = field('assigneeName');
+      return `${field('code')} ${field('title')}${assignee === '' ? '' : ` → ${assignee}`}`.trim();
+    })
+    .join(', ');
 }
 
 const STEP_OUTCOME_LABELS: Record<string, string> = {
