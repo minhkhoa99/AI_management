@@ -12,6 +12,7 @@ import { useApiQuery } from '../../../shared/api/use-api-query';
 import { controlStyles, StatusNotice } from '../../../shared/ui/controls';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
 import { PROVIDER_PRESENTATION } from '../../organization/organization-labels';
+import { LocalEngineModelField } from '../../providers/components/local-engine-model-field';
 import { changeAgentConfiguration, loadProviderConnections } from '../../providers/providers-api';
 import styles from './org-screen.module.css';
 
@@ -132,16 +133,7 @@ export function AgentBrainForm({ agent }: { agent: AgentDetail }) {
           </label>
         </div>
       ) : (
-        <label className={controlStyles.field}>
-          Model (tuỳ chọn)
-          <input
-            type="text"
-            value={model}
-            onChange={(event) => setModel(event.target.value)}
-            placeholder="Theo model mặc định của engine (Cài đặt API)"
-            className={`${controlStyles.fieldInput} ${styles.monoInput}`}
-          />
-        </label>
+        <LocalEngineModelField key={provider} engine={provider} value={model} onChange={setModel} />
       )}
 
       <span className={styles.brainHeading}>Quyền</span>

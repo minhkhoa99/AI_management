@@ -6,6 +6,7 @@ import { controlStyles, StatusNotice, ToggleSwitch } from '../../../shared/ui/co
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
 import { startLocalEngineTestRun, updateLocalEngineSettings } from '../providers-api';
 import { useEngineTestRun } from '../use-engine-test-run';
+import { LOCAL_ENGINE_MODEL_CHOICES } from '../local-engine-models';
 import { EngineTestRunLog } from './engine-test-run-log';
 import styles from './settings.module.css';
 
@@ -14,7 +15,6 @@ const ENGINE_PRESENTATION = {
     name: 'Claude Code',
     mark: 'CC',
     via: 'claude -p · tài khoản Claude đã đăng nhập',
-    modelSuggestions: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
     modelPlaceholder: 'Mặc định của Claude Code',
     commandSafety: {
       kind: 'toggle',
@@ -29,7 +29,6 @@ const ENGINE_PRESENTATION = {
     name: 'Codex',
     mark: 'CX',
     via: 'codex exec · tài khoản ChatGPT đã đăng nhập',
-    modelSuggestions: [] as string[],
     modelPlaceholder: 'Mặc định của Codex',
     commandSafety: {
       kind: 'note',
@@ -124,7 +123,7 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
           </button>
         </span>
         <datalist id={`${engine.engine}-models`}>
-          {presentation.modelSuggestions.map((model) => (
+          {LOCAL_ENGINE_MODEL_CHOICES[engine.engine].map(({ model }) => (
             <option key={model} value={model} />
           ))}
         </datalist>

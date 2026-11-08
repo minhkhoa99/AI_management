@@ -14,6 +14,7 @@ import { controlStyles, InlinePanel, StatusNotice } from '../../../shared/ui/con
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
 import { useApiQuery } from '../../../shared/api/use-api-query';
 import { addDepartmentMember } from '../../organization/organization-api';
+import { LocalEngineModelField } from '../../providers/components/local-engine-model-field';
 import { loadProviderConnections } from '../../providers/providers-api';
 import { PROVIDER_PRESENTATION, ROLE_LABELS } from '../../organization/organization-labels';
 import { collectFieldErrors, listTreeMembers } from '../org-tree-navigation';
@@ -64,7 +65,8 @@ export function AddMemberPanel(props: AddMemberPanelProps) {
       name,
       role,
       provider,
-      ...(provider === 'custom_api' ? { connectionId, model: model || undefined } : {}),
+      ...(provider === 'custom_api' ? { connectionId } : {}),
+      model: model.trim() === '' ? undefined : model.trim(),
       reportsToPositionId: isFirstMember ? null : managerPositionId,
     });
     if (!parsed.success) {
@@ -138,6 +140,14 @@ export function AddMemberPanel(props: AddMemberPanelProps) {
             })}
           </select>
         </label>
+        {provider !== 'custom_api' && (
+          <LocalEngineModelField
+            key={provider}
+            engine={provider}
+            value={model}
+            onChange={setModel}
+          />
+        )}
         {provider === 'custom_api' && (
           <div className={styles.brainGrid}>
             <label className={controlStyles.field}>
