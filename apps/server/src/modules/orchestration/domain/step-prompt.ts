@@ -93,7 +93,7 @@ export function buildStepPrompt(input: StepPromptInput): string {
         `Cấp dưới của bạn: ${input.splitCandidates
           .map((candidate) => `${candidate.name} (${candidate.roleLabel})`)
           .join(', ')}.`,
-        'Nền tảng tạo task con, mỗi cấp dưới làm trong nhánh riêng; khi tất cả xong, code được gộp vào thư mục của bạn và bạn nhận kết quả để làm tiếp bước này. Việc nhỏ thì tự làm, không tách.',
+        'Nền tảng tạo task con, mỗi cấp dưới làm trong nhánh riêng; khi tất cả xong, code được gộp vào thư mục của bạn và bạn nhận kết quả để làm tiếp bước này. Mô tả task yêu cầu giao cho cấp dưới thì phải tách theo đúng yêu cầu đó; còn việc nhỏ không ai yêu cầu tách thì tự làm.',
       ].join(' '),
     );
   }
