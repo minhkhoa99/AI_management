@@ -32,6 +32,7 @@ import { ApprovalRequests } from './approval-requests';
 import { FinishTaskTurnUseCase } from './finish-task-turn.use-case';
 import { SessionEventRecorder } from './session-event-recorder';
 import { TaskProgression } from './task-progression';
+import { TaskSplitter } from './task-splitter';
 import { TaskRunRegistry } from './task-run-registry';
 
 const NO_AGENT_RETRY_DELAY_MS = 60_000;
@@ -60,6 +61,7 @@ export class StartTaskTurnUseCase {
     private readonly approvalRequests: ApprovalRequests,
     private readonly sessionEventRecorder: SessionEventRecorder,
     private readonly finishTaskTurnUseCase: FinishTaskTurnUseCase,
+    private readonly taskSplitter: TaskSplitter,
   ) {}
 
   /** Never rejects: whatever goes wrong fails this task only. */
@@ -154,6 +156,7 @@ export class StartTaskTurnUseCase {
       workingDirectory: state.workingDirectory,
       worktreePath: state.worktreePath,
       qaDocuments: this.attachmentRepository.listAttachments(taskId),
+      forkFromTaskId: state.parentTaskId,
     });
     const current = this.taskRepository.findTaskById(taskId);
     if (current === undefined) {
@@ -241,6 +244,10 @@ export class StartTaskTurnUseCase {
   ): string {
     const state = task.toState();
     const rules = this.progression.readWorkflowRules(state.workflowId);
+    const parent =
+      state.parentTaskId === null
+        ? undefined
+        : this.taskRepository.findTaskById(state.parentTaskId)?.toState();
     return buildStepPrompt({
       taskCode: formatTaskCode(state.sequenceNumber),
       title: state.title,
@@ -266,7 +273,16 @@ export class StartTaskTurnUseCase {
       feedback: extras.feedback,
       // Without a workflow the default rule still applies: sensitive work needs the user.
       sensitiveActionsNeedApproval: rules?.sensitiveActionsNeedApproval ?? true,
-      allowAgentSubsteps: rules?.allowAgentSubsteps ?? false,
+      splitCandidates: this.taskSplitter
+        .listSplitCandidates(task, snapshot.agentId)
+        .map((candidate) => ({
+          name: candidate.name,
+          roleLabel: ROLE_LABELS_FOR_PROMPTS[candidate.role],
+        })),
+      subtaskOf:
+        parent === undefined
+          ? null
+          : { taskCode: formatTaskCode(parent.sequenceNumber), title: parent.title },
       canEditWorkspace: snapshot.accessLevel === 'edit_workspace',
     });
   }

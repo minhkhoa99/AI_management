@@ -19,12 +19,25 @@ export const PRIORITY_PRESENTATION: Record<
 
 /** Status line on a card, for states the column alone does not explain. */
 export const STATUS_NOTES: Partial<Record<TaskStatus, string>> = {
-  waiting_children: 'Chờ cấp dưới',
+  waiting_children: 'Chờ các task con',
   waiting_approval: 'Chờ bạn duyệt',
   paused: 'Đã tạm dừng',
   failed: 'Thất bại, cần xem lại',
   cancelling: 'Đã gửi tín hiệu huỷ, chờ agent dừng…',
   cancelled: 'Đã huỷ',
+};
+
+/** Short status of a subtask in its parent's detail. */
+export const SUBTASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  queued: 'chờ chạy',
+  running: 'đang làm',
+  waiting_children: 'chờ task con',
+  waiting_approval: 'chờ bạn duyệt',
+  paused: 'tạm dừng',
+  succeeded: 'đạt',
+  failed: 'thất bại',
+  cancelling: 'đang huỷ',
+  cancelled: 'đã huỷ',
 };
 
 /** Last two folders of a path, for chips ("…/shop-api/src"). */

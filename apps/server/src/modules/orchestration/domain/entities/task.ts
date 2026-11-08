@@ -48,6 +48,8 @@ export interface TaskState {
   statusNote: string | null;
   /** Commit the task branch started from (diffs "since start", file reverts). */
   baseSha: string | null;
+  /** Set on a subtask: the task whose agent split its step into this one (one level deep). */
+  parentTaskId: string | null;
 }
 
 export interface TaskContent {
@@ -99,7 +101,38 @@ export class Task {
       pendingFeedback: null,
       statusNote: null,
       baseSha: null,
+      parentTaskId: null,
     });
+  }
+
+  /**
+   * A piece of `parent`'s current step, done by one subordinate without a workflow. It works in
+   * its own worktree forked from the parent's, in the same folder, with the parent's priority.
+   */
+  static createSubtask(input: {
+    id: string;
+    sequenceNumber: number;
+    parent: TaskState;
+    title: string;
+    description: string;
+    assigneeAgentId: string;
+  }): Task {
+    const subtask = Task.createNew({
+      id: input.id,
+      sequenceNumber: input.sequenceNumber,
+      departmentId: input.parent.departmentId,
+      workflowId: null,
+      title: input.title,
+      description: input.description,
+      criteria: '',
+      priority: input.parent.priority,
+      assigneeAgentId: input.assigneeAgentId,
+      workingDirectory: input.parent.workingDirectory,
+      testCommand: null,
+      previewCommand: input.parent.previewCommand,
+    });
+    subtask.state.parentTaskId = input.parent.id;
+    return subtask;
   }
 
   /** Rebuilds a task loaded from storage (already validated when it was saved). */
@@ -125,6 +158,14 @@ export class Task {
 
   get currentStepId(): string | null {
     return this.state.currentStepId;
+  }
+
+  get parentTaskId(): string | null {
+    return this.state.parentTaskId;
+  }
+
+  get isSubtask(): boolean {
+    return this.state.parentTaskId !== null;
   }
 
   get isFinished(): boolean {
@@ -232,6 +273,24 @@ export class Task {
 
   clearEngineFailures(): void {
     this.state.engineFailures = 0;
+  }
+
+  /** The agent split its step: the task waits until every subtask is finished. */
+  waitForSubtasks(subtaskCount: number): void {
+    this.state.status = 'waiting_children';
+    this.state.runAfter = null;
+    this.state.statusNote = `Chờ ${subtaskCount} task con do cấp dưới làm.`;
+  }
+
+  /**
+   * Every subtask finished: back in the queue on the same step, so the same agent continues its
+   * session with the results (`feedback`) and finishes the step.
+   */
+  resumeAfterSubtasks(feedback: string): void {
+    this.state.status = 'queued';
+    this.state.runAfter = null;
+    this.state.statusNote = null;
+    this.addFeedback(feedback);
   }
 
   waitForApproval(note: string): void {

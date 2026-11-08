@@ -36,6 +36,8 @@ interface TaskSummaryRow {
   step_name: string | null;
   step_gate: StepGate | null;
   attachment_count: number;
+  parent_id: string | null;
+  parent_sequence_number: number | null;
 }
 
 interface TaskAgentRow {
@@ -54,17 +56,20 @@ const TASK_SUMMARY_SELECT = `
          a.provider AS assignee_provider, (a.enabled AND d.enabled) AS assignee_available,
          w.id AS workflow_id, w.name AS workflow_name,
          s.id AS step_id, s.name AS step_name, s.gate AS step_gate,
-         (SELECT COUNT(*) FROM task_attachments ta WHERE ta.task_id = t.id) AS attachment_count
+         (SELECT COUNT(*) FROM task_attachments ta WHERE ta.task_id = t.id) AS attachment_count,
+         p.id AS parent_id, p.sequence_number AS parent_sequence_number
   FROM tasks t
   JOIN departments d ON d.id = t.department_id
   LEFT JOIN agents a ON a.id = t.assignee_agent_id
   LEFT JOIN workflows w ON w.id = t.workflow_id
-  LEFT JOIN workflow_steps s ON s.id = t.current_step_id`;
+  LEFT JOIN workflow_steps s ON s.id = t.current_step_id
+  LEFT JOIN tasks p ON p.id = t.parent_task_id`;
 
 @Injectable()
 export class SqliteTaskBoardQuery implements TaskBoardQuery {
   private readonly listStatement: StatementSync;
   private readonly findStatement: StatementSync;
+  private readonly subtasksStatement: StatementSync;
   private readonly chainStatement: StatementSync;
   private readonly recentDirectoriesStatement: StatementSync;
   private readonly departmentAgentsStatement: StatementSync;
@@ -77,6 +82,9 @@ export class SqliteTaskBoardQuery implements TaskBoardQuery {
        ORDER BY t.priority, t.sequence_number DESC`,
     );
     this.findStatement = database.prepare(`${TASK_SUMMARY_SELECT} WHERE t.id = ?`);
+    this.subtasksStatement = database.prepare(
+      `${TASK_SUMMARY_SELECT} WHERE t.parent_task_id = ? ORDER BY t.sequence_number`,
+    );
     // Walks the reporting line upwards (bounded), then lists it from the head down.
     this.chainStatement = database.prepare(
       `WITH RECURSIVE chain(position_id, reports_to, depth) AS (
@@ -115,6 +123,12 @@ export class SqliteTaskBoardQuery implements TaskBoardQuery {
   findTaskSummary(taskId: string): TaskSummary | undefined {
     const row = this.findStatement.get(taskId) as TaskSummaryRow | undefined;
     return row === undefined ? undefined : toTaskSummary(row);
+  }
+
+  listSubtaskSummaries(parentTaskId: string): TaskSummary[] {
+    return (this.subtasksStatement.all(parentTaskId) as unknown as TaskSummaryRow[]).map(
+      toTaskSummary,
+    );
   }
 
   listReportingChain(agentId: string): TaskAgent[] {
@@ -178,6 +192,10 @@ function toTaskSummary(row: TaskSummaryRow): TaskSummary {
     workingDirectory: row.working_dir,
     statusNote: row.status_note,
     attachmentCount: Number(row.attachment_count),
+    parentTask:
+      row.parent_id === null || row.parent_sequence_number === null
+        ? null
+        : { id: row.parent_id, code: formatTaskCode(Number(row.parent_sequence_number)) },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

@@ -157,6 +157,29 @@
   white-space: nowrap;
 }
 
+.subtaskChip {
+  background: #2a1f45;
+  color: #d4c2ff;
+}
+
+.subtaskList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.subtaskLink {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.subtaskLink:hover {
+  text-decoration: underline;
+}
+
 .goalChipQa {
   background: #0f2a22;
   color: #86efac;

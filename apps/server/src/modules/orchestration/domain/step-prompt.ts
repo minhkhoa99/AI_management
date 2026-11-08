@@ -1,4 +1,5 @@
 import type { CompletionGoal, StepGate } from '@aiteam/contracts';
+import { MAX_SUBTASKS_PER_SPLIT } from './agent-report';
 
 export interface StepPromptInput {
   taskCode: string;
@@ -19,7 +20,10 @@ export interface StepPromptInput {
   previousReports: ReadonlyArray<{ stepName: string; agentName: string; summary: string }>;
   feedback: string | null;
   sensitiveActionsNeedApproval: boolean;
-  allowAgentSubsteps: boolean;
+  /** Subordinates the agent may hand subtasks to; empty: splitting is not offered. */
+  splitCandidates: ReadonlyArray<{ name: string; roleLabel: string }>;
+  /** Set on a subtask: the task it was split from. */
+  subtaskOf: { taskCode: string; title: string } | null;
   canEditWorkspace: boolean;
 }
 
@@ -38,6 +42,11 @@ export function buildStepPrompt(input: StepPromptInput): string {
   sections.push(
     `Bạn là ${input.agentRoleLabel} trong một nhóm AI. Task ${input.taskCode}: ${input.title}`,
   );
+  if (input.subtaskOf !== null) {
+    sections.push(
+      `Đây là task con do cấp trên tách ra từ task ${input.subtaskOf.taskCode} "${input.subtaskOf.title}". Chỉ làm đúng phần việc này; kết quả của bạn được gộp lại cho cấp trên.`,
+    );
+  }
   if (input.description.trim() !== '') {
     sections.push(`Mô tả:\n${input.description.trim()}`);
   }
@@ -77,9 +86,15 @@ export function buildStepPrompt(input: StepPromptInput): string {
       'Việc nhạy cảm (xoá dữ liệu, chi tiền, đăng công khai, deploy, gửi thông tin ra ngoài) phải được người dùng duyệt: KHÔNG làm, mà dừng lại với outcome "needs_approval" và mô tả việc định làm trong approvalRequest.',
     );
   }
-  if (input.allowAgentSubsteps) {
+  if (input.splitCandidates.length > 0) {
     rules.push(
-      'Bạn được chia nhỏ bước thành các bước phụ, nhưng phải liệt kê chúng trong summary.',
+      [
+        `Nếu phần việc nên chia cho cấp dưới làm song song, thêm "subtasks" (tối đa ${MAX_SUBTASKS_PER_SPLIT}) vào khối báo cáo cùng outcome "done", ví dụ "subtasks": [{"title": "tên việc", "description": "việc cụ thể và đầu ra cần có", "assignee": "tên cấp dưới"}].`,
+        `Cấp dưới của bạn: ${input.splitCandidates
+          .map((candidate) => `${candidate.name} (${candidate.roleLabel})`)
+          .join(', ')}.`,
+        'Nền tảng tạo task con, mỗi cấp dưới làm trong nhánh riêng; khi tất cả xong, code được gộp vào thư mục của bạn và bạn nhận kết quả để làm tiếp bước này. Mô tả task yêu cầu giao cho cấp dưới thì phải tách theo đúng yêu cầu đó; còn việc nhỏ không ai yêu cầu tách thì tự làm.',
+      ].join(' '),
     );
   }
   sections.push(`Quy tắc:\n${rules.map((rule) => `- ${rule}`).join('\n')}`);

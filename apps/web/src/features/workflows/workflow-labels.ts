@@ -41,7 +41,8 @@ export const RULE_PRESENTATION: ReadonlyArray<{
   },
   {
     key: 'allowAgentSubsteps',
-    label: 'Cho phép agent tự thêm bước phụ',
-    description: 'Agent được chia nhỏ bước nếu cần, vẫn phải báo cáo',
+    label: 'Cho phép agent tách task con',
+    description:
+      'Agent có cấp dưới được chia phần việc thành task con cho cấp dưới làm song song; xong thì code được gộp lại',
   },
 ];

@@ -46,7 +46,18 @@ export interface TaskWorkspace {
     workingDirectory: string | null;
     worktreePath: string | null;
     qaDocuments: ReadonlyArray<{ fileName: string; contentPath: string }>;
+    /** A subtask: its branch starts from the parent's branch (latest checkpoint), same folder. */
+    forkFromTaskId?: string | null;
   }): Promise<PreparedTaskWorkspace>;
+  /**
+   * Merges a finished subtask's branch into the parent's worktree (a platform commit). On a
+   * conflict the merge is undone and nothing changes; the subtask branch is always kept.
+   */
+  mergeSubtaskBranch(
+    parentWorktreePath: string,
+    subtaskId: string,
+    message: string,
+  ): Promise<'merged' | 'conflict'>;
   /** Commits everything the agent changed ("mốc"); null when nothing changed. */
   saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null>;
   /** Removes the worktree; the agent/<taskId> branch is always kept. */

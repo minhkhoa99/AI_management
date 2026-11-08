@@ -269,7 +269,7 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 - **Điều kiện chuyển bước:** `auto` sang bước sau khi agent báo xong. `tests_pass`: nền tảng chạy lệnh test khai báo cho task trong worktree, exit 0 là đạt. `qc_pass`: agent QC phụ trách bước trả kết luận pass/fail dạng JSON cuối lượt. `lead_approval`: mở phiên riêng cho cấp trên của người làm bước, trả pass/fail (người làm là trưởng phòng thì chuyển thành bạn duyệt). `user_approval`: tạo yêu cầu duyệt cho bạn.
 - **Người làm bước:** `workflow_steps.owner_role` là vai trò (`AGENT_ROLES`) hoặc `user` (`STEP_OWNERS`, migration 006); bước của `user` chỉ dùng `user_approval`. Mỗi bước chọn agent đang bật có đúng vai trò trong phòng, ưu tiên cấp dưới trong chuỗi giao việc, ít việc nhất.
-- **Giao việc:** một task đi qua các bước; "Giao xuống" là đổi người nhận sang cấp dưới trực tiếp và ghi vào chuỗi giao việc. Chưa có task con (`waiting_children` để sau).
+- **Giao việc:** một task đi qua các bước; "Giao xuống" là đổi người nhận sang cấp dưới trực tiếp và ghi vào chuỗi giao việc. Task con làm sau Giai đoạn 5 (xem "Sau Giai đoạn 5: task con").
 - **Việc nhạy cảm:** agent kết thúc lượt bằng khối "cần duyệt" → task `waiting_approval`, phiên dừng; duyệt thì tiếp tục bằng `session_ref`, từ chối thì bước coi như không đạt. Lệnh nguy hiểm vẫn bị chặn như Giai đoạn 2. Không dùng MCP permission prompt.
 - **Tài liệu QA:** mỗi file một request `PUT` thân nhị phân, không thêm `@fastify/multipart`. Chỉ đếm kịch bản cho `.md/.txt/.feature/.csv`; `.pdf/.docx/.xlsx` lưu và đưa đường dẫn để agent tự đọc.
 - **Thư mục cho phép:** là các thư mục bạn đã chọn bằng hộp chọn thư mục của hệ điều hành; đường dẫn gõ tay phải nằm trong một thư mục đã chọn.
@@ -340,6 +340,18 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
   - `--disallowedTools` rỗng làm Claude thoát lỗi; mã phiên từ output CLI được kiểm định dạng trước khi thành tham số.
   - git chạy trên worktree của agent: tắt fsmonitor, hook, ký commit, external diff; hoàn tác dùng `--literal-pathspecs`; không mở FIFO; không chép tài liệu QA qua symlink/junction; tên tài liệu QA so không phân biệt hoa thường.
 - **Giới hạn đã biết (chấp nhận, ghi trên thẻ Claude Code):** agent `edit_workspace` trên Claude Code chạy Bash/PowerShell với quyền người dùng, nên đọc được `~/.aiteam` và lách được luật chặn lệnh (lọc theo đầu lệnh). Chỉ cấp quyền sửa cho việc tin được. Codex dựa vào sandbox của Codex (trên Windows cần kiểm chứng thêm). Agent đổi file `.git` trong worktree sang gitdir giả vẫn là rủi ro còn lại (đã tắt các cấu hình chạy lệnh phổ biến).
+
+### Sau Giai đoạn 5: task con (agent tự tách việc)
+
+**Quyết định đã chốt (11/2026):**
+
+- **Ai tách:** chỉ agent có cấp dưới trực tiếp đang bật, và chỉ khi luật "Cho phép agent tách task con" (`allowAgentSubsteps`, trước là "tự thêm bước phụ") của quy trình bật. Không theo quy trình (không có workflow) thì không tách.
+- **Cách yêu cầu:** báo cáo của lượt có thêm `subtasks: [{title, description, assignee}]` cùng `outcome: "done"`. Mỗi lần tối đa 5, mỗi task tối đa 10 (mọi lần cộng lại). Mục sai bị bỏ, không làm hỏng cả báo cáo. `assignee` là tên cấp dưới (không phân biệt hoa thường); sai hoặc bỏ trống thì nền tảng giao người ít việc nhất, rải đều.
+- **Task con:** `tasks.parent_task_id` (migration 011, có index, không khoá ngoại). Không theo quy trình, một người làm xong là xong, cùng độ ưu tiên và thư mục với task cha, kế thừa lệnh chạy giao diện. Chạy trong worktree riêng, nhánh `agent/<id>` tách từ nhánh của task cha (mốc mới nhất), song song trong giới hạn "Số agent chạy cùng lúc". Task con không được tách tiếp (1 cấp).
+- **Task cha:** chuyển `waiting_children`. Mỗi lượt của bộ lập lịch, task cha có mọi task con đã kết thúc (đạt, thất bại hoặc huỷ) được xử lý: gộp nhánh của task con đạt vào worktree cha (`merge --no-ff`, commit của nền tảng); xung đột thì huỷ gộp, giữ nhánh và báo agent. Sau đó task cha về hàng đợi ở đúng bước đó, cùng agent tiếp tục phiên với kết quả từng task con, rồi báo cáo bước như thường (QC, duyệt chạy tiếp).
+- **Xoá task cha** xoá luôn các task con (task con đang chạy thì huỷ rồi xoá). Không tạm dừng được task đang chờ task con.
+- **Giao diện:** thẻ kanban có nhãn "Task con của T-x"; chi tiết task liệt kê task con (mã, tiêu đề, người làm, trạng thái) và link về task cha; nhật ký có dòng "tách N task con", "các task con đã xong", "không tách task con: lý do".
+- Thử thật với Claude haiku: PM tách 2 file cho Dev và QC, hai task con chạy song song, code gộp vào worktree của PM, PM tiếp tục phiên cũ, kiểm tra và hoàn thành. Lần đầu prompt dặn "việc nhỏ thì tự làm" lấn át yêu cầu tách trong mô tả; đã sửa để yêu cầu của người dùng thắng.
 
 ## 8. Rủi ro và cách xử lý
 

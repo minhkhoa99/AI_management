@@ -11,4 +11,8 @@ export interface TaskRepository {
   deleteTask(taskId: string): void;
   /** Queued tasks of enabled departments whose back-off has passed: priority, then oldest. */
   listRunnableTaskIds(nowIso: string): string[];
+  /** Subtasks of a task, oldest first. */
+  listSubtaskIds(parentTaskId: string): string[];
+  /** Tasks waiting for subtasks of which none is left unfinished. */
+  listParentIdsReadyToResume(): string[];
 }

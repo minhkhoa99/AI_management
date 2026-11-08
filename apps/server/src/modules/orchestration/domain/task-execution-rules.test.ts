@@ -18,7 +18,31 @@ describe('interpretAgentReport', () => {
       summary: 'Đạt 14/14 kịch bản',
       approvalRequest: null,
       wellFormed: true,
+      subtasks: [],
     });
+  });
+
+  it('keeps valid subtasks only, at most five, whatever else the agent wrote', () => {
+    const subtasks = [
+      { title: 'API đăng nhập', description: 'POST /login', assignee: 'Dev backend' },
+      { title: '   ' },
+      { description: 'thiếu tiêu đề' },
+      'không phải object',
+      ...Array.from({ length: 6 }, (_unused, index) => ({ title: `Phần ${index + 1}` })),
+    ];
+
+    const report = interpretAgentReport(
+      `<aiteam-report>${JSON.stringify({ outcome: 'done', summary: 'chia việc', subtasks })}</aiteam-report>`,
+    );
+
+    expect(report.wellFormed).toBe(true);
+    expect(report.subtasks).toEqual([
+      { title: 'API đăng nhập', description: 'POST /login', assignee: 'Dev backend' },
+      { title: 'Phần 1', description: '', assignee: null },
+      { title: 'Phần 2', description: '', assignee: null },
+      { title: 'Phần 3', description: '', assignee: null },
+      { title: 'Phần 4', description: '', assignee: null },
+    ]);
   });
 
   it('keeps the approval request only when approval is asked', () => {
@@ -174,7 +198,8 @@ describe('buildStepPrompt', () => {
     agentRoleLabel: 'Dev Dev backend',
     previousReports: [{ stepName: 'Chia task', agentName: 'PM Linh', summary: 'Chia 3 việc' }],
     feedback: 'TC-03 còn lỗi',
-    allowAgentSubsteps: false,
+    splitCandidates: [],
+    subtaskOf: null,
   };
 
   it('states the step duty, previous results, feedback, rules and the report format', () => {
@@ -223,6 +248,28 @@ describe('buildStepPrompt', () => {
     expect(qcPrompt).toContain('{"outcome": "pass"');
     expect(reviewPrompt).toContain('{"outcome": "pass"');
     expect(reviewPrompt).not.toContain('{"outcome": "done"');
+  });
+
+  it('offers splitting only with subordinates, naming them, and says so on a subtask', () => {
+    const lead = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: true,
+      canEditWorkspace: true,
+      splitCandidates: [{ name: 'Dev backend', roleLabel: 'Dev' }],
+    });
+    const worker = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: true,
+      canEditWorkspace: true,
+      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập' },
+    });
+
+    expect(lead).toContain('"subtasks"');
+    expect(lead).toContain('Cấp dưới của bạn: Dev backend (Dev).');
+    expect(worker).not.toContain('"subtasks"');
+    expect(worker).toContain('task con do cấp trên tách ra từ task T-3 "Trang đăng nhập"');
   });
 
   it('tells read-only agents not to change files, and leaves out the approval rule when off', () => {

@@ -42,11 +42,13 @@ import { RetryTaskUseCase } from './application/use-cases/retry-task.use-case';
 import { ScheduleTasksUseCase } from './application/use-cases/schedule-tasks.use-case';
 import { SessionEventRecorder } from './application/use-cases/session-event-recorder';
 import { StartTaskTurnUseCase } from './application/use-cases/start-task-turn.use-case';
+import { ResumeSplitTasksUseCase } from './application/use-cases/resume-split-tasks.use-case';
 import { StepReviewLauncher } from './application/use-cases/step-review-launcher';
 import { TaskCheckpoints } from './application/use-cases/task-checkpoints';
 import { TaskHandover } from './application/use-cases/task-handover';
 import { TaskProgression } from './application/use-cases/task-progression';
 import { TaskRemoval } from './application/use-cases/task-removal';
+import { TaskSplitter } from './application/use-cases/task-splitter';
 import { TaskRunRegistry } from './application/use-cases/task-run-registry';
 import {
   STAFF_DIRECTORY,
@@ -190,6 +192,8 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     TaskHandover,
     SessionEventRecorder,
     StepReviewLauncher,
+    TaskSplitter,
+    ResumeSplitTasksUseCase,
     FinishTaskTurnUseCase,
     StartTaskTurnUseCase,
     ScheduleTasksUseCase,

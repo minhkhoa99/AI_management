@@ -72,9 +72,12 @@ export class GitTaskWorkspace implements TaskWorkspace {
     workingDirectory: string | null;
     worktreePath: string | null;
     qaDocuments: ReadonlyArray<{ fileName: string; contentPath: string }>;
+    forkFromTaskId?: string | null;
   }): Promise<PreparedTaskWorkspace> {
+    const forkFromTaskId = input.forkFromTaskId ?? null;
+    // A subtask of a task without a chosen folder works in the folder created for its parent.
     const sourceDirectory =
-      input.workingDirectory ?? path.join(this.createdFoldersRoot, input.taskId);
+      input.workingDirectory ?? path.join(this.createdFoldersRoot, forkFromTaskId ?? input.taskId);
     mkdirSync(sourceDirectory, { recursive: true });
     const repositoryRoot = await this.ensureRepository(sourceDirectory);
     const relativeFolder = path.relative(repositoryRoot, sourceDirectory);
@@ -86,7 +89,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
       // Left over from an interrupted removal: start clean.
       rmSync(worktreePath, { recursive: true, force: true, maxRetries: 3 });
       await this.runGit(repositoryRoot, ['worktree', 'prune']);
-      const branch = `agent/${input.taskId}`;
+      const branch = taskBranchName(input.taskId);
       const branchExists = await this.succeeds(repositoryRoot, [
         'rev-parse',
         '--verify',
@@ -97,7 +100,14 @@ export class GitTaskWorkspace implements TaskWorkspace {
         repositoryRoot,
         branchExists
           ? ['worktree', 'add', worktreePath, branch]
-          : ['worktree', 'add', '-b', branch, worktreePath, 'HEAD'],
+          : [
+              'worktree',
+              'add',
+              '-b',
+              branch,
+              worktreePath,
+              forkFromTaskId === null ? 'HEAD' : taskBranchName(forkFromTaskId),
+            ],
       );
       baseSha = branchExists
         ? null
@@ -141,6 +151,30 @@ export class GitTaskWorkspace implements TaskWorkspace {
       .split(/\r?\n/)
       .filter((line) => line.trim() !== '');
     return { sha, files };
+  }
+
+  async mergeSubtaskBranch(
+    parentWorktreePath: string,
+    subtaskId: string,
+    message: string,
+  ): Promise<'merged' | 'conflict'> {
+    try {
+      await this.runGit(parentWorktreePath, [
+        ...PLATFORM_IDENTITY,
+        'merge',
+        '--no-ff',
+        '--no-edit',
+        '-m',
+        message,
+        taskBranchName(subtaskId),
+      ]);
+      return 'merged';
+    } catch (error) {
+      if (!(error instanceof AppError) || error.code !== 'GIT_COMMAND_FAILED') throw error;
+      // Conflict (or a dirty parent worktree): leave the parent exactly as it was.
+      await this.succeeds(parentWorktreePath, ['merge', '--abort']);
+      return 'conflict';
+    }
   }
 
   async removeTaskWorkspace(worktreePath: string): Promise<void> {
@@ -386,4 +420,9 @@ function removeUnlessRealEntry(entryPath: string, kind: 'directory' | 'file'): v
   if (!isExpected || entry.isSymbolicLink()) {
     rmSync(entryPath, { recursive: true, force: true });
   }
+}
+
+/** Every task works on its own branch, kept after the task is deleted. */
+function taskBranchName(taskId: string): string {
+  return `agent/${taskId}`;
 }

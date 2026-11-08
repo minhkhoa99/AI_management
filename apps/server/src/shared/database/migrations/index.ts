@@ -9,6 +9,7 @@ import tasksAndWorkspaceSql from './007_tasks_and_workspace.sql';
 import taskExecutionSql from './008_task_execution.sql';
 import taskReviewSql from './009_task_review.sql';
 import taskPreviewSql from './010_task_preview.sql';
+import taskSubtasksSql from './011_task_subtasks.sql';
 
 /** Every schema migration, in ascending version order. Append only; never edit a released one. */
 export const ALL_MIGRATIONS: readonly SqlMigration[] = [
@@ -37,4 +38,5 @@ export const ALL_MIGRATIONS: readonly SqlMigration[] = [
   { version: 8, name: 'task-execution', sql: taskExecutionSql },
   { version: 9, name: 'task-review', sql: taskReviewSql, rebuildsTables: true },
   { version: 10, name: 'task-preview', sql: taskPreviewSql },
+  { version: 11, name: 'task-subtasks', sql: taskSubtasksSql },
 ];
