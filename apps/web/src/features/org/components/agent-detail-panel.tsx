@@ -21,6 +21,7 @@ import {
   updateDepartmentMember,
 } from '../../organization/organization-api';
 import { ROLE_LABELS } from '../../organization/organization-labels';
+import { loadAgentSkills } from '../../skills/skills-api';
 import { AgentBrainForm } from './agent-brain-form';
 import {
   collectDescendantPositionIds,
@@ -157,6 +158,7 @@ function AgentDetailContent({
         </div>
       </div>
       <AgentBrainForm agent={agent} />
+      <AgentSkillsSummary agentId={agent.id} departmentId={agent.department.id} />
 
       <ToggleSwitch
         pressed={agent.enabled}
@@ -293,5 +295,23 @@ function AgentDetailContent({
         </div>
       )}
     </section>
+  );
+}
+
+/** Skills the agent may use; assigned on the Skill screen. */
+function AgentSkillsSummary({ agentId, departmentId }: { agentId: string; departmentId: string }) {
+  const skills = useApiQuery(`agent-skills:${agentId}`, () => loadAgentSkills(agentId));
+  return (
+    <div className={styles.statTile}>
+      <span className={styles.statLabel}>Skill được gán</span>
+      <span className={styles.statValueSmall}>
+        {skills.status !== 'success'
+          ? '…'
+          : skills.result.length === 0
+            ? 'Chưa có skill'
+            : skills.result.map((skill) => skill.name).join(', ')}
+      </span>
+      <Link href={`/skills/?dept=${encodeURIComponent(departmentId)}`}>Gán skill</Link>
+    </div>
   );
 }

@@ -31,6 +31,13 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
     iconPath: 'M3 5h6v5H3zM15 14h6v5h-6zM9 7.5h3a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2',
   },
   {
+    href: '/skills/',
+    label: 'Skill',
+    screenTitle: 'Skill',
+    screenSubtitle: 'Kỹ năng của từng phòng ban và agent nào được dùng',
+    iconPath: 'M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8-4.3-4.1 5.9-.9z',
+  },
+  {
     href: '/tasks/',
     label: 'Task',
     screenTitle: 'Task',
