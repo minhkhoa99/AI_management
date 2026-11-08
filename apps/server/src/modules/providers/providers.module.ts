@@ -5,6 +5,7 @@ import { AGENT_ENGINE_RESOLVER } from '../orchestration/application/ports/agent-
 import { AGENT_RUN_PREPARER } from '../orchestration/application/ports/task-execution.ports';
 import { PrepareAgentRunUseCase } from './application/use-cases/prepare-agent-run.use-case';
 import { EngineTestRunRegistry } from './application/engine-test-run-registry';
+import { CODEX_MODEL_CATALOG } from './application/ports/codex-model-catalog.port';
 import { LOCAL_ENGINE_PROBE } from './application/ports/local-engine-probe.port';
 import { MODEL_CATALOG } from './application/ports/model-catalog.port';
 import { SAMPLE_WORKSPACE_FACTORY } from './application/ports/sample-workspace.port';
@@ -14,6 +15,7 @@ import { CheckProviderConnectionUseCase } from './application/use-cases/check-pr
 import { CreateProviderConnectionUseCase } from './application/use-cases/create-provider-connection.use-case';
 import { DeleteProviderConnectionUseCase } from './application/use-cases/delete-provider-connection.use-case';
 import { DiscoverModelsUseCase } from './application/use-cases/discover-models.use-case';
+import { ListLocalEngineModelsUseCase } from './application/use-cases/list-local-engine-models.use-case';
 import { ListLocalEnginesUseCase } from './application/use-cases/list-local-engines.use-case';
 import { ListProviderConnectionsUseCase } from './application/use-cases/list-provider-connections.use-case';
 import { StartConnectionTestRunUseCase } from './application/use-cases/start-connection-test-run.use-case';
@@ -24,6 +26,7 @@ import { WatchEngineTestRunUseCase } from './application/use-cases/watch-engine-
 import { LOCAL_ENGINE_SETTINGS_REPOSITORY } from './domain/repositories/local-engine-settings.repository';
 import { PROVIDER_CONNECTION_REPOSITORY } from './domain/repositories/provider-connection.repository';
 import { AesGcmSecretVault } from './infrastructure/adapters/aes-gcm-secret-vault';
+import { CliCodexModelCatalog } from './infrastructure/adapters/cli-codex-model-catalog';
 import { CliLocalEngineProbe } from './infrastructure/adapters/cli-local-engine.probe';
 import { EngineRegistry } from './infrastructure/adapters/engines/agent-engine-resolver';
 import { AnthropicApiEngine } from './infrastructure/adapters/engines/anthropic-api.engine';
@@ -56,6 +59,7 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
     },
     { provide: MODEL_CATALOG, useClass: HttpModelCatalog },
     { provide: LOCAL_ENGINE_PROBE, useClass: CliLocalEngineProbe },
+    { provide: CODEX_MODEL_CATALOG, useClass: CliCodexModelCatalog },
     { provide: SAMPLE_WORKSPACE_FACTORY, useClass: TemporarySampleWorkspaceFactory },
     ClaudeCodeCliEngine,
     CodexCliEngine,
@@ -71,6 +75,7 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
     DiscoverModelsUseCase,
     CheckProviderConnectionUseCase,
     ListLocalEnginesUseCase,
+    ListLocalEngineModelsUseCase,
     UpdateLocalEngineSettingsUseCase,
     StartLocalEngineTestRunUseCase,
     StartConnectionTestRunUseCase,

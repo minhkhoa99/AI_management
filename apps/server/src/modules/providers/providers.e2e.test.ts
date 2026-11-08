@@ -6,6 +6,7 @@ import {
   connectionCheckResultSchema,
   departmentSchema,
   engineTestRunMessageSchema,
+  localEngineModelListSchema,
   localEngineStatusListSchema,
   providerConnectionListSchema,
   providerConnectionSchema,
@@ -384,6 +385,27 @@ describe('local engines', () => {
     const unknownEngine = await app.callApi('PATCH', '/api/local-engines/gemini/settings', {
       allowNetwork: true,
     });
+    expect(unknownEngine.statusCode).toBe(400);
+  });
+
+  it('offers model quick picks: Claude aliases, and Codex catalog or a problem', async () => {
+    const claude = localEngineModelListSchema.parse(
+      (await app.callApi('GET', '/api/local-engines/claude_code/models')).body,
+    );
+    expect(claude.models.map((choice) => choice.model)).toEqual([
+      'opus',
+      'sonnet',
+      'haiku',
+      'fable',
+    ]);
+
+    // CI has no Codex CLI: the list is then empty with a reason, never an error response.
+    const codex = await app.callApi('GET', '/api/local-engines/codex/models');
+    expect(codex.statusCode).toBe(200);
+    const codexList = localEngineModelListSchema.parse(codex.body);
+    expect(codexList.models.length > 0 || codexList.problem !== null).toBe(true);
+
+    const unknownEngine = await app.callApi('GET', '/api/local-engines/gemini/models');
     expect(unknownEngine.statusCode).toBe(400);
   });
 

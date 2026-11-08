@@ -63,6 +63,7 @@ function OrgTreeBranch({ node, ...props }: OrgTreeViewProps & { node: OrgTreeNod
             </span>
             <span className={styles.memberMeta}>
               {ROLE_LABELS[agent.role]} · {statusLabel}
+              {agent.model !== null && ` · ${agent.model}`}
             </span>
           </span>
         </button>

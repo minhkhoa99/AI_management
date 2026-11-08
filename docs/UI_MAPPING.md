@@ -106,6 +106,7 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 | Chi tiết agent: xoá khỏi phòng | `DELETE /api/departments/:id/members/:positionId` (chặn khi còn cấp dưới) | `RemoveDepartmentMemberUseCase` (xoá ghế + agent) · departments | 1 |
 | Chi tiết agent: đổi bộ não và quyền (provider, kết nối, model, quyền trong thư mục, mạng) | `PATCH /api/agents/:id/configuration` (phát `AgentConfigurationChanged`) | `ChangeAgentConfigurationUseCase` · agents | 2 |
 | Cấu hình Custom API của agent (kết nối + model) | `GET /api/provider-connections`, `PATCH /api/agents/:id/configuration` | như trên · agents + providers | 2 |
+| Model của agent Claude Code / Codex (chọn nhanh, mặc định engine, hoặc tự nhập; cả lúc thêm thành viên). Claude: `opus` / `sonnet` / `haiku` / `fable` (tên ngắn, CLI tự lên bản mới nhất). Codex: danh sách của chính Codex (`codex debug models`, mục `visibility: list`, cache 10 phút; đọc lỗi thì chỉ còn tự nhập). Sơ đồ hiện model cạnh vai trò | `GET /api/local-engines/:engine/models`, `POST /api/departments/:id/members` `{ model? }`, `PATCH /api/agents/:id/configuration` | `ListLocalEngineModelsUseCase` (+ `CliCodexModelCatalog`), như trên; engine chạy `claude --model <tên>` / `codex exec -m <tên>` · agents + providers | 5 |
 | "Xem trực tiếp agent này" | điều hướng `/monitor?agent=…` | — | 4 |
 
 Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế chỉ có một agent; tắt phòng thì task mới bị từ chối.

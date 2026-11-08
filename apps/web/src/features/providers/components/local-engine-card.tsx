@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { type LocalEngineStatus, modelNameSchema } from '@aiteam/contracts';
 import { controlStyles, StatusNotice, ToggleSwitch } from '../../../shared/ui/controls';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
-import { startLocalEngineTestRun, updateLocalEngineSettings } from '../providers-api';
+import { useApiQuery } from '../../../shared/api/use-api-query';
+import {
+  loadLocalEngineModels,
+  startLocalEngineTestRun,
+  updateLocalEngineSettings,
+} from '../providers-api';
 import { useEngineTestRun } from '../use-engine-test-run';
 import { EngineTestRunLog } from './engine-test-run-log';
 import styles from './settings.module.css';
@@ -14,7 +19,6 @@ const ENGINE_PRESENTATION = {
     name: 'Claude Code',
     mark: 'CC',
     via: 'claude -p · tài khoản Claude đã đăng nhập',
-    modelSuggestions: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'],
     modelPlaceholder: 'Mặc định của Claude Code',
     commandSafety: {
       kind: 'toggle',
@@ -29,7 +33,6 @@ const ENGINE_PRESENTATION = {
     name: 'Codex',
     mark: 'CX',
     via: 'codex exec · tài khoản ChatGPT đã đăng nhập',
-    modelSuggestions: [] as string[],
     modelPlaceholder: 'Mặc định của Codex',
     commandSafety: {
       kind: 'note',
@@ -47,6 +50,10 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
   const [modelError, setModelError] = useState<string | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
   const testRun = useEngineTestRun();
+  const modelList = useApiQuery(`local-engine-models:${engine.engine}`, () =>
+    loadLocalEngineModels(engine.engine),
+  );
+  const modelChoices = modelList.status === 'success' ? modelList.result.models : [];
   const ready = engine.installed && engine.signedIn !== false;
 
   const saveDefaultModel = () => {
@@ -124,7 +131,7 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
           </button>
         </span>
         <datalist id={`${engine.engine}-models`}>
-          {presentation.modelSuggestions.map((model) => (
+          {modelChoices.map(({ model }) => (
             <option key={model} value={model} />
           ))}
         </datalist>

@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Param, Patch, Post, Sse } from '@nestj
 import {
   entityIdSchema,
   type LocalEngine,
+  type LocalEngineModelList,
   type LocalEngineSettings,
   type LocalEngineStatus,
   localEngineSchema,
@@ -11,6 +12,7 @@ import {
 import { map, type Observable } from 'rxjs';
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
 import { CancelEngineTestRunUseCase } from '../../application/use-cases/cancel-engine-test-run.use-case';
+import { ListLocalEngineModelsUseCase } from '../../application/use-cases/list-local-engine-models.use-case';
 import { ListLocalEnginesUseCase } from '../../application/use-cases/list-local-engines.use-case';
 import { StartLocalEngineTestRunUseCase } from '../../application/use-cases/start-local-engine-test-run.use-case';
 import { UpdateLocalEngineSettingsUseCase } from '../../application/use-cases/update-local-engine-settings.use-case';
@@ -23,6 +25,7 @@ const testRunIdPipe = new ZodRequestPipe(entityIdSchema, 'Mã lần chạy thử
 export class LocalEnginesController {
   constructor(
     private readonly listLocalEnginesUseCase: ListLocalEnginesUseCase,
+    private readonly listLocalEngineModelsUseCase: ListLocalEngineModelsUseCase,
     private readonly updateLocalEngineSettingsUseCase: UpdateLocalEngineSettingsUseCase,
     private readonly startLocalEngineTestRunUseCase: StartLocalEngineTestRunUseCase,
   ) {}
@@ -30,6 +33,14 @@ export class LocalEnginesController {
   @Get()
   listLocalEngines(): Promise<LocalEngineStatus[]> {
     return this.listLocalEnginesUseCase.listLocalEngines();
+  }
+
+  /** Quick picks of the agent model picker; Codex's come from its own catalog. */
+  @Get(':engine/models')
+  listLocalEngineModels(
+    @Param('engine', enginePipe) engine: LocalEngine,
+  ): Promise<LocalEngineModelList> {
+    return this.listLocalEngineModelsUseCase.listLocalEngineModels(engine);
   }
 
   @Patch(':engine/settings')

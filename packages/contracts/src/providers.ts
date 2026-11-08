@@ -79,6 +79,27 @@ export const localEngineStatusSchema = z.object({
 export type LocalEngineStatus = z.infer<typeof localEngineStatusSchema>;
 export const localEngineStatusListSchema = z.array(localEngineStatusSchema);
 
+/** One quick pick of the model picker for agents on a local engine. */
+export const localEngineModelChoiceSchema = z.object({
+  /** Passed to the CLI as-is (`claude --model <model>`, `codex exec -m <model>`). */
+  model: z.string(),
+  label: z.string(),
+  /** What it is good for, so the owner can trade quality for tokens per agent. */
+  note: z.string(),
+});
+export type LocalEngineModelChoice = z.infer<typeof localEngineModelChoiceSchema>;
+
+/**
+ * Claude Code: built-in aliases (always the newest model of each family). Codex: the CLI's own
+ * catalog, so new models show up without an aiteam release. Empty with a `problem` when the
+ * catalog cannot be read; the owner can still type any model name.
+ */
+export const localEngineModelListSchema = z.object({
+  models: z.array(localEngineModelChoiceSchema),
+  problem: z.string().nullable(),
+});
+export type LocalEngineModelList = z.infer<typeof localEngineModelListSchema>;
+
 // ---- Engine event stream -------------------------------------------------------------------
 
 /** Normalised events every engine emits, whatever its native output format. */
