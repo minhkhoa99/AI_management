@@ -143,6 +143,7 @@ Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế ch�
 | Sửa task | `PATCH /api/tasks/:id` | `UpdateTaskUseCase` (đổi người nhận → gửi tín hiệu dừng cho agent cũ) · orchestration | 3 |
 | Xoá task + trạng thái "chờ agent dừng" | `DELETE /api/tasks/:id` trả về `202`, task chuyển `cancelling`; SSE `task.cancelled` khi agent xác nhận | `CancelTaskExecutionUseCase` → `AgentEnginePort` abort → `CleanupTaskWorkspaceUseCase` · orchestration | 3 |
 | Chi tiết task: chuỗi giao việc | `GET /api/tasks/:id` (kèm `delegationChain`) | `GetTaskDetailUseCase` · orchestration | 3 |
+| Màn Skill: skill của phòng (tự viết, mẫu, .md/.zip, GitHub), sửa, sao chép, xoá; bảng gán skill cho agent | `GET/POST /api/departments/:id/skills`, `…/from-template`, `…/from-github`, `PUT …/upload`, `GET /api/skills/templates`, `GET/PATCH/DELETE /api/skills/:id`, `POST /api/skills/:id/copy`, `GET/PUT /api/agents/:id/skills` | use case của module skills | sau 5 |
 | Chi tiết task: task con, link về task cha; thẻ kanban "Task con của T-x" | `GET /api/tasks/:id` (`subtasks`, `parentTask`), `GET /api/tasks` (`parentTask`) | `GetTaskDetailUseCase`, `ListTasksUseCase` · orchestration | sau 5 |
 | Giao xuống cấp dưới | `POST /api/tasks/:id/delegations` `{ toAgentId }` | `DelegateTaskToSubordinateUseCase` · orchestration | 3 |
 | "Để Manager tự giao" | `POST /api/tasks/:id/auto-delegations` | `AutoDelegateByWorkloadUseCase` · orchestration | 3 |

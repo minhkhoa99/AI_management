@@ -127,6 +127,9 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
   chạy lệnh với quyền người dùng, kể cả trong phiên duyệt chỉ đọc). CLAUDE.md của dự án do nền tảng
   đọc (file thường, có giới hạn) và đặt đầu prompt. Codex: `codex exec --json --ignore-user-config`
   gọi thẳng CLI (không dùng `@openai/codex-sdk`).
+- Skill của phòng (module skills): file ở `~/.aiteam/data/skills/<id>/`, mỗi lượt chép đúng skill được
+  gán vào `.aiteam-skills/` (dựng lại, loại khỏi git). ZIP đọc bằng `zip-archive.ts` (không thêm thư
+  viện, chặn zip slip/zip bomb/symlink); GitHub chỉ tải từ host của GitHub, không gửi token.
 - git trên worktree luôn chạy với `core.fsmonitor=false`, hook trỏ về null device,
   `commit.gpgsign=false`, diff `--no-ext-diff`. Không mở thứ không phải file thường trong worktree.
 - Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
