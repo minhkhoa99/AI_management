@@ -12,6 +12,8 @@ export interface TaskBoardQuery {
   /** Highest priority first, then newest. */
   listTaskSummaries(filter: TaskBoardFilter): TaskSummary[];
   findTaskSummary(taskId: string): TaskSummary | undefined;
+  /** Subtasks of a task, oldest first. */
+  listSubtaskSummaries(parentTaskId: string): TaskSummary[];
   /** From the department head down to the agent. */
   listReportingChain(agentId: string): TaskAgent[];
   listDepartmentAgents(departmentId: string): TaskAgent[];

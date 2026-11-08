@@ -63,6 +63,7 @@ export class GetTaskDetailUseCase {
       }),
       delegations: this.delegationRepository.listDelegations(taskId),
       delegationTargets: this.listDelegationTargets(taskId, summary.departmentId),
+      subtasks: this.taskBoardQuery.listSubtaskSummaries(taskId),
       pendingApprovalId: this.approvalRepository.findPendingApprovalOfTask(taskId)?.id ?? null,
       workflowSteps:
         this.progression

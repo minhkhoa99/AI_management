@@ -213,6 +213,8 @@ export const taskSummarySchema = z.object({
   /** Why the task waits, is retried or failed; null when there is nothing to say. */
   statusNote: z.string().nullable(),
   attachmentCount: z.number().int().nonnegative(),
+  /** Set on a subtask: the task whose agent split its step into this one. */
+  parentTask: z.object({ id: entityIdSchema, code: z.string() }).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -242,6 +244,8 @@ export const taskDetailSchema = taskSummarySchema.extend({
   pendingApprovalId: entityIdSchema.nullable(),
   /** Steps of the task's workflow, to show where it is. */
   workflowSteps: z.array(z.object({ id: entityIdSchema, name: z.string(), gate: stepGateSchema })),
+  /** Tasks the agent split this one into, oldest first. */
+  subtasks: z.array(taskSummarySchema),
 });
 export type TaskDetail = z.infer<typeof taskDetailSchema>;
 
