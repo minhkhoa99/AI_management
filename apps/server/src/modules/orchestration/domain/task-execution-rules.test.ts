@@ -200,6 +200,7 @@ describe('buildStepPrompt', () => {
     feedback: 'TC-03 còn lỗi',
     splitCandidates: [],
     subtaskOf: null,
+    skills: [],
   };
 
   it('states the step duty, previous results, feedback, rules and the report format', () => {
@@ -270,6 +271,36 @@ describe('buildStepPrompt', () => {
     expect(lead).toContain('Cấp dưới của bạn: Dev backend (Dev).');
     expect(worker).not.toContain('"subtasks"');
     expect(worker).toContain('task con do cấp trên tách ra từ task T-3 "Trang đăng nhập"');
+  });
+
+  it('lists skills to read, or gives their text to agents that cannot open files', () => {
+    const listed = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: true,
+      canEditWorkspace: true,
+      skills: [
+        {
+          name: 'Viết test',
+          description: 'Khi viết code',
+          manifestPath: '.aiteam-skills/viet-test/SKILL.md',
+          content: null,
+        },
+      ],
+    });
+    const inline = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: true,
+      canEditWorkspace: false,
+      skills: [{ name: 'Viết test', description: '', manifestPath: null, content: 'Test trước.' }],
+    });
+
+    expect(listed).toContain(
+      '- Viết test: Khi viết code (hướng dẫn: .aiteam-skills/viet-test/SKILL.md)',
+    );
+    expect(inline).toContain('### Skill "Viết test"');
+    expect(inline).toContain('Test trước.');
   });
 
   it('tells read-only agents not to change files, and leaves out the approval rule when off', () => {

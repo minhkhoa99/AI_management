@@ -5,6 +5,7 @@ import {
   APPROVAL_STATUSES,
   DELEGATION_REASONS,
   LINE_COMMENT_STATUSES,
+  SKILL_SOURCE_KINDS,
   AGENT_ROLES,
   AGENT_PROVIDERS,
   API_FORMATS,
@@ -178,6 +179,18 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
       database
         .prepare("INSERT INTO approvals (id, task_id, summary, status) VALUES (?, 'task', 'S', ?)")
         .run(rowId, value),
+  },
+  {
+    table: 'department_skills',
+    column: 'source_kind',
+    contractValues: SKILL_SOURCE_KINDS,
+    invalidValue: 'npm',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare(
+          "INSERT INTO department_skills (id, department_id, name, source_kind) VALUES (?, 'dept', ?, ?)",
+        )
+        .run(rowId, `skill-${rowId}`, value),
   },
   {
     table: 'line_comments',

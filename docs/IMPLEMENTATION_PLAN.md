@@ -353,6 +353,18 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - **Giao diện:** thẻ kanban có nhãn "Task con của T-x"; chi tiết task liệt kê task con (mã, tiêu đề, người làm, trạng thái) và link về task cha; nhật ký có dòng "tách N task con", "các task con đã xong", "không tách task con: lý do".
 - Thử thật với Claude haiku: PM tách 2 file cho Dev và QC, hai task con chạy song song, code gộp vào worktree của PM, PM tiếp tục phiên cũ, kiểm tra và hoàn thành. Lần đầu prompt dặn "việc nhỏ thì tự làm" lấn át yêu cầu tách trong mô tả; đã sửa để yêu cầu của người dùng thắng.
 
+### Sau Giai đoạn 5: skill của phòng ban
+
+**Quyết định đã chốt (11/2026):**
+
+- **Skill thuộc phòng ban**, sao chép được sang phòng khác (bản độc lập, chưa gán cho ai). Mỗi skill là một thư mục có `SKILL.md` ở gốc (front matter `name`, `description` như Agent Skills), lưu ở `~/.aiteam/data/skills/<id>/`; bảng `department_skills` (tên duy nhất trong phòng) và `agent_skills` (migration 012).
+- **Nguồn:** tự viết trên giao diện, 5 skill mẫu (viết test, review code, kịch bản kiểm thử, commit chuẩn, tài liệu API), tải lên `.md` hoặc `.zip` (một thư mục skill), hoặc link GitHub công khai (`/tree/<nhánh>/<thư mục>`, file `.md`, hoặc cả repo: lấy `SKILL.md` nông nhất; hai cái cùng độ sâu thì báo chọn thư mục). Tên và mô tả lấy từ front matter.
+- **An toàn:** trình đọc ZIP tự viết trên `node:zlib` (không thêm thư viện): từ chối ZIP64, file mã hoá, symlink, đường dẫn `..`/tuyệt đối/ổ đĩa; chỉ giải nén file của skill được chọn, kiểm từng kích thước (chống zip bomb); tối đa 300 file, 20 MB mỗi skill, file tải lên 10 MB. GitHub chỉ tải qua `codeload.github.com`/`raw.githubusercontent.com`, chuyển hướng chỉ trong host của GitHub, tối đa 50 MB, không gửi token. Skill có thể kèm script agent sẽ chạy với quyền người dùng: giao diện nhắc chỉ thêm skill từ nguồn tin được.
+- **Gán:** mỗi agent chỉ được gán skill của phòng mình (bảng tick trên màn Skill; chi tiết agent ở Sơ đồ tổ chức hiện danh sách).
+- **Khi chạy:** mỗi lượt, `.aiteam-skills/` trong thư mục của agent được dựng lại đúng bằng các skill được gán (thứ agent sửa hay đặt vào đó bị xoá, link bị gỡ chứ không theo), loại khỏi git. Prompt liệt kê tên, mô tả và đường dẫn `SKILL.md`, dặn chỉ dùng các skill này và đọc hướng dẫn trước khi làm phần việc liên quan. Agent Custom API (không mở được file) nhận nguyên văn (tối đa 12.000 ký tự mỗi skill). Claude chạy với `--setting-sources ""` nên không nạp skill cá nhân của người dùng.
+- **Chưa làm:** skill cho phiên duyệt của cấp trên; tự cập nhật skill GitHub (xoá rồi nhập lại); dọn thư mục skill khi xoá cả phòng ban.
+- Thử thật với Claude haiku: nhập `anthropics/skills` (cả repo và `skills/pdf`, 12 file), tạo skill "Chữ ký file" với quy tắc dòng cuối, gán cho Dev; agent đọc `SKILL.md` và tạo file có đúng dòng chữ ký.
+
 ## 8. Rủi ro và cách xử lý
 
 | Rủi ro | Cách xử lý |

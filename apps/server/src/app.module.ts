@@ -9,6 +9,7 @@ import { AgentsModule } from './modules/agents/agents.module';
 import { DepartmentsModule } from './modules/departments/departments.module';
 import { OrchestrationModule } from './modules/orchestration/orchestration.module';
 import { ProvidersModule } from './modules/providers/providers.module';
+import { SkillsModule } from './modules/skills/skills.module';
 import { TracingModule } from './modules/tracing/tracing.module';
 import { AppExceptionFilter } from './shared/errors/app-exception.filter';
 import { TraceContextMiddleware } from './shared/observability/trace-context.middleware';
@@ -36,6 +37,7 @@ export class AppModule implements NestModule {
         SystemModule,
         DepartmentsModule,
         AgentsModule,
+        SkillsModule,
         OrchestrationModule,
         ProvidersModule,
         TracingModule,

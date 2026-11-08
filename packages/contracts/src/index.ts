@@ -9,3 +9,4 @@ export * from './tasks';
 export * from './workspace';
 export * from './tracing';
 export * from './monitor';
+export * from './skills';

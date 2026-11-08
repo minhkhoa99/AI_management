@@ -16,12 +16,15 @@ import {
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
 import { ROLE_LABELS_FOR_PROMPTS } from '../../domain/role-labels';
 import { chooseStepAgent } from '../../domain/step-assignee';
-import { buildStepPrompt } from '../../domain/step-prompt';
+import { buildStepPrompt, type StepPromptInput } from '../../domain/step-prompt';
 import {
   AGENT_RUN_PREPARER,
   STAFF_DIRECTORY,
   TASK_EVENT_LOG,
   TASK_WORKSPACE,
+  AGENT_SKILL_SOURCE,
+  type AgentSkillFolder,
+  type AgentSkillSource,
   type AgentRunPreparer,
   type PreparedAgentRun,
   type StaffDirectory,
@@ -36,6 +39,8 @@ import { TaskSplitter } from './task-splitter';
 import { TaskRunRegistry } from './task-run-registry';
 
 const NO_AGENT_RETRY_DELAY_MS = 60_000;
+/** Per skill, for Custom API agents that get the text in the prompt. */
+const INLINE_SKILL_MAX_LENGTH = 12_000;
 
 /**
  * Starts the next turn of a queued task: picks the step and the agent that does it, prepares the
@@ -51,6 +56,7 @@ export class StartTaskTurnUseCase {
     private readonly delegationRepository: TaskDelegationRepository,
     @Inject(STAFF_DIRECTORY) private readonly staffDirectory: StaffDirectory,
     @Inject(TASK_WORKSPACE) private readonly taskWorkspace: TaskWorkspace,
+    @Inject(AGENT_SKILL_SOURCE) private readonly skillSource: AgentSkillSource,
     @Inject(AGENT_RUN_PREPARER) private readonly runPreparer: AgentRunPreparer,
     @Inject(TASK_EVENT_LOG) private readonly eventLog: TaskEventLog,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
@@ -151,12 +157,14 @@ export class StartTaskTurnUseCase {
     this.taskRepository.updateTask(task);
     this.runRegistry.reserveRun(taskId, snapshot.agentId, 'turn');
 
+    const skills = this.skillSource.listAgentSkillFolders(snapshot.agentId);
     const workspace = await this.taskWorkspace.prepareTaskWorkspace({
       taskId,
       workingDirectory: state.workingDirectory,
       worktreePath: state.worktreePath,
       qaDocuments: this.attachmentRepository.listAttachments(taskId),
       forkFromTaskId: state.parentTaskId,
+      skills,
     });
     const current = this.taskRepository.findTaskById(taskId);
     if (current === undefined) {
@@ -175,6 +183,8 @@ export class StartTaskTurnUseCase {
     const prompt = this.buildPrompt(current, step, route?.steps.length ?? 0, stepIndex, snapshot, {
       feedback,
       qaDocumentPaths: workspace.qaDocumentPaths,
+      skills,
+      skillManifestPaths: workspace.skillManifestPaths,
     });
     this.launchSession(
       current,
@@ -240,7 +250,12 @@ export class StartTaskTurnUseCase {
     stepCount: number,
     stepIndex: number,
     snapshot: EngineSnapshot & { name: string; role: keyof typeof ROLE_LABELS_FOR_PROMPTS },
-    extras: { feedback: string | null; qaDocumentPaths: string[] },
+    extras: {
+      feedback: string | null;
+      qaDocumentPaths: string[];
+      skills: readonly AgentSkillFolder[];
+      skillManifestPaths: ReadonlyMap<string, string>;
+    },
   ): string {
     const state = task.toState();
     const rules = this.progression.readWorkflowRules(state.workflowId);
@@ -279,11 +294,45 @@ export class StartTaskTurnUseCase {
           name: candidate.name,
           roleLabel: ROLE_LABELS_FOR_PROMPTS[candidate.role],
         })),
+      skills: this.describeSkillsForPrompt(snapshot.provider, extras),
       subtaskOf:
         parent === undefined
           ? null
           : { taskCode: formatTaskCode(parent.sequenceNumber), title: parent.title },
       canEditWorkspace: snapshot.accessLevel === 'edit_workspace',
+    });
+  }
+
+  /**
+   * Agents on Claude Code or Codex read each SKILL.md from the worktree when needed; a Custom
+   * API agent cannot open files, so it gets the text (capped).
+   */
+  private describeSkillsForPrompt(
+    provider: EngineSnapshot['provider'],
+    extras: {
+      skills: readonly AgentSkillFolder[];
+      skillManifestPaths: ReadonlyMap<string, string>;
+    },
+  ): StepPromptInput['skills'] {
+    return extras.skills.flatMap((skill): StepPromptInput['skills'] => {
+      const manifestPath = extras.skillManifestPaths.get(skill.slug) ?? null;
+      if (provider !== 'custom_api') {
+        return manifestPath === null
+          ? []
+          : [{ name: skill.name, description: skill.description, manifestPath, content: null }];
+      }
+      const text = this.skillSource.readSkillManifest(skill.skillId);
+      return [
+        {
+          name: skill.name,
+          description: skill.description,
+          manifestPath: null,
+          content:
+            text.length <= INLINE_SKILL_MAX_LENGTH
+              ? text
+              : `${text.slice(0, INLINE_SKILL_MAX_LENGTH)}…`,
+        },
+      ];
     });
   }
 

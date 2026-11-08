@@ -116,3 +116,11 @@ export type DelegationReason = z.infer<typeof delegationReasonSchema>;
 export const LINE_COMMENT_STATUSES = ['open', 'sent', 'resolved'] as const;
 export const lineCommentStatusSchema = z.enum(LINE_COMMENT_STATUSES);
 export type LineCommentStatus = z.infer<typeof lineCommentStatusSchema>;
+
+/**
+ * Where a department skill came from: written in the app, added from a built-in template, an
+ * uploaded SKILL.md or .zip, or imported from a GitHub folder.
+ */
+export const SKILL_SOURCE_KINDS = ['written', 'template', 'markdown', 'zip', 'github'] as const;
+export const skillSourceKindSchema = z.enum(SKILL_SOURCE_KINDS);
+export type SkillSourceKind = z.infer<typeof skillSourceKindSchema>;

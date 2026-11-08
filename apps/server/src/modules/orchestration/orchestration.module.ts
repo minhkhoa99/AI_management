@@ -51,6 +51,7 @@ import { TaskRemoval } from './application/use-cases/task-removal';
 import { TaskSplitter } from './application/use-cases/task-splitter';
 import { TaskRunRegistry } from './application/use-cases/task-run-registry';
 import {
+  AGENT_SKILL_SOURCE,
   STAFF_DIRECTORY,
   TASK_WORKSPACE,
   TEST_COMMAND_RUNNER,
@@ -127,8 +128,10 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
  * Tasks, delegation, workflows, step gates, approvals and the task scheduler (phase 3).
  * Also: startup recovery after an abrupt stop (error policy).
  */
+import { AgentSkillLibrary } from '../skills/application/use-cases/agent-skill.use-cases';
+import { SkillsModule } from '../skills/skills.module';
 @Module({
-  imports: [DepartmentsModule, AgentsModule, ProvidersModule, TracingModule],
+  imports: [DepartmentsModule, AgentsModule, ProvidersModule, TracingModule, SkillsModule],
   controllers: [
     WorkflowsController,
     TasksController,
@@ -142,6 +145,7 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
     { provide: WORKFLOW_REPOSITORY, useClass: SqliteWorkflowRepository },
     { provide: WORKFLOW_TASK_USAGE, useClass: SqliteWorkflowTaskUsage },
     { provide: TASK_REPOSITORY, useClass: SqliteTaskRepository },
+    { provide: AGENT_SKILL_SOURCE, useExisting: AgentSkillLibrary },
     { provide: TASK_ATTACHMENT_REPOSITORY, useClass: SqliteTaskAttachmentRepository },
     { provide: WORKSPACE_SETTINGS_REPOSITORY, useClass: SqliteWorkspaceSettingsRepository },
     { provide: TASK_BOARD_QUERY, useClass: SqliteTaskBoardQuery },
