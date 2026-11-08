@@ -126,6 +126,11 @@ function TaskCard({
         {task.currentStep !== null && ` · ${task.currentStep.name}`}
       </div>
       <div className={styles.cardChips}>
+        {task.parentTask !== null && (
+          <span className={`${styles.goalChip} ${styles.subtaskChip}`}>
+            Task con của {task.parentTask.code}
+          </span>
+        )}
         {task.workingDirectory !== null && (
           <span className={styles.directoryChip} title={task.workingDirectory}>
             {shortenDirectory(task.workingDirectory)}

@@ -16,6 +16,7 @@ import {
   formatFileSize,
   PRIORITY_PRESENTATION,
   STATUS_NOTES,
+  SUBTASK_STATUS_LABELS,
 } from '../task-labels';
 import {
   autoDelegateTask,
@@ -86,6 +87,14 @@ export function TaskDetailPanel({
             </span>
           </span>
           <h2 className={styles.detailTitle}>{detail.title}</h2>
+          {detail.parentTask !== null && (
+            <Link
+              className={styles.subtaskLink}
+              href={`/tasks/?task=${encodeURIComponent(detail.parentTask.id)}`}
+            >
+              Task con của {detail.parentTask.code}
+            </Link>
+          )}
           {statusNote !== undefined && (
             <span role="status" className={styles.statusNote}>
               {statusNote}
@@ -119,6 +128,25 @@ export function TaskDetailPanel({
                 ))
               )}
             </div>
+            {detail.subtasks.length > 0 && (
+              <div className={styles.fact}>
+                <span className={styles.factLabel}>Task con ({detail.subtasks.length})</span>
+                <ul className={styles.subtaskList}>
+                  {detail.subtasks.map((subtask) => (
+                    <li key={subtask.id} className={styles.factValue}>
+                      <Link
+                        className={styles.subtaskLink}
+                        href={`/tasks/?task=${encodeURIComponent(subtask.id)}`}
+                      >
+                        {subtask.code} · {subtask.title}
+                      </Link>{' '}
+                      · {subtask.assignee?.name ?? 'chưa có người nhận'} ·{' '}
+                      {SUBTASK_STATUS_LABELS[subtask.status]}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {detail.testCommand !== null && (
               <div className={styles.fact}>
                 <span className={styles.factLabel}>Lệnh kiểm thử</span>
