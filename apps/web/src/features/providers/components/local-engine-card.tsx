@@ -4,9 +4,13 @@ import { useState } from 'react';
 import { type LocalEngineStatus, modelNameSchema } from '@aiteam/contracts';
 import { controlStyles, StatusNotice, ToggleSwitch } from '../../../shared/ui/controls';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
-import { startLocalEngineTestRun, updateLocalEngineSettings } from '../providers-api';
+import { useApiQuery } from '../../../shared/api/use-api-query';
+import {
+  loadLocalEngineModels,
+  startLocalEngineTestRun,
+  updateLocalEngineSettings,
+} from '../providers-api';
 import { useEngineTestRun } from '../use-engine-test-run';
-import { LOCAL_ENGINE_MODEL_CHOICES } from '../local-engine-models';
 import { EngineTestRunLog } from './engine-test-run-log';
 import styles from './settings.module.css';
 
@@ -46,6 +50,10 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
   const [modelError, setModelError] = useState<string | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
   const testRun = useEngineTestRun();
+  const modelList = useApiQuery(`local-engine-models:${engine.engine}`, () =>
+    loadLocalEngineModels(engine.engine),
+  );
+  const modelChoices = modelList.status === 'success' ? modelList.result.models : [];
   const ready = engine.installed && engine.signedIn !== false;
 
   const saveDefaultModel = () => {
@@ -123,7 +131,7 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
           </button>
         </span>
         <datalist id={`${engine.engine}-models`}>
-          {LOCAL_ENGINE_MODEL_CHOICES[engine.engine].map(({ model }) => (
+          {modelChoices.map(({ model }) => (
             <option key={model} value={model} />
           ))}
         </datalist>

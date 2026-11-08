@@ -132,6 +132,9 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
   viện, chặn zip slip/zip bomb/symlink); GitHub chỉ tải từ host của GitHub, không gửi token.
 - git trên worktree luôn chạy với `core.fsmonitor=false`, hook trỏ về null device,
   `commit.gpgsign=false`, diff `--no-ext-diff`. Không mở thứ không phải file thường trong worktree.
+- Chọn model cho agent: Claude dùng tên ngắn (`opus`/`sonnet`/`haiku`/`fable`, ở
+  `providers/domain/claude-code-models.ts`); Codex đọc `codex debug models` (lệnh gỡ lỗi: parse bằng
+  zod, lọc tên model an toàn, lỗi thì trả `problem` để người dùng tự nhập, không bao giờ 500).
 - Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
   đầu bằng `-`.
   Ngoại lệ duy nhất: lệnh kiểm thử và lệnh chạy giao diện (xem trước) của task do người dùng viết

@@ -4,6 +4,7 @@ import {
   connectionCheckResultSchema,
   engineTestRunStartedSchema,
   type LocalEngine,
+  localEngineModelListSchema,
   localEngineSettingsSchema,
   localEngineStatusListSchema,
   type ModelDiscoveryRequest,
@@ -26,6 +27,9 @@ const encodeId = encodeURIComponent;
 
 export const loadLocalEngines = () =>
   fetchApiJson('/api/local-engines', localEngineStatusListSchema);
+
+export const loadLocalEngineModels = (engine: LocalEngine) =>
+  fetchApiJson(`/api/local-engines/${engine}/models`, localEngineModelListSchema);
 
 export const updateLocalEngineSettings = (
   engine: LocalEngine,
