@@ -10,6 +10,24 @@ import type {
 // ---- Git workspace of a task -----------------------------------------------------------------
 
 export const TASK_WORKSPACE = Symbol('TASK_WORKSPACE');
+export const AGENT_SKILL_SOURCE = Symbol('AGENT_SKILL_SOURCE');
+
+/** A skill the agent may use: copied into the worktree under .aiteam-skills/<slug>/. */
+export interface AgentSkillFolder {
+  skillId: string;
+  name: string;
+  description: string;
+  slug: string;
+  /** The platform's copy of the skill (SKILL.md at its root). */
+  folder: string;
+}
+
+/** Skills assigned to an agent in its department (skills module). */
+export interface AgentSkillSource {
+  listAgentSkillFolders(agentId: string): AgentSkillFolder[];
+  /** SKILL.md text, for agents that cannot open files (Custom API). */
+  readSkillManifest(skillId: string): string;
+}
 
 export interface PreparedTaskWorkspace {
   /** Root of the task's git worktree (branch agent/<taskId>). */
@@ -18,6 +36,8 @@ export interface PreparedTaskWorkspace {
   agentDirectory: string;
   /** QA documents copied into the worktree, relative to agentDirectory. */
   qaDocumentPaths: string[];
+  /** SKILL.md of each skill copied for the agent, relative to agentDirectory, by slug. */
+  skillManifestPaths: Map<string, string>;
   /** HEAD when the worktree was created now; null when it already existed. */
   baseSha: string | null;
 }
@@ -48,6 +68,8 @@ export interface TaskWorkspace {
     qaDocuments: ReadonlyArray<{ fileName: string; contentPath: string }>;
     /** A subtask: its branch starts from the parent's branch (latest checkpoint), same folder. */
     forkFromTaskId?: string | null;
+    /** The agent's skills; .aiteam-skills/ is rebuilt with exactly these on every turn. */
+    skills?: ReadonlyArray<{ slug: string; folder: string }>;
   }): Promise<PreparedTaskWorkspace>;
   /**
    * Merges a finished subtask's branch into the parent's worktree (a platform commit). On a

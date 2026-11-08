@@ -3,6 +3,7 @@ import {
   appendFileSync,
   closeSync,
   copyFileSync,
+  cpSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -31,6 +32,8 @@ const GIT_TIMEOUT_MS = 120_000;
 const PLATFORM_IDENTITY = ['-c', 'user.name=AI Team', '-c', 'user.email=aiteam@localhost'];
 /** QA documents are copied here inside the worktree and kept out of git. */
 const QA_FOLDER = '.aiteam-qa';
+/** The agent's skills are copied here inside the worktree and kept out of git. */
+const SKILLS_FOLDER = '.aiteam-skills';
 const MAX_LISTED_FILES = 5_000;
 const MAX_FILE_BYTES = 512 * 1024;
 /**
@@ -73,6 +76,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
     worktreePath: string | null;
     qaDocuments: ReadonlyArray<{ fileName: string; contentPath: string }>;
     forkFromTaskId?: string | null;
+    skills?: ReadonlyArray<{ slug: string; folder: string }>;
   }): Promise<PreparedTaskWorkspace> {
     const forkFromTaskId = input.forkFromTaskId ?? null;
     // A subtask of a task without a chosen folder works in the folder created for its parent.
@@ -123,7 +127,12 @@ export class GitTaskWorkspace implements TaskWorkspace {
       agentDirectory,
       input.qaDocuments,
     );
-    return { worktreePath, agentDirectory, qaDocumentPaths, baseSha };
+    const skillManifestPaths = await this.copySkills(
+      worktreePath,
+      agentDirectory,
+      input.skills ?? [],
+    );
+    return { worktreePath, agentDirectory, qaDocumentPaths, skillManifestPaths, baseSha };
   }
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
@@ -322,6 +331,30 @@ export class GitTaskWorkspace implements TaskWorkspace {
       ]);
     }
     return repositoryRoot;
+  }
+
+  /**
+   * Rebuilds .aiteam-skills/ with exactly the agent's skills: anything the agent changed, added
+   * or linked there is thrown away first (a link is removed, never followed).
+   */
+  private async copySkills(
+    worktreePath: string,
+    agentDirectory: string,
+    skills: ReadonlyArray<{ slug: string; folder: string }>,
+  ): Promise<Map<string, string>> {
+    const skillsDirectory = path.join(agentDirectory, SKILLS_FOLDER);
+    removeUnlessRealEntry(skillsDirectory, 'directory');
+    rmSync(skillsDirectory, { recursive: true, force: true });
+    const manifestPaths = new Map<string, string>();
+    if (skills.length === 0) return manifestPaths;
+    mkdirSync(skillsDirectory, { recursive: true });
+    await this.excludeFromGit(worktreePath, SKILLS_FOLDER);
+    for (const skill of skills) {
+      if (!existsSync(skill.folder)) continue;
+      cpSync(skill.folder, path.join(skillsDirectory, skill.slug), { recursive: true });
+      manifestPaths.set(skill.slug, path.posix.join(SKILLS_FOLDER, skill.slug, 'SKILL.md'));
+    }
+    return manifestPaths;
   }
 
   private async copyQaDocuments(

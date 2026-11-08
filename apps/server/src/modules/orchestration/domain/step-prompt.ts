@@ -24,6 +24,16 @@ export interface StepPromptInput {
   splitCandidates: ReadonlyArray<{ name: string; roleLabel: string }>;
   /** Set on a subtask: the task it was split from. */
   subtaskOf: { taskCode: string; title: string } | null;
+  /**
+   * The only skills the agent may use: where to read each one (`manifestPath`), or its text
+   * (`content`) for agents that cannot open files.
+   */
+  skills: ReadonlyArray<{
+    name: string;
+    description: string;
+    manifestPath: string | null;
+    content: string | null;
+  }>;
   canEditWorkspace: boolean;
 }
 
@@ -72,6 +82,9 @@ export function buildStepPrompt(input: StepPromptInput): string {
         .join('\n')}`,
     );
   }
+  if (input.skills.length > 0) {
+    sections.push(describeSkills(input.skills));
+  }
   if (input.feedback !== null && input.feedback.trim() !== '') {
     sections.push(`Phản hồi cần xử lý trong lượt này:\n${input.feedback.trim()}`);
   }
@@ -103,6 +116,21 @@ export function buildStepPrompt(input: StepPromptInput): string {
     `${describeOutcomes(gate)}\n${describeReportFormat(gate === 'qc_pass' ? 'pass' : 'done')}`,
   );
   return sections.join('\n\n');
+}
+
+/** The agent's skills: a list to read on demand, or the full text when files cannot be read. */
+function describeSkills(skills: StepPromptInput['skills']): string {
+  const lines = skills.map((skill) => {
+    const purpose = skill.description.trim() === '' ? '' : `: ${skill.description.trim()}`;
+    if (skill.content !== null) {
+      return [`### Skill "${skill.name}"${purpose}`, skill.content.trim()].join('\n');
+    }
+    return `- ${skill.name}${purpose} (hướng dẫn: ${skill.manifestPath ?? ''})`;
+  });
+  return [
+    'Skill được giao cho bạn (chỉ dùng các skill này; trước khi làm phần việc liên quan, đọc hướng dẫn của skill đó và làm theo):',
+    ...lines,
+  ].join('\n');
 }
 
 /** Prompt for the superior who reviews a step ("Cấp trên duyệt"). Always read-only. */
