@@ -51,6 +51,7 @@ export class StartConnectionTestRunUseCase {
             {
               prompt: CONNECTION_TEST_PROMPT,
               workingDirectory: workspace.directory,
+              workspaceRoot: null,
               model,
               permissions: resolveSessionPermissions(
                 { accessLevel: 'read_only', networkAccess: false },

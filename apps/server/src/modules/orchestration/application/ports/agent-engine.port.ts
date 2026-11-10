@@ -18,6 +18,8 @@ export interface AgentSessionRequest {
   prompt: string;
   /** Absolute path the engine works in (a task worktree, or a temp dir for test runs). */
   workingDirectory: string;
+  /** Root of the task worktree that contains workingDirectory; null for runs outside a task (engine test runs in a throw-away directory). */
+  workspaceRoot: string | null;
   model: string | null;
   permissions: SessionPermissions;
   /** Continue an earlier engine session (Claude session id / Codex thread id). */

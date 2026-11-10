@@ -16,7 +16,10 @@ import {
   NETWORK_COMMAND_PREFIXES,
 } from '../../../domain/command-restrictions';
 import { type CliInvocation, resolveCliExecutable, streamCliOutput } from './cli-process';
-import { readClaudeProjectInstructions } from './claude-project-instructions';
+import {
+  prependProjectInstructions,
+  readClaudeProjectInstructions,
+} from './claude-project-instructions';
 import { assertEngineSessionRef } from './engine-session-ref';
 import { ClaudeStreamTranslator } from './claude-stream-translator';
 import { toFailedEvent } from './engine-failure';
@@ -139,15 +142,7 @@ export function buildClaudeInvocation(
     executable: resolveCliExecutable('claude'),
     args,
     workingDirectory: request.workingDirectory,
-    stdinText:
-      projectInstructions === null
-        ? request.prompt
-        : [
-            'Hướng dẫn của dự án (các file CLAUDE.md, nền tảng đọc giúp bạn):',
-            projectInstructions,
-            '---',
-            request.prompt,
-          ].join('\n\n'),
+    stdinText: prependProjectInstructions(request.prompt, projectInstructions),
   };
 }
 
