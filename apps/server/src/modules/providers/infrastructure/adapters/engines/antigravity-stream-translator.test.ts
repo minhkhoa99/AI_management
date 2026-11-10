@@ -167,6 +167,34 @@ describe('AntigravityStreamTranslator', () => {
           .map((event) => event.kind),
       ).toEqual(['tool_call']));
 
+    it('the working-directory check treats POSIX paths the same way on every host', () => {
+      const posix = new AntigravityStreamTranslator('/work/task');
+      const kindOf = (filePath: string) =>
+        posix
+          .translateAntigravityLine(toolStep('DONE', 'write_file', { Path: filePath }))
+          .map((event) => event.kind);
+
+      expect(
+        posix.translateAntigravityLine(
+          toolStep('DONE', 'write_file', { Path: '/work/task/x.txt' }),
+        ),
+      ).toEqual([{ kind: 'file_change', path: '/work/task/x.txt', changeKind: 'update' }]);
+      expect(kindOf('/work/task\\sub\\x.txt')).toEqual(['file_change']);
+      expect(kindOf('/work/task2/x.txt')).toEqual(['tool_call']);
+      expect(kindOf('/work/task/../other/x.txt')).toEqual(['tool_call']);
+      expect(kindOf('/Work/Task/x.txt')).toEqual(['tool_call']);
+    });
+
+    it('the working-directory check ignores case and separator style for Windows paths', () => {
+      const kindOf = (filePath: string) =>
+        translator()
+          .translateAntigravityLine(toolStep('DONE', 'write_file', { Path: filePath }))
+          .map((event) => event.kind);
+
+      expect(kindOf('c:/WORK/task/x.txt')).toEqual(['file_change']);
+      expect(kindOf('C:\\work\\task\\..\\other\\x.txt')).toEqual(['tool_call']);
+    });
+
     it('other tools become tool calls; ACTIVE tool steps are ignored', () => {
       const t = translator();
 

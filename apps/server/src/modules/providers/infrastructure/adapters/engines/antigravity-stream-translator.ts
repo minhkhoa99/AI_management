@@ -40,6 +40,7 @@ interface AntigravityStreamLine {
 // agy may put "Created At" / "Completed At" lines before the header, so the pattern is not anchored at the start.
 const COMMAND_EXIT_PATTERN =
   /Command exited with code (-?\d+)\.\r?\n\r?\n(?:Command output:\r?\n([\s\S]*)|No output from the command\.)$/;
+const DRIVE_PATTERN = /^[a-z]:/i;
 const AGY_ERROR_PATTERN = /^AGY_ERROR:\s*(\{.*\})\s*$/m;
 
 /**
@@ -194,10 +195,11 @@ export class AntigravityStreamTranslator {
   }
 
   private isInsideWorkingDirectory(filePath: string): boolean {
-    const root = normaliseForComparison(this.workingDirectory);
-    const target = normaliseForComparison(filePath);
-    const relative = path.relative(root, target);
-    return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+    const root = normaliseForComparison(this.workingDirectory, this.workingDirectory);
+    const target = normaliseForComparison(filePath, this.workingDirectory);
+    return root.startsWith('/') || DRIVE_PATTERN.test(root)
+      ? target.startsWith(root.endsWith('/') ? root : `${root}/`)
+      : false;
   }
 }
 
@@ -267,9 +269,14 @@ function lowercaseKeys(
       );
 }
 
-function normaliseForComparison(filePath: string): string {
-  const resolved = path.resolve(filePath);
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+/**
+ * Host-independent path normalisation (never uses node:path's host flavour): backslashes become
+ * slashes, `.`/`..` are resolved, and the comparison ignores case when the working directory has a
+ * Windows drive letter. Recordings and agy itself mix separators (`/workspace\x.txt`).
+ */
+function normaliseForComparison(filePath: string, workingDirectory: string): string {
+  const normalised = path.posix.normalize(filePath.replaceAll('\\', '/'));
+  return DRIVE_PATTERN.test(workingDirectory) ? normalised.toLowerCase() : normalised;
 }
 
 function nonEmptyString(value: string | undefined): string | null {
