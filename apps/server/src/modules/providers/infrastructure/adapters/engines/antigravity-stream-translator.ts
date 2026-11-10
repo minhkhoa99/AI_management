@@ -152,6 +152,10 @@ export class AntigravityStreamTranslator {
   }
 
   private translateResult(result: AntigravityResult): AgentEngineEvent[] {
+    // One terminal event per run: a repeated `result` line is ignored.
+    if (this.sawTerminalEvent) {
+      return [];
+    }
     this.sawTerminalEvent = true;
     const events: AgentEngineEvent[] = [];
     if (result.usage !== undefined) {
@@ -224,13 +228,21 @@ function translateCommandStep(
 }
 
 function classifyAntigravityFailure(message: string): FailedEvent {
-  if (/authentication required|sign in|log ?in|unauthori[sz]ed|401/i.test(message)) {
+  if (
+    /authentication required|sign in again|log ?in again|not logged in|unauthori[sz]ed|\b401\b/i.test(
+      message,
+    )
+  ) {
     return { kind: 'failed', code: 'ENGINE_AUTH_FAILED', message, retryable: false };
   }
-  if (/rate limit|quota|too many requests|429|RESOURCE_EXHAUSTED/i.test(message)) {
+  if (/rate limit|quota|too many requests|\b429\b|RESOURCE_EXHAUSTED/i.test(message)) {
     return { kind: 'failed', code: 'RATE_LIMITED', message, retryable: true };
   }
-  if (/UNAVAILABLE|code 503|No capacity available|stream was interrupted/i.test(message)) {
+  // `UNAVAILABLE (code 503)` is the status token agy prints; case-sensitive on purpose.
+  if (
+    /\bUNAVAILABLE \(code 503\)/.test(message) ||
+    /No capacity available|stream was interrupted/i.test(message)
+  ) {
     return { kind: 'failed', code: 'ENGINE_UNAVAILABLE', message, retryable: true };
   }
   if (/invalid model selection|not recognized as a known model/i.test(message)) {

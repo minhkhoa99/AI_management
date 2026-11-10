@@ -40,7 +40,7 @@ export async function clearEngineManagedPaths(
   if (trackedFolder !== null) {
     throw new AppError({
       code: REFUSAL_CODE,
-      message: `Dự án đã commit cấu hình Antigravity (${trackedFolder}). Engine Antigravity chưa hỗ trợ dự án có hook/MCP/plugin Antigravity riêng.`,
+      message: `Trong git của task đã có thư mục cấu hình của engine (${trackedFolder}). Engine Antigravity không chạy khi các thư mục .agents, .agent, _agents, _agent, .gemini được theo dõi bằng git.`,
       retryable: false,
     });
   }

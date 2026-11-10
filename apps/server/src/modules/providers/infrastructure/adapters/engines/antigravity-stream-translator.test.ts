@@ -332,6 +332,45 @@ describe('AntigravityStreamTranslator', () => {
         message: 'boom',
         retryable: false,
       }));
+
+    it('a second result line emits nothing after the terminal event', () => {
+      const t = translator();
+      expect(t.translateAntigravityLine(result({ response: 'xong' }))).not.toEqual([]);
+
+      expect(t.translateAntigravityLine(result({ status: 'ERROR', error: 'boom' }))).toEqual([]);
+    });
+
+    it.each([
+      'tool unavailable',
+      'request id 14012 failed',
+      'UNAVAILABLE without the code',
+      'error 4290 at step 14012',
+      'sign in to the preview',
+    ])('status ERROR "%s" is not classified by accident', (error) =>
+      expect(
+        translator()
+          .translateAntigravityLine(result({ status: 'ERROR', error }))
+          .at(-1),
+      ).toEqual({
+        kind: 'failed',
+        code: 'ENGINE_REPORTED_ERROR',
+        message: error,
+        retryable: false,
+      }),
+    );
+
+    it('whole-number 401 and 429 still classify', () => {
+      expect(
+        translator()
+          .translateAntigravityLine(result({ status: 'ERROR', error: 'HTTP 401' }))
+          .at(-1),
+      ).toMatchObject({ code: 'ENGINE_AUTH_FAILED' });
+      expect(
+        translator()
+          .translateAntigravityLine(result({ status: 'ERROR', error: 'HTTP 429.' }))
+          .at(-1),
+      ).toMatchObject({ code: 'RATE_LIMITED' });
+    });
   });
 
   describe('exit', () => {

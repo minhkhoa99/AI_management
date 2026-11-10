@@ -89,7 +89,7 @@ describe('clearEngineManagedPaths', () => {
     expect(existsSync(below)).toBe(true);
   });
 
-  it('refuses when the project tracks a file under a managed folder and deletes nothing', async () => {
+  it('refuses when the task git tracks a file under a managed folder and deletes nothing', async () => {
     const tracked = write('.agents/skills/x.md');
     git('add', '.agents/skills/x.md');
     git('commit', '-q', '-m', 'agents');
@@ -98,7 +98,8 @@ describe('clearEngineManagedPaths', () => {
     await expect(clearEngineManagedPaths(root, root)).rejects.toMatchObject({
       code: 'ENGINE_WORKSPACE_UNSUPPORTED',
       retryable: false,
-      message: expect.stringContaining('(.agents)'),
+      message:
+        'Trong git của task đã có thư mục cấu hình của engine (.agents). Engine Antigravity không chạy khi các thư mục .agents, .agent, _agents, _agent, .gemini được theo dõi bằng git.',
     });
 
     expect(existsSync(tracked)).toBe(true);
