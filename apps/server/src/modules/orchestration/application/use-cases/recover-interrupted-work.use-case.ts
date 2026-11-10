@@ -20,7 +20,7 @@ import {
 } from '../../domain/repositories/task-recovery.repository';
 
 /** Executables aiteam itself starts for sessions (node = npm shim running the CLI's script). */
-const KILLABLE_PROCESS_NAMES = new Set(['claude', 'codex', 'node']);
+const KILLABLE_PROCESS_NAMES = new Set(['claude', 'codex', 'agy', 'node']);
 
 /**
  * A turn cut off by the crash runs again; the agent resumes its session (session_ref) and is told

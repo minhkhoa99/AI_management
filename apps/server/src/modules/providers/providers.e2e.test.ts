@@ -80,7 +80,7 @@ async function createConnection(overrides: Record<string, unknown> = {}) {
   return providerConnectionSchema.parse(response.body);
 }
 
-async function createAgent(provider: 'codex' | 'claude_code' = 'codex') {
+async function createAgent(provider: 'codex' | 'claude_code' | 'antigravity' = 'codex') {
   const department = departmentSchema.parse(
     (await app.callApi('POST', '/api/departments', { name: 'Dev', color: '#60A5FA' })).body,
   );
@@ -269,6 +269,31 @@ describe('provider connections', () => {
   });
 });
 
+describe('Antigravity agents', () => {
+  it('creates an agent on the Antigravity engine', async () => {
+    const agent = await createAgent('antigravity');
+
+    expect(agent.provider).toBe('antigravity');
+  });
+
+  it('rejects a connection on an Antigravity agent, at creation', async () => {
+    const connection = await createConnection();
+    const department = departmentSchema.parse(
+      (await app.callApi('POST', '/api/departments', { name: 'Dev', color: '#60A5FA' })).body,
+    );
+
+    const response = await app.callApi('POST', `/api/departments/${department.id}/members`, {
+      name: 'Dev backend',
+      role: 'dev',
+      provider: 'antigravity',
+      connectionId: connection.id,
+      reportsToPositionId: null,
+    });
+
+    expect(readErrorCode(response)).toBe('CONNECTION_NOT_APPLICABLE');
+  });
+});
+
 describe('agent configuration changes', () => {
   function captureConfigurationEvents(): AgentConfigurationChanged[] {
     const captured: AgentConfigurationChanged[] = [];
@@ -354,17 +379,30 @@ describe('agent configuration changes', () => {
 });
 
 describe('local engines', () => {
-  it('lists both engines with their safe default settings', async () => {
+  it('lists every engine with their safe default settings', async () => {
     const engines = localEngineStatusListSchema.parse(
       (await app.callApi('GET', '/api/local-engines')).body,
     );
 
-    expect(engines.map((engine) => engine.engine)).toEqual(['claude_code', 'codex']);
+    expect(engines.map((engine) => engine.engine)).toEqual(['claude_code', 'codex', 'antigravity']);
     expect(
       engines.every(
         (engine) => engine.settings.blockDangerousCommands && !engine.settings.allowNetwork,
       ),
     ).toBe(true);
+  });
+
+  it('saves the settings of the Antigravity engine', async () => {
+    const updated = await app.callApi('PATCH', '/api/local-engines/antigravity/settings', {
+      defaultModel: 'agy-flash',
+      allowNetwork: true,
+    });
+
+    expect(updated.body).toEqual({
+      defaultModel: 'agy-flash',
+      blockDangerousCommands: true,
+      allowNetwork: true,
+    });
   });
 
   it('updates settings and validates the model name', async () => {
@@ -404,6 +442,12 @@ describe('local engines', () => {
     expect(codex.statusCode).toBe(200);
     const codexList = localEngineModelListSchema.parse(codex.body);
     expect(codexList.models.length > 0 || codexList.problem !== null).toBe(true);
+
+    // Same for Antigravity: no CLI in CI, so an empty list with a reason.
+    const antigravity = await app.callApi('GET', '/api/local-engines/antigravity/models');
+    expect(antigravity.statusCode).toBe(200);
+    const antigravityList = localEngineModelListSchema.parse(antigravity.body);
+    expect(antigravityList.models.length > 0 || antigravityList.problem !== null).toBe(true);
 
     const unknownEngine = await app.callApi('GET', '/api/local-engines/gemini/models');
     expect(unknownEngine.statusCode).toBe(400);

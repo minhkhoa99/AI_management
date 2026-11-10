@@ -63,6 +63,13 @@ const SIMULATED_PROCESSES: SimulatedProcess[] = [
     recordedStart: RECORDED_START,
     live: { name: 'explorer', startedAt: RECORDED_START },
   },
+  // Antigravity CLI.
+  {
+    pid: 1008,
+    recordedName: 'agy',
+    recordedStart: RECORDED_START,
+    live: { name: 'agy', startedAt: RECORDED_START },
+  },
 ];
 
 describe('startup recovery after an abrupt stop', () => {
@@ -121,7 +128,7 @@ describe('startup recovery after an abrupt stop', () => {
   it('kills only processes whose PID, name and start time all match the record', async () => {
     const { app, killedPids } = await restartApplication();
 
-    expect(killedPids.sort()).toEqual([1001, 1002]);
+    expect(killedPids.sort()).toEqual([1001, 1002, 1008]);
     expect(
       app.database.prepare('SELECT COUNT(*) AS remaining FROM cli_process_records').get(),
     ).toEqual({ remaining: 0 });

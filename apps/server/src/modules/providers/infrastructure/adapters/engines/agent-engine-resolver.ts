@@ -8,6 +8,7 @@ import type {
   AgentEnginePort,
   AgentEngineResolver,
 } from '../../../../orchestration/application/ports/agent-engine.port';
+import { AntigravityCliEngine } from './antigravity-cli.engine';
 import { ClaudeCodeCliEngine } from './claude-code-cli.engine';
 import { CodexCliEngine } from './codex-cli.engine';
 import { CustomApiEngine } from './custom-api.engine';
@@ -18,6 +19,7 @@ export class EngineRegistry implements AgentEngineResolver {
   constructor(
     private readonly claudeCodeEngine: ClaudeCodeCliEngine,
     private readonly codexEngine: CodexCliEngine,
+    private readonly antigravityEngine: AntigravityCliEngine,
     private readonly customApiEngine: CustomApiEngine,
     @Inject(AGENT_ENGINE_OVERRIDE) private readonly engineOverride: AgentEngineOverride,
   ) {}
@@ -31,6 +33,8 @@ export class EngineRegistry implements AgentEngineResolver {
         return this.claudeCodeEngine;
       case 'codex':
         return this.codexEngine;
+      case 'antigravity':
+        return this.antigravityEngine;
       case 'custom_api':
         return this.customApiEngine;
     }
