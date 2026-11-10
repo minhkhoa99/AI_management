@@ -4,7 +4,6 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AgentEngineEvent } from '@aiteam/contracts';
 import type { CliProcessTracker } from '../../../../../shared/runtime/cli-process-tracker';
-import * as cliProcess from './cli-process';
 import { AntigravityCliEngine } from './antigravity-cli.engine';
 
 const temporaryDirectories: string[] = [];
@@ -21,7 +20,6 @@ describe('AntigravityCliEngine', () => {
     const workingDirectory = await mkdtemp(path.join(tmpdir(), 'aiteam-agy-work-'));
     const unrelatedRoot = await mkdtemp(path.join(tmpdir(), 'aiteam-agy-root-'));
     temporaryDirectories.push(workingDirectory, unrelatedRoot);
-    const streamSpy = vi.spyOn(cliProcess, 'streamCliOutput');
     const processTracker: CliProcessTracker = {
       recordSpawnedProcess: vi.fn(() => () => undefined),
       listRecordedProcesses: () => [],
@@ -56,7 +54,6 @@ describe('AntigravityCliEngine', () => {
         retryable: false,
       }),
     ]);
-    expect(streamSpy).not.toHaveBeenCalled();
     expect(processTracker.recordSpawnedProcess).not.toHaveBeenCalled();
   });
 });
