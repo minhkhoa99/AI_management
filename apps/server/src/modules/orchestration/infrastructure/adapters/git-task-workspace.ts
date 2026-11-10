@@ -13,12 +13,13 @@ import {
   rmSync,
   statSync,
 } from 'node:fs';
-import { devNull } from 'node:os';
 import path from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../../../app-runtime-config';
 import { AppError } from '../../../../shared/errors/app-error';
 import { ValidationError } from '../../../../shared/errors/app-error';
+import { ENGINE_MANAGED_WORKSPACE_PATHS } from '../../../../shared/runtime/engine-managed-paths';
+import { SAFE_GIT_OPTIONS } from '../../../../shared/runtime/safe-git-options';
 import type {
   PreparedTaskWorkspace,
   SavedCheckpoint,
@@ -36,19 +37,6 @@ const QA_FOLDER = '.aiteam-qa';
 const SKILLS_FOLDER = '.aiteam-skills';
 const MAX_LISTED_FILES = 5_000;
 const MAX_FILE_BYTES = 512 * 1024;
-/**
- * Before every git command. The worktree is written by agents (Codex runs sandboxed, git here
- * does not): no fsmonitor command, no hooks, no signing program, whatever config it points at.
- */
-const SAFE_GIT_OPTIONS = [
-  '-c',
-  'core.fsmonitor=false',
-  '-c',
-  `core.hooksPath=${devNull}`,
-  '-c',
-  'commit.gpgsign=false',
-];
-
 function requireCommitSha(sha: string): string {
   if (!/^[0-9a-f]{7,64}$/.test(sha)) {
     throw new ValidationError('Mã commit không hợp lệ.', { code: 'COMMIT_SHA_INVALID' });
@@ -122,6 +110,10 @@ export class GitTaskWorkspace implements TaskWorkspace {
     mkdirSync(agentDirectory, { recursive: true });
     // An agent could have replaced the folder with a link to somewhere else.
     if (relativeFolder !== '') resolveInsideWorktree(worktreePath, relativeFolder);
+    // Engine-managed folders (config an engine loads) are never committed, whatever the engine.
+    for (const folder of ENGINE_MANAGED_WORKSPACE_PATHS) {
+      await this.excludeFromGit(worktreePath, folder);
+    }
     const qaDocumentPaths = await this.copyQaDocuments(
       worktreePath,
       agentDirectory,

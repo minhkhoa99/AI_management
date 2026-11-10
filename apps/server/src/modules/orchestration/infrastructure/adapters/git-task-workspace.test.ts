@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -100,5 +101,20 @@ describe('GitTaskWorkspace with agent-planted files', () => {
     expect(existsSync(path.join(outside, 'spec.md'))).toBe(false);
     expect(readFileSync(path.join(worktreePath, '.aiteam-qa', 'spec.md'), 'utf8')).toBe('# Spec\n');
     expect(prepared.qaDocumentPaths).toEqual(['.aiteam-qa/spec.md']);
+  });
+
+  it('keeps engine-managed folders out of checkpoints at any depth', async () => {
+    const { worktreePath } = await prepare();
+    mkdirSync(path.join(worktreePath, 'sub', '_agent', 'plugins', 'p'), { recursive: true });
+    mkdirSync(path.join(worktreePath, '.agents'));
+    writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'sub', '_agent', 'plugins', 'p', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
+
+    expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+
+    const tracked = execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
+    expect(tracked).toContain('normal.txt');
+    expect(tracked).not.toContain('hooks.json');
   });
 });
