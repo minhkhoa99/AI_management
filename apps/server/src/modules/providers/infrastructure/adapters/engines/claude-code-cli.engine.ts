@@ -10,6 +10,11 @@ import type {
   AgentSessionRequest,
   SessionPermissions,
 } from '../../../../orchestration/application/ports/agent-engine.port';
+import {
+  type CommandPrefixes,
+  DANGEROUS_COMMAND_PREFIXES,
+  NETWORK_COMMAND_PREFIXES,
+} from '../../../domain/command-restrictions';
 import { type CliInvocation, resolveCliExecutable, streamCliOutput } from './cli-process';
 import { readClaudeProjectInstructions } from './claude-project-instructions';
 import { assertEngineSessionRef } from './engine-session-ref';
@@ -29,15 +34,16 @@ const NETWORK_TOOLS = ['WebFetch', 'WebSearch'];
 /** Shell tools pre-approved for agents allowed to edit (deny rules still win). */
 const WORKSPACE_COMMAND_TOOLS = ['Bash', 'PowerShell'];
 /** Shell commands that reach the network, denied with the network tools. */
-const NETWORK_COMMAND_RULES = ['Bash(curl:*)', 'Bash(wget:*)', 'PowerShell(Invoke-WebRequest:*)'];
+const NETWORK_COMMAND_RULES = toClaudeCommandRules(NETWORK_COMMAND_PREFIXES);
 /** Denied even for agents allowed to edit, when the engine blocks dangerous commands. */
-const DANGEROUS_COMMAND_RULES = [
-  'Bash(rm -rf:*)',
-  'Bash(git push:*)',
-  'Bash(git reset --hard:*)',
-  'Bash(npm publish:*)',
-  'PowerShell(Remove-Item:*)',
-];
+const DANGEROUS_COMMAND_RULES = toClaudeCommandRules(DANGEROUS_COMMAND_PREFIXES);
+
+function toClaudeCommandRules(prefixes: CommandPrefixes): string[] {
+  return [
+    ...prefixes.shell.map((prefix) => `Bash(${prefix}:*)`),
+    ...prefixes.powershell.map((prefix) => `PowerShell(${prefix}:*)`),
+  ];
+}
 
 /**
  * Settings from the command line outrank every settings file. With no settings source loaded this
