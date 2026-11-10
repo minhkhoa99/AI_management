@@ -30,6 +30,7 @@ export class TaskCheckpoints {
     if (worktreePath === null) return;
     try {
       const checkpoint = await this.taskWorkspace.saveCheckpoint(worktreePath, message);
+      await this.noteContentLeftOut(task, worktreePath);
       if (checkpoint === null) return;
       this.checkpointRepository.insertCheckpoint({
         id: this.idGenerator.generateId(),
@@ -49,5 +50,24 @@ export class TaskCheckpoints {
     } catch (error) {
       this.logger.warn({ err: error, taskId: task.id }, 'task checkpoint could not be saved');
     }
+  }
+
+  /** Makes the omission visible: new files in engine-managed folders never enter a checkpoint. */
+  private async noteContentLeftOut(task: Task, worktreePath: string): Promise<void> {
+    const leftOut = await this.taskWorkspace.listUncommittedEngineManagedPaths(worktreePath);
+    if (leftOut.length === 0) return;
+    const shown = leftOut.slice(0, 3).join(', ');
+    this.eventLog.recordTaskEvent({
+      taskId: task.id,
+      agentId: null,
+      kind: 'message',
+      payload: {
+        platformNote: true,
+        text:
+          `Không lưu mốc ${leftOut.length} file trong thư mục cấu hình của engine ` +
+          `(${shown}${leftOut.length > 3 ? '…' : ''}): nền tảng không đưa các thư mục ` +
+          '.agents, .agent, _agents, _agent, .gemini mới vào kết quả của task.',
+      },
+    });
   }
 }

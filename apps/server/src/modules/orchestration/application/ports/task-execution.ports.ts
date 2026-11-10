@@ -82,6 +82,11 @@ export interface TaskWorkspace {
   ): Promise<'merged' | 'conflict'>;
   /** Commits everything the agent changed ("mốc"); null when nothing changed. */
   saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null>;
+  /**
+   * New (untracked) paths under engine-managed folder names that checkpoints leave out, at most
+   * the first 20, relative, "/" separated. Empty when there are none.
+   */
+  listUncommittedEngineManagedPaths(worktreePath: string): Promise<string[]>;
   /** Removes the worktree; the agent/<taskId> branch is always kept. */
   removeTaskWorkspace(worktreePath: string): Promise<void>;
   /** Folder of the task inside the repository ("" for the root), "/" separated. */
