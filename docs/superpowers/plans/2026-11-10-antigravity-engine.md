@@ -36,19 +36,19 @@
 
 Tạo mới (đều dưới `apps/server/src/modules/providers/` trừ khi ghi khác):
 
-| File | Trách nhiệm |
-|---|---|
-| `domain/command-restrictions.ts` | Danh sách đầu lệnh nguy hiểm và lệnh mạng, không phụ thuộc cú pháp engine |
-| `infrastructure/adapters/engines/antigravity-settings.ts` | `SessionPermissions` → JSON `--settings` của `agy` |
-| `infrastructure/adapters/engines/antigravity-stream-translator.ts` | JSONL của `agy` → `AgentEngineEvent` |
-| `infrastructure/adapters/engines/antigravity-workspace-guard.ts` | Xoá/kiểm tra ba đường dẫn `.agents/…` trước lượt chạy |
-| `infrastructure/adapters/engines/antigravity-cli.engine.ts` | `AgentEnginePort` + `buildAntigravityInvocation` |
-| `infrastructure/adapters/cli-antigravity-model-catalog.ts` | Đọc và parse `agy models` |
-| `application/ports/antigravity-model-catalog.port.ts` | Cổng danh mục model |
-| `apps/server/src/shared/runtime/engine-managed-paths.ts` | Hằng: đường dẫn trong worktree mà CLI engine nạp cấu hình chạy được lệnh |
-| `apps/server/src/shared/runtime/safe-git-options.ts` | `SAFE_GIT_OPTIONS` chuyển ra dùng chung |
-| `apps/server/src/shared/database/migrations/013_antigravity_engine.sql` | CHECK mới cho `agents.provider`, `local_engine_settings.engine` |
-| `…/engines/__fixtures__/antigravity-*.jsonl` | Bản ghi thật đã làm sạch |
+| File                                                                    | Trách nhiệm                                                               |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `domain/command-restrictions.ts`                                        | Danh sách đầu lệnh nguy hiểm và lệnh mạng, không phụ thuộc cú pháp engine |
+| `infrastructure/adapters/engines/antigravity-settings.ts`               | `SessionPermissions` → JSON `--settings` của `agy`                        |
+| `infrastructure/adapters/engines/antigravity-stream-translator.ts`      | JSONL của `agy` → `AgentEngineEvent`                                      |
+| `infrastructure/adapters/engines/antigravity-workspace-guard.ts`        | Xoá/kiểm tra ba đường dẫn `.agents/…` trước lượt chạy                     |
+| `infrastructure/adapters/engines/antigravity-cli.engine.ts`             | `AgentEnginePort` + `buildAntigravityInvocation`                          |
+| `infrastructure/adapters/cli-antigravity-model-catalog.ts`              | Đọc và parse `agy models`                                                 |
+| `application/ports/antigravity-model-catalog.port.ts`                   | Cổng danh mục model                                                       |
+| `apps/server/src/shared/runtime/engine-managed-paths.ts`                | Hằng: đường dẫn trong worktree mà CLI engine nạp cấu hình chạy được lệnh  |
+| `apps/server/src/shared/runtime/safe-git-options.ts`                    | `SAFE_GIT_OPTIONS` chuyển ra dùng chung                                   |
+| `apps/server/src/shared/database/migrations/013_antigravity_engine.sql` | CHECK mới cho `agents.provider`, `local_engine_settings.engine`           |
+| `…/engines/__fixtures__/antigravity-*.jsonl`                            | Bản ghi thật đã làm sạch                                                  |
 
 Sửa: `claude-code-cli.engine.ts`, `git-task-workspace.ts`, `agent-engine-resolver.ts`, `cli-local-engine.probe.ts`, `list-local-engine-models.use-case.ts`, `providers.module.ts`, `recover-interrupted-work.use-case.ts`, `packages/contracts/src/{enumerations,providers}.ts`, `migrations/index.ts`, `scripts/record-engine-streams.mjs`, `bin/aiteam.mjs`, các file web ở Task 8, tài liệu ở Task 9.
 
@@ -59,6 +59,7 @@ Sửa: `claude-code-cli.engine.ts`, `git-task-workspace.ts`, `agent-engine-resol
 Không viết code sản phẩm. Kết quả quyết định vài giá trị ở các task sau.
 
 **Files:**
+
 - Modify: `docs/superpowers/specs/2026-11-10-antigravity-engine-design.md` (thêm mục "## 8. Kết quả kiểm chứng")
 
 - [ ] **Step 1: Tạo nhánh, commit spec và plan**
@@ -92,16 +93,16 @@ Mỗi mục lưu stdout, stderr, mã thoát và trạng thái thư mục sau khi
 
 - [ ] **Step 4: Áp dụng cổng chặn**
 
-| Kết quả | Hành động |
-|---|---|
-| A không đạt | **Dừng.** Báo chủ dự án. |
-| B không đạt với `command(prefix)` | Thử `command(regex:…)`; đạt thì Task 2 dùng dạng regex; vẫn không đạt → **dừng**, báo. |
-| C: hook chạy | Bình thường (Task 4 đã lo). Có thêm đường dẫn chạy được lệnh → thêm vào `ENGINE_MANAGED_WORKSPACE_PATHS` ở Task 4. Có hiệu lực giữa lượt → **dừng**, báo trước khi làm tiếp. |
-| D không đạt | **Dừng**, báo (spec: engine không resume). |
-| E không đạt | Task 5 ghi settings ra file tạm trong `os.tmpdir()`, xoá trong `finally`. |
-| F: có tiến trình tên khác | Thêm tên đó vào `KILLABLE_PROCESS_NAMES` ở Task 7. Còn sót sau kill → **dừng**, báo. |
-| G | Bổ sung mẫu regex vào `classifyAntigravityFailure` ở Task 3. |
-| H đạt | Task 2 thêm đúng dạng luật khớp được vào `deny` của `edit_workspace`. Không đạt → bỏ luật đó. |
+| Kết quả                           | Hành động                                                                                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A không đạt                       | **Dừng.** Báo chủ dự án.                                                                                                                                                     |
+| B không đạt với `command(prefix)` | Thử `command(regex:…)`; đạt thì Task 2 dùng dạng regex; vẫn không đạt → **dừng**, báo.                                                                                       |
+| C: hook chạy                      | Bình thường (Task 4 đã lo). Có thêm đường dẫn chạy được lệnh → thêm vào `ENGINE_MANAGED_WORKSPACE_PATHS` ở Task 4. Có hiệu lực giữa lượt → **dừng**, báo trước khi làm tiếp. |
+| D không đạt                       | **Dừng**, báo (spec: engine không resume).                                                                                                                                   |
+| E không đạt                       | Task 5 ghi settings ra file tạm trong `os.tmpdir()`, xoá trong `finally`.                                                                                                    |
+| F: có tiến trình tên khác         | Thêm tên đó vào `KILLABLE_PROCESS_NAMES` ở Task 7. Còn sót sau kill → **dừng**, báo.                                                                                         |
+| G                                 | Bổ sung mẫu regex vào `classifyAntigravityFailure` ở Task 3.                                                                                                                 |
+| H đạt                             | Task 2 thêm đúng dạng luật khớp được vào `deny` của `edit_workspace`. Không đạt → bỏ luật đó.                                                                                |
 
 - [ ] **Step 5: Commit**
 
@@ -115,12 +116,14 @@ git commit -m "docs: record agy verification results"
 ### Task 2: Settings quyền cho `agy`
 
 **Files:**
+
 - Create: `apps/server/src/modules/providers/domain/command-restrictions.ts`
 - Create: `apps/server/src/modules/providers/infrastructure/adapters/engines/antigravity-settings.ts`
 - Test: `apps/server/src/modules/providers/infrastructure/adapters/engines/antigravity-settings.test.ts`
 - Modify: `apps/server/src/modules/providers/infrastructure/adapters/engines/claude-code-cli.engine.ts:28-40`
 
 **Interfaces:**
+
 - Produces:
   - `DANGEROUS_COMMAND_PREFIXES: { shell: readonly string[]; powershell: readonly string[] }` = `shell: ['rm -rf', 'git push', 'git reset --hard', 'npm publish']`, `powershell: ['Remove-Item']`
   - `NETWORK_COMMAND_PREFIXES` cùng dạng = `shell: ['curl', 'wget']`, `powershell: ['Invoke-WebRequest']`
@@ -137,12 +140,27 @@ Thêm vào Interfaces của task này (Task 4 dùng lại, không tạo lại): 
 - [ ] **Step 1: Viết test fail**
 
 ```ts
-const readOnlyOffline = { accessLevel: 'read_only', networkAccess: false, blockDangerousCommands: true } as const;
-const editOnline = { accessLevel: 'edit_workspace', networkAccess: true, blockDangerousCommands: false } as const;
+const readOnlyOffline = {
+  accessLevel: 'read_only',
+  networkAccess: false,
+  blockDangerousCommands: true,
+} as const;
+const editOnline = {
+  accessLevel: 'edit_workspace',
+  networkAccess: true,
+  blockDangerousCommands: false,
+} as const;
 const MANAGED_WRITE_DENIES = [
-  'write_file(.agents/)', 'write_file(.agents)', 'write_file(.agent/)', 'write_file(.agent)',
-  'write_file(_agents/)', 'write_file(_agents)', 'write_file(_agent/)', 'write_file(_agent)',
-  'write_file(.gemini/)', 'write_file(.gemini)',
+  'write_file(.agents/)',
+  'write_file(.agents)',
+  'write_file(.agent/)',
+  'write_file(.agent)',
+  'write_file(_agents/)',
+  'write_file(_agents)',
+  'write_file(_agent/)',
+  'write_file(_agent)',
+  'write_file(.gemini/)',
+  'write_file(.gemini)',
 ];
 
 it('read-only, offline: denies writes, commands, urls, MCP and the browser', () => {
@@ -151,10 +169,18 @@ it('read-only, offline: denies writes, commands, urls, MCP and the browser', () 
     permissions: {
       allow: [],
       deny: [
-        'mcp(*)', 'execute_url(*)', 'write_file(*)', 'command(*)', 'read_url(*)',
-        'command(regex:(?i).*curl.*)', 'command(regex:(?i).*wget.*)', 'command(regex:(?i).*Invoke-WebRequest.*)',
-        'command(regex:(?i).*rm[ ]+-rf.*)', 'command(regex:(?i).*git[ ]+push.*)',
-        'command(regex:(?i).*git[ ]+reset[ ]+--hard.*)', 'command(regex:(?i).*npm[ ]+publish.*)',
+        'mcp(*)',
+        'execute_url(*)',
+        'write_file(*)',
+        'command(*)',
+        'read_url(*)',
+        'command(regex:(?i).*curl.*)',
+        'command(regex:(?i).*wget.*)',
+        'command(regex:(?i).*Invoke-WebRequest.*)',
+        'command(regex:(?i).*rm[ ]+-rf.*)',
+        'command(regex:(?i).*git[ ]+push.*)',
+        'command(regex:(?i).*git[ ]+reset[ ]+--hard.*)',
+        'command(regex:(?i).*npm[ ]+publish.*)',
         'command(regex:(?i).*Remove-Item.*)',
       ],
     },
@@ -164,21 +190,36 @@ it('read-only, offline: denies writes, commands, urls, MCP and the browser', () 
 it('edit, online, dangerous commands allowed: commands and urls pre-approved, config folders write-protected', () => {
   expect(buildAntigravitySettings(editOnline)).toEqual({
     allowNonWorkspaceAccess: false,
-    permissions: { allow: ['command(*)', 'read_url(*)'], deny: ['mcp(*)', 'execute_url(*)', ...MANAGED_WRITE_DENIES] },
+    permissions: {
+      allow: ['command(*)', 'read_url(*)'],
+      deny: ['mcp(*)', 'execute_url(*)', ...MANAGED_WRITE_DENIES],
+    },
   });
 });
 
 it('edit, offline, blocking: dangerous and network commands denied although commands are allowed', () => {
-  const settings = buildAntigravitySettings({ ...editOnline, networkAccess: false, blockDangerousCommands: true });
+  const settings = buildAntigravitySettings({
+    ...editOnline,
+    networkAccess: false,
+    blockDangerousCommands: true,
+  });
   expect(settings.permissions.allow).toEqual(['command(*)']);
-  expect(settings.permissions.deny).toEqual(expect.arrayContaining([
-    'read_url(*)', 'command(regex:(?i).*curl.*)', 'command(regex:(?i).*git[ ]+push.*)',
-  ]));
+  expect(settings.permissions.deny).toEqual(
+    expect.arrayContaining([
+      'read_url(*)',
+      'command(regex:(?i).*curl.*)',
+      'command(regex:(?i).*git[ ]+push.*)',
+    ]),
+  );
   expect(settings.permissions.deny).not.toContain('command(*)');
 });
 
 it('no rule contains a backslash (agy decodes rule strings twice)', () => {
-  for (const permissions of [readOnlyOffline, editOnline, { ...editOnline, networkAccess: false, blockDangerousCommands: true }]) {
+  for (const permissions of [
+    readOnlyOffline,
+    editOnline,
+    { ...editOnline, networkAccess: false, blockDangerousCommands: true },
+  ]) {
     expect(JSON.stringify(buildAntigravitySettings(permissions).permissions)).not.toContain('\\');
   }
 });
@@ -199,31 +240,34 @@ it('no rule contains a backslash (agy decodes rule strings twice)', () => {
 ### Task 3: Translator và bản ghi thật
 
 **Files:**
+
 - Modify: `scripts/record-engine-streams.mjs`
 - Create: `apps/server/src/modules/providers/infrastructure/adapters/engines/__fixtures__/antigravity-{read-only,edit,denied-command,cancelled,invalid-model}.jsonl`
 - Create: `apps/server/src/modules/providers/infrastructure/adapters/engines/antigravity-stream-translator.ts`
 - Test: `…/engines/antigravity-stream-translator.test.ts`, `…/engines/engine-stream.contract.test.ts`
 
 **Interfaces:**
+
 - Consumes: `CliOutput` (`cli-process.ts`), `describeToolInput`, `truncateEngineText` (`engine-text.ts`)
 - Produces:
+
   ```ts
   class AntigravityStreamTranslator {
-    constructor(workingDirectory: string)
-    translateAntigravityLine(rawLine: string): AgentEngineEvent[]
-    translateAntigravityExit(exit: Extract<CliOutput, { kind: 'exit' }>): AgentEngineEvent[]
+    constructor(workingDirectory: string);
+    translateAntigravityLine(rawLine: string): AgentEngineEvent[];
+    translateAntigravityExit(exit: Extract<CliOutput, { kind: 'exit' }>): AgentEngineEvent[];
   }
   ```
 
 - [ ] **Step 1: Mở rộng script ghi**: thêm nhóm `antigravity` vào `RECORDINGS`; mỗi bản ghi `agy` gửi stdin là `JSON.stringify({ event: 'user', message: { content: prompt } }) + '\n'` (thêm một trường tuỳ chọn cho bản ghi để đổi cách dựng stdin; Claude/Codex giữ nguyên). Tham số chung: `--input-format stream-json --output-format stream-json --disable-slash-commands --model gemini-3.8-flash-low --settings <JSON>`. Khi làm sạch sự kiện `init` của `agy`: bỏ `init.tools`. Năm bản ghi:
 
-| Tên | Settings (theo `buildAntigravitySettings`) | Prompt |
-|---|---|---|
-| `antigravity-read-only` | read_only, offline, block | `READ_PROMPT` |
-| `antigravity-edit` | edit_workspace, offline, block | `EDIT_PROMPT` + " Sau đó chạy lệnh: node --version" |
-| `antigravity-denied-command` | read_only, offline, block | "Chạy lệnh: node --version. Không làm gì khác." |
-| `antigravity-cancelled` | read_only | `LONG_PROMPT`, huỷ sau 15000 ms |
-| `antigravity-invalid-model` | read_only, `--model model-that-does-not-exist` | "Chào" |
+| Tên                          | Settings (theo `buildAntigravitySettings`)     | Prompt                                              |
+| ---------------------------- | ---------------------------------------------- | --------------------------------------------------- |
+| `antigravity-read-only`      | read_only, offline, block                      | `READ_PROMPT`                                       |
+| `antigravity-edit`           | edit_workspace, offline, block                 | `EDIT_PROMPT` + " Sau đó chạy lệnh: node --version" |
+| `antigravity-denied-command` | read_only, offline, block                      | "Chạy lệnh: node --version. Không làm gì khác."     |
+| `antigravity-cancelled`      | read_only                                      | `LONG_PROMPT`, huỷ sau 15000 ms                     |
+| `antigravity-invalid-model`  | read_only, `--model model-that-does-not-exist` | "Chào"                                              |
 
 - [ ] **Step 2: Ghi** — `node scripts/record-engine-streams.mjs antigravity` (tuần tự, tốn ít hạn mức). Kiểm tra 5 file không chứa đường dẫn cá nhân, email, UUID thật.
 
@@ -296,6 +340,7 @@ Bổ sung từ kiểm chứng (spec mục 8), thêm test tương ứng ở Step 
 ### Task 4: Dọn workspace và loại trừ git
 
 **Files:**
+
 - Create: `apps/server/src/shared/runtime/engine-managed-paths.ts`, `apps/server/src/shared/runtime/safe-git-options.ts`
 - Create: `apps/server/src/modules/providers/infrastructure/adapters/engines/antigravity-workspace-guard.ts`
 - Test: `…/engines/antigravity-workspace-guard.test.ts`
@@ -303,6 +348,7 @@ Bổ sung từ kiểm chứng (spec mục 8), thêm test tương ứng ở Step 
 - Test: file test hiện có của `git-task-workspace` (tìm bằng `Glob **/git-task-workspace*.test.ts`; không có thì thêm vào `task-execution.e2e.test.ts`)
 
 **Interfaces:**
+
 - Produces:
   - Consumes `ENGINE_MANAGED_WORKSPACE_PATHS` = `['.agents', '.agent', '_agents', '_agent', '.gemini']` (đã tạo ở Task 2 trong `shared/runtime/engine-managed-paths.ts`; không tạo lại). Kiểm chứng C cho thấy `agy` nạp hook từ `.agents/` của thư mục làm việc **và** của mọi thư mục cha tới gốc git, và tài liệu liệt kê nhiều thứ chạy được lệnh trong đó (hook, MCP, plugin, subagent, manifest trỏ ra ngoài, `.gemini/config.json` chuyển hướng thư mục cấu hình), nên quản lý **cả thư mục** thay vì ba file. Mọi chỗ trong task này nói "ba đường dẫn" hay `.agents/hooks.json`… đều hiểu là năm thư mục này; test dùng `.agents/hooks.json` làm ví dụ file bên trong, và ca "leaves other files in .agents/ alone" đổi thành "removes the whole .agents directory, keeps other files of the working directory".
   - `SAFE_GIT_OPTIONS: readonly string[]` (chuyển nguyên từ `git-task-workspace.ts`)
@@ -340,10 +386,12 @@ it('outside a git repository only the working directory is cleaned', …);
 ### Task 5: Engine và lệnh gọi
 
 **Files:**
+
 - Create: `apps/server/src/modules/providers/infrastructure/adapters/engines/antigravity-cli.engine.ts`
 - Test: `apps/server/src/modules/providers/infrastructure/adapters/engines/cli-invocations.test.ts`
 
 **Interfaces:**
+
 - Consumes: `buildAntigravitySettings` (Task 2), `AntigravityStreamTranslator` (Task 3), `clearEngineManagedPaths` (Task 4), `readClaudeProjectInstructions(workingDirectory): string | null`, `assertEngineSessionRef`, `resolveCliExecutable`, `streamCliOutput`, `toFailedEvent`, `CLI_PROCESS_TRACKER`
 - Produces:
   - `buildAntigravityInvocation(request: AgentSessionRequest, projectInstructions?: string | null): CliInvocation`
@@ -387,11 +435,13 @@ Nếu kiểm chứng E không đạt: `--settings` là đường dẫn file; đ�
 ### Task 6: Danh mục model
 
 **Files:**
+
 - Create: `apps/server/src/modules/providers/application/ports/antigravity-model-catalog.port.ts`
 - Create: `apps/server/src/modules/providers/infrastructure/adapters/cli-antigravity-model-catalog.ts`
 - Test: `apps/server/src/modules/providers/infrastructure/adapters/cli-antigravity-model-catalog.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `ANTIGRAVITY_MODEL_CATALOG: symbol`; `interface AntigravityModelCatalog { listAntigravityModels(): Promise<LocalEngineModelChoice[]> }`
   - `parseAntigravityModelList(rawOutput: string): LocalEngineModelChoice[]`
@@ -426,6 +476,7 @@ it('throws ANTIGRAVITY_MODEL_CATALOG_UNREADABLE when no line is a model', …); 
 ### Task 7: Nối dây server (enum, migration, DI, probe, khôi phục)
 
 **Files:**
+
 - Modify: `packages/contracts/src/enumerations.ts:13`, `packages/contracts/src/providers.ts:9` (+ chú thích dòng 84, 93)
 - Create: `apps/server/src/shared/database/migrations/013_antigravity_engine.sql`
 - Modify: `apps/server/src/shared/database/migrations/index.ts`
@@ -435,6 +486,7 @@ it('throws ANTIGRAVITY_MODEL_CATALOG_UNREADABLE when no line is a model', …); 
 - Test: `list-local-engine-models.use-case.test.ts`, `providers.e2e.test.ts`, `enumerations.test.ts` (tự bao phủ), test của `cli-local-engine.probe` nếu có, `startup-recovery.e2e.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AntigravityCliEngine` (Task 5), `ANTIGRAVITY_MODEL_CATALOG`, `CliAntigravityModelCatalog` (Task 6)
 - Produces: `AGENT_PROVIDERS = ['claude_code', 'codex', 'antigravity', 'custom_api']`, `LOCAL_ENGINES = ['claude_code', 'codex', 'antigravity']`
 
@@ -507,22 +559,24 @@ Trước khi viết: đối chiếu định nghĩa `agents` hiện hành (`PRAGM
 ### Task 8: Giao diện
 
 **Files:**
+
 - Modify: `apps/web/src/features/organization/organization-labels.ts`, `apps/web/src/features/providers/components/local-engine-card.tsx`, `…/local-engine-model-field.tsx:75`, `…/settings-screen.tsx:19-60`, `apps/web/src/features/overview/components/overview-figures.tsx:9`, `apps/web/src/features/tasks/components/task-form-panel.tsx:347`, `apps/web/src/features/org/components/{add-member-panel,agent-brain-form}.tsx`
 
 **Interfaces:**
+
 - Consumes: `AGENT_PROVIDERS`, `LOCAL_ENGINES` (Task 7)
 
 - [ ] **Step 1: Nội dung cố định**
 
-| Chỗ | Giá trị |
-|---|---|
-| `PROVIDER_PRESENTATION.antigravity` | `label: 'Antigravity'`, `note: 'Tài khoản Antigravity đã đăng nhập'`, `background: '#2A1F4D'`, `foreground: '#CDBBFF'` |
-| `ENGINE_PRESENTATION.antigravity` | `name: 'Antigravity'`, `mark: 'AG'`, `via: 'agy · tài khoản Antigravity đã đăng nhập'`, `modelPlaceholder: 'Mặc định của Antigravity'`, cùng màu trên |
-| `commandSafety` của Antigravity | `kind: 'toggle'`, `label` y như Claude Code, `hint: 'Lọc theo đầu lệnh, không chặn được mọi cách viết khác. Antigravity vẫn nạp hook và MCP cá nhân của bạn trong ~/.gemini/config. Agent được sửa chạy lệnh với quyền của bạn: chỉ cấp quyền sửa cho việc bạn tin.'` |
-| Màu biểu đồ tổng quan | `antigravity: '#A78BFA'` |
-| Placeholder ô model | theo engine: Claude `vd. claude-sonnet-5-5`, Codex `vd. gpt-5.6-terra`, Antigravity `vd. gemini-3.8-flash-high` (bảng `Record<LocalEngine, string>` thay phép chọn hai nhánh) |
-| Hướng dẫn cài ở Cài đặt | thêm mục 3: `# 3. Antigravity CLI` / `irm https://antigravity.google/cli/install.ps1 | iex` / `agy   # chạy một lần để đăng nhập`; tiêu đề thành `Bộ não lập trình: Claude Code, Codex và Antigravity`; dòng chờ thành `Đang kiểm tra Claude Code, Codex và Antigravity trên máy…` |
-| Chú thích thư mục task | `Claude Code và Codex` → `Claude Code, Codex và Antigravity` |
+| Chỗ                                 | Giá trị                                                                                                                                                                                                                                                               |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROVIDER_PRESENTATION.antigravity` | `label: 'Antigravity'`, `note: 'Tài khoản Antigravity đã đăng nhập'`, `background: '#2A1F4D'`, `foreground: '#CDBBFF'`                                                                                                                                                |
+| `ENGINE_PRESENTATION.antigravity`   | `name: 'Antigravity'`, `mark: 'AG'`, `via: 'agy · tài khoản Antigravity đã đăng nhập'`, `modelPlaceholder: 'Mặc định của Antigravity'`, cùng màu trên                                                                                                                 |
+| `commandSafety` của Antigravity     | `kind: 'toggle'`, `label` y như Claude Code, `hint: 'Lọc theo đầu lệnh, không chặn được mọi cách viết khác. Antigravity vẫn nạp hook và MCP cá nhân của bạn trong ~/.gemini/config. Agent được sửa chạy lệnh với quyền của bạn: chỉ cấp quyền sửa cho việc bạn tin.'` |
+| Màu biểu đồ tổng quan               | `antigravity: '#A78BFA'`                                                                                                                                                                                                                                              |
+| Placeholder ô model                 | theo engine: Claude `vd. claude-sonnet-5-5`, Codex `vd. gpt-5.6-terra`, Antigravity `vd. gemini-3.8-flash-high` (bảng `Record<LocalEngine, string>` thay phép chọn hai nhánh)                                                                                         |
+| Hướng dẫn cài ở Cài đặt             | thêm mục 3: `# 3. Antigravity CLI` / `irm https://antigravity.google/cli/install.ps1                                                                                                                                                                                  | iex`/`agy # chạy một lần để đăng nhập`; tiêu đề thành `Bộ não lập trình: Claude Code, Codex và Antigravity`; dòng chờ thành `Đang kiểm tra Claude Code, Codex và Antigravity trên máy…` |
+| Chú thích thư mục task              | `Claude Code và Codex` → `Claude Code, Codex và Antigravity`                                                                                                                                                                                                          |
 
 - [ ] **Step 2: Rà mọi phép so sánh provider/engine trong `apps/web/src`** (`Grep "'claude_code'|'codex'"`): chỗ nào rẽ nhánh hai engine local (hiện ô model local, ẩn chọn kết nối…) phải đúng cho `antigravity`; ưu tiên điều kiện `provider !== 'custom_api'` hoặc bảng `Record`.
 
@@ -537,6 +591,7 @@ Trước khi viết: đối chiếu định nghĩa `agents` hiện hành (`PRAGM
 ### Task 9: Doctor, tài liệu, chạy thật
 
 **Files:**
+
 - Modify: `bin/aiteam.mjs:50,203-209`, `CLAUDE.md` (mục Engine, mục Khi khởi động), `docs/IMPLEMENTATION_PLAN.md`, `docs/UI_MAPPING.md`, `scripts/record-engine-streams.mjs` (chú thích đầu file)
 
 - [ ] **Step 1: Doctor** — thêm `{ label: 'agy --version', outcome: probeCommand('agy --version') }`; dòng trợ giúp thành `Kiểm tra Node, git, Claude Code, Codex, Antigravity`. Chạy `node bin/aiteam.mjs doctor` → có dòng `[ok] agy --version`.
