@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Records real JSONL streams from the local Claude Code and Codex CLIs, sanitises them, and
-// writes them as contract-test fixtures. Re-run when a CLI changes its output format.
+// Records real JSONL streams from the local Claude Code, Codex and Antigravity (agy) CLIs,
+// sanitises them, and writes them as contract-test fixtures. Re-run when a CLI changes its output format.
 //
-//   node scripts/record-engine-streams.mjs [claude|codex|all] [fixture-name]
+//   node scripts/record-engine-streams.mjs [claude|codex|antigravity|all] [fixture-name]
 //
 // Spends a little of the signed-in accounts' quota (a few tiny prompts, cheapest models).
 // Sanitising removes: personal paths, session/thread ids, account and quota details, hooks.
@@ -46,6 +46,64 @@ const CODEX_BASE = [
   '--ephemeral',
 ];
 
+// Same flags as the Antigravity engine; the settings JSON (--settings, inline) is appended per recording.
+const AGY_BASE = [
+  '--input-format',
+  'stream-json',
+  '--output-format',
+  'stream-json',
+  '--disable-slash-commands',
+  '--model',
+  'gemini-3.8-flash-low',
+];
+// Hardcoded copies of buildAntigravitySettings() output (this script cannot import TypeScript).
+const AGY_NETWORK_DENIES = [
+  'read_url(*)',
+  'command(regex:(?i).*curl.*)',
+  'command(regex:(?i).*wget.*)',
+  'command(regex:(?i).*Invoke-WebRequest.*)',
+];
+const AGY_DANGEROUS_DENIES = [
+  'command(regex:(?i).*rm[ ]+-rf.*)',
+  'command(regex:(?i).*git[ ]+push.*)',
+  'command(regex:(?i).*git[ ]+reset[ ]+--hard.*)',
+  'command(regex:(?i).*npm[ ]+publish.*)',
+  'command(regex:(?i).*Remove-Item.*)',
+];
+const AGY_MANAGED_WRITE_DENIES = ['.agents', '.agent', '_agents', '_agent', '.gemini'].flatMap(
+  (folder) => [`write_file(${folder}/)`, `write_file(${folder})`],
+);
+const AGY_READ_ONLY_SETTINGS = JSON.stringify({
+  allowNonWorkspaceAccess: false,
+  permissions: {
+    allow: [],
+    deny: [
+      'mcp(*)',
+      'execute_url(*)',
+      'write_file(*)',
+      'command(*)',
+      ...AGY_NETWORK_DENIES,
+      ...AGY_DANGEROUS_DENIES,
+    ],
+  },
+});
+const AGY_EDIT_SETTINGS = JSON.stringify({
+  allowNonWorkspaceAccess: false,
+  permissions: {
+    allow: ['command(*)'],
+    deny: [
+      'mcp(*)',
+      'execute_url(*)',
+      ...AGY_MANAGED_WRITE_DENIES,
+      ...AGY_NETWORK_DENIES,
+      ...AGY_DANGEROUS_DENIES,
+    ],
+  },
+});
+// agy reads one stream-json user event from stdin instead of the bare prompt.
+const agyStdin = (prompt) => JSON.stringify({ event: 'user', message: { content: prompt } }) + '\n';
+const COMMAND_PROMPT = 'Chạy lệnh: node --version. Không làm gì khác.';
+
 const RECORDINGS = {
   claude: [
     [
@@ -82,6 +140,48 @@ const RECORDINGS = {
       'claude',
       [...CLAUDE_BASE.slice(0, -2), '--model', 'claude-model-that-does-not-exist'],
       'Chào',
+    ],
+  ],
+  antigravity: [
+    [
+      'antigravity-read-only',
+      'agy',
+      [...AGY_BASE, '--settings', AGY_READ_ONLY_SETTINGS],
+      READ_PROMPT,
+      undefined,
+      agyStdin,
+    ],
+    [
+      'antigravity-edit',
+      'agy',
+      [...AGY_BASE, '--settings', AGY_EDIT_SETTINGS],
+      `${EDIT_PROMPT} Sau đó chạy lệnh: node --version`,
+      undefined,
+      agyStdin,
+    ],
+    [
+      'antigravity-denied-command',
+      'agy',
+      [...AGY_BASE, '--settings', AGY_READ_ONLY_SETTINGS],
+      COMMAND_PROMPT,
+      undefined,
+      agyStdin,
+    ],
+    [
+      'antigravity-cancelled',
+      'agy',
+      [...AGY_BASE, '--settings', AGY_READ_ONLY_SETTINGS],
+      LONG_PROMPT,
+      15000,
+      agyStdin,
+    ],
+    [
+      'antigravity-invalid-model',
+      'agy',
+      [...AGY_BASE.slice(0, -1), 'model-that-does-not-exist', '--settings', AGY_READ_ONLY_SETTINGS],
+      'Chào',
+      undefined,
+      agyStdin,
     ],
   ],
   codex: [
@@ -121,6 +221,36 @@ const DROPPED_KEYS = new Set([
   'capabilities',
 ]);
 
+// agy's init event lists every tool with its full schema: large and not needed by the translator.
+function dropAgyInitTools(event) {
+  const { tools: _tools, ...init } = event.init ?? {};
+  return { ...event, init };
+}
+
+// agy streams response text in arbitrary slices, so a path can be cut in two and escape the
+// scrubber. Merge the consecutive ACTIVE slices of one step into a single event before scrubbing.
+function mergeAgyTextDeltas(events) {
+  const merged = [];
+  for (const event of events) {
+    const update = event.step_update;
+    const previous = merged.at(-1)?.step_update;
+    if (
+      update?.step_type === 'agent_response' &&
+      update.state === 'ACTIVE' &&
+      typeof update.text_delta === 'string' &&
+      previous?.step_type === 'agent_response' &&
+      previous.state === 'ACTIVE' &&
+      previous.step_index === update.step_index &&
+      typeof previous.text_delta === 'string'
+    ) {
+      previous.text_delta += update.text_delta;
+    } else {
+      merged.push(event);
+    }
+  }
+  return merged;
+}
+
 function sanitiseRecording(rawOutput, workspace) {
   const idReplacements = new Map();
   const replaceId = (value) => {
@@ -138,7 +268,13 @@ function sanitiseRecording(rawOutput, workspace) {
       .join('/workspace')
       .split(workspace.replaceAll('\\', '\\\\'))
       .join('/workspace')
+      .split(workspace.replaceAll('\\', '/'))
+      .join('/workspace')
       .split(homedir())
+      .join('~')
+      .split(homedir().replaceAll('\\', '\\\\'))
+      .join('~')
+      .split(homedir().replaceAll('\\', '/'))
       .join('~')
       .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, replaceId);
@@ -155,22 +291,32 @@ function sanitiseRecording(rawOutput, workspace) {
     return value;
   };
   return (
-    rawOutput
-      .split('\n')
-      .filter((line) => line.trim() !== '')
-      .map((line) => JSON.parse(line))
+    mergeAgyTextDeltas(
+      rawOutput
+        .split('\n')
+        .filter((line) => line.trim() !== '')
+        .map((line) => JSON.parse(line)),
+    )
       .filter((event) => !(event.type === 'system' && /^hook_/.test(event.subtype ?? '')))
       .map((event) =>
         event.type === 'rate_limit_event'
           ? { type: 'rate_limit_event', rate_limit_info: { status: event.rate_limit_info?.status } }
           : event,
       )
+      .map((event) => (event.event === 'init' ? dropAgyInitTools(event) : event))
       .map((event) => JSON.stringify(scrubValue(event)))
       .join('\n') + '\n'
   );
 }
 
-function recordOne([fixtureName, command, args, prompt, cancelAfterMs]) {
+function recordOne([
+  fixtureName,
+  command,
+  args,
+  prompt,
+  cancelAfterMs,
+  buildStdin = (text) => text,
+]) {
   return new Promise((resolve) => {
     const workspace = mkdtempSync(path.join(tmpdir(), 'aiteam-record-'));
     writeFileSync(
@@ -181,7 +327,7 @@ function recordOne([fixtureName, command, args, prompt, cancelAfterMs]) {
     let stdout = '';
     child.stdout.on('data', (chunk) => (stdout += chunk));
     child.stderr.resume();
-    child.stdin.end(prompt);
+    child.stdin.end(buildStdin(prompt));
     const timer =
       cancelAfterMs === undefined
         ? undefined
@@ -196,7 +342,12 @@ function recordOne([fixtureName, command, args, prompt, cancelAfterMs]) {
         path.join(fixtureDirectory, `${fixtureName}.jsonl`),
         sanitiseRecording(stdout, workspace),
       );
-      rmSync(workspace, { recursive: true, force: true });
+      try {
+        // A just-killed agy can still hold the folder for a moment on Windows.
+        rmSync(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+      } catch (error) {
+        console.warn(`${fixtureName}: could not remove ${workspace}: ${error.message}`);
+      }
       console.log(`${fixtureName}: exit ${exitCode}`);
       resolve();
     });
