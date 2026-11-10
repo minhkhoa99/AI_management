@@ -59,16 +59,16 @@ const AGY_BASE = [
 // Hardcoded copies of buildAntigravitySettings() output (this script cannot import TypeScript).
 const AGY_NETWORK_DENIES = [
   'read_url(*)',
-  'command(regex:(?i).*curl.*)',
-  'command(regex:(?i).*wget.*)',
-  'command(regex:(?i).*Invoke-WebRequest.*)',
+  'command(regex:(?is).*curl.*)',
+  'command(regex:(?is).*wget.*)',
+  'command(regex:(?is).*Invoke-WebRequest.*)',
 ];
 const AGY_DANGEROUS_DENIES = [
-  'command(regex:(?i).*rm[ ]+-rf.*)',
-  'command(regex:(?i).*git[ ]+push.*)',
-  'command(regex:(?i).*git[ ]+reset[ ]+--hard.*)',
-  'command(regex:(?i).*npm[ ]+publish.*)',
-  'command(regex:(?i).*Remove-Item.*)',
+  'command(regex:(?is).*rm[[:space:]]+-rf.*)',
+  'command(regex:(?is).*git[[:space:]]+push.*)',
+  'command(regex:(?is).*git[[:space:]]+reset[[:space:]]+--hard.*)',
+  'command(regex:(?is).*npm[[:space:]]+publish.*)',
+  'command(regex:(?is).*Remove-Item.*)',
 ];
 const AGY_MANAGED_WRITE_DENIES = ['.agents', '.agent', '_agents', '_agent', '.gemini'].flatMap(
   (folder) => [`write_file(${folder}/)`, `write_file(${folder})`],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAntigravitySettings } from './antigravity-settings';
+import { buildAntigravitySettings, buildCommandRegexRule } from './antigravity-settings';
 
 const readOnlyOffline = {
   accessLevel: 'read_only',
@@ -36,14 +36,14 @@ describe('buildAntigravitySettings', () => {
           'write_file(*)',
           'command(*)',
           'read_url(*)',
-          'command(regex:(?i).*curl.*)',
-          'command(regex:(?i).*wget.*)',
-          'command(regex:(?i).*Invoke-WebRequest.*)',
-          'command(regex:(?i).*rm[ ]+-rf.*)',
-          'command(regex:(?i).*git[ ]+push.*)',
-          'command(regex:(?i).*git[ ]+reset[ ]+--hard.*)',
-          'command(regex:(?i).*npm[ ]+publish.*)',
-          'command(regex:(?i).*Remove-Item.*)',
+          'command(regex:(?is).*curl.*)',
+          'command(regex:(?is).*wget.*)',
+          'command(regex:(?is).*Invoke-WebRequest.*)',
+          'command(regex:(?is).*rm[[:space:]]+-rf.*)',
+          'command(regex:(?is).*git[[:space:]]+push.*)',
+          'command(regex:(?is).*git[[:space:]]+reset[[:space:]]+--hard.*)',
+          'command(regex:(?is).*npm[[:space:]]+publish.*)',
+          'command(regex:(?is).*Remove-Item.*)',
         ],
       },
     });
@@ -69,8 +69,8 @@ describe('buildAntigravitySettings', () => {
     expect(settings.permissions.deny).toEqual(
       expect.arrayContaining([
         'read_url(*)',
-        'command(regex:(?i).*curl.*)',
-        'command(regex:(?i).*git[ ]+push.*)',
+        'command(regex:(?is).*curl.*)',
+        'command(regex:(?is).*git[[:space:]]+push.*)',
       ]),
     );
     expect(settings.permissions.deny).not.toContain('command(*)');
@@ -83,6 +83,27 @@ describe('buildAntigravitySettings', () => {
       { ...editOnline, networkAccess: false, blockDangerousCommands: true },
     ]) {
       expect(JSON.stringify(buildAntigravitySettings(permissions).permissions)).not.toContain('\\');
+    }
+  });
+
+  it('every command rule matches the whole command and lets dot cross newlines', () => {
+    const { deny } = buildAntigravitySettings({
+      ...editOnline,
+      networkAccess: false,
+      blockDangerousCommands: true,
+    }).permissions;
+    const regexRules = deny.filter((rule) => rule.startsWith('command(regex:'));
+    expect(regexRules.length).toBeGreaterThan(0);
+    for (const rule of regexRules) {
+      expect(rule.startsWith('command(regex:(?is).*')).toBe(true);
+      expect(rule.endsWith('.*)')).toBe(true);
+    }
+  });
+
+  it('builds a rule from a prefix and rejects regex metacharacters', () => {
+    expect(buildCommandRegexRule('git push')).toBe('command(regex:(?is).*git[[:space:]]+push.*)');
+    for (const prefix of ['a.b', 'rm (x)', 'git\\push', 'a|b', '', ' git', 'curl*']) {
+      expect(() => buildCommandRegexRule(prefix)).toThrow(/Tiền tố lệnh/);
     }
   });
 });
