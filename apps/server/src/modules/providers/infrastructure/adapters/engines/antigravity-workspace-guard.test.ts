@@ -212,4 +212,14 @@ describe('clearEngineManagedPaths', () => {
     expect(existsSync(path.join(root, '.agents'))).toBe(false);
     expect(existsSync(outsideFile)).toBe(true);
   });
+
+  it('accepts a working directory whose name merely starts with two dots', async () => {
+    const workingDirectory = path.join(root, '..cache');
+    mkdirSync(workingDirectory);
+    write('.agents/hooks.json', workingDirectory);
+
+    await clearEngineManagedPaths(workingDirectory, root);
+
+    expect(existsSync(path.join(workingDirectory, '.agents'))).toBe(false);
+  });
 });

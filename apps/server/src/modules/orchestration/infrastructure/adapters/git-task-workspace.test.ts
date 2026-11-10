@@ -128,4 +128,47 @@ describe('GitTaskWorkspace with agent-planted files', () => {
       expect(excludeText).not.toContain(name);
     }
   });
+
+  it('still excludes managed folders when the environment forces literal pathspecs', async () => {
+    const { worktreePath } = await prepare();
+    mkdirSync(path.join(worktreePath, '.agents'));
+    writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
+    const previous = process.env.GIT_LITERAL_PATHSPECS;
+    process.env.GIT_LITERAL_PATHSPECS = '1';
+    try {
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.GIT_LITERAL_PATHSPECS;
+      else process.env.GIT_LITERAL_PATHSPECS = previous;
+    }
+
+    const tracked = execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
+    expect(tracked).toContain('normal.txt');
+    expect(tracked).not.toContain('hooks.json');
+  });
+
+  it('keeps checkpointing files the project already tracks under managed names', async () => {
+    mkdirSync(path.join(repositoryDirectory, '.gemini'));
+    writeFileSync(path.join(repositoryDirectory, '.gemini', 'settings.json'), 'old');
+    mkdirSync(path.join(repositoryDirectory, '.agents', 'skills'), { recursive: true });
+    writeFileSync(path.join(repositoryDirectory, '.agents', 'skills', 'x.md'), 'x');
+    const { worktreePath } = await prepare();
+    writeFileSync(path.join(worktreePath, '.gemini', 'settings.json'), 'new');
+    rmSync(path.join(worktreePath, '.agents', 'skills', 'x.md'));
+    writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
+
+    expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+
+    const changed = execFileSync(
+      'git',
+      ['-C', worktreePath, 'show', '--name-status', '--format=', 'HEAD'],
+      { encoding: 'utf8' },
+    );
+    expect(changed).toMatch(/M\s+\.gemini\/settings\.json/);
+    expect(changed).toMatch(/D\s+\.agents\/skills\/x\.md/);
+    expect(changed).toContain('normal.txt');
+    expect(changed).not.toContain('hooks.json');
+  });
 });

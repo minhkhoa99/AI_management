@@ -19,7 +19,10 @@ import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../../../app-runti
 import { AppError } from '../../../../shared/errors/app-error';
 import { ValidationError } from '../../../../shared/errors/app-error';
 import { ENGINE_MANAGED_WORKSPACE_PATHS } from '../../../../shared/runtime/engine-managed-paths';
-import { SAFE_GIT_OPTIONS } from '../../../../shared/runtime/safe-git-options';
+import {
+  buildGitEnvironmentWithoutPathspecOverrides,
+  SAFE_GIT_OPTIONS,
+} from '../../../../shared/runtime/safe-git-options';
 import type {
   PreparedTaskWorkspace,
   SavedCheckpoint,
@@ -125,7 +128,9 @@ export class GitTaskWorkspace implements TaskWorkspace {
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
     if (!existsSync(worktreePath)) return null;
-    // Engine-managed folders (config an engine loads) are never committed, whatever the engine.
+    // Changes to files the project already tracks are always saved, whatever their name.
+    await this.runGit(worktreePath, ['add', '-u', '--', '.']);
+    // New files under engine-managed folder names are never committed, whatever the engine.
     // Pathspecs, not info/exclude: that file is shared with the user's own checkout and loses
     // against a `!` rule in a .gitignore the agent wrote.
     await this.runGit(worktreePath, [
@@ -408,6 +413,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
         {
           timeout: GIT_TIMEOUT_MS,
           windowsHide: true,
+          env: buildGitEnvironmentWithoutPathspecOverrides(),
           encoding: 'utf8',
           maxBuffer: 16 * 1024 * 1024,
         },

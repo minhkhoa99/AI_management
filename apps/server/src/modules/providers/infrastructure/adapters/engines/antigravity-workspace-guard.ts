@@ -5,17 +5,14 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { AppError } from '../../../../../shared/errors/app-error';
 import { ENGINE_MANAGED_WORKSPACE_PATHS } from '../../../../../shared/runtime/engine-managed-paths';
-import { SAFE_GIT_OPTIONS } from '../../../../../shared/runtime/safe-git-options';
+import {
+  buildGitEnvironmentWithoutPathspecOverrides,
+  SAFE_GIT_OPTIONS,
+} from '../../../../../shared/runtime/safe-git-options';
 
 const GIT_TIMEOUT_MS = 20_000;
 
 const REFUSAL_CODE = 'ENGINE_WORKSPACE_UNSUPPORTED';
-const PATHSPEC_ENVIRONMENT_VARIABLES = [
-  'GIT_LITERAL_PATHSPECS',
-  'GIT_GLOB_PATHSPECS',
-  'GIT_NOGLOB_PATHSPECS',
-  'GIT_ICASE_PATHSPECS',
-];
 const nativeRealpath = promisify(realpath.native);
 
 /**
@@ -72,7 +69,7 @@ async function resolveExistingDirectory(directory: string): Promise<string> {
 /** Directories from `start` up to and including `root`, by path ancestry only. */
 function directoriesUpTo(start: string, root: string): string[] {
   const relative = path.relative(root, start);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new AppError({
       code: REFUSAL_CODE,
       message: 'Thư mục làm việc nằm ngoài thư mục của task.',
@@ -144,7 +141,7 @@ function runGit(directory: string, args: string[]): Promise<string> {
         windowsHide: true,
         encoding: 'utf8',
         maxBuffer: 16 * 1024 * 1024,
-        env: gitEnvironment(),
+        env: buildGitEnvironmentWithoutPathspecOverrides(),
       },
       (error, stdout, stderr) => {
         if (error === null) {
@@ -165,11 +162,4 @@ function runGit(directory: string, args: string[]): Promise<string> {
       },
     );
   });
-}
-
-/** The user's environment must not change how pathspecs are read. */
-function gitEnvironment(): NodeJS.ProcessEnv {
-  const environment = { ...process.env };
-  for (const name of PATHSPEC_ENVIRONMENT_VARIABLES) delete environment[name];
-  return environment;
 }
