@@ -102,7 +102,7 @@ Ngân sách bundle web (gzip, mỗi route):
 - **Cấp tiến trình** (`unhandledRejection`, `uncaughtException`): log `fatal` kèm stack và `traceId`,
   ghi `~/.aiteam/logs/crash-<timestamp>.json`, huỷ mọi phiên và lưu mốc (tối đa 5 giây), flush log,
   `exit(1)`, in hướng dẫn chạy lại `aiteam`. Không ghi log rồi chạy tiếp. Không thêm tiến trình giám sát.
-- **Khi khởi động:** kill tiến trình CLI còn sống của lần chạy trước chỉ khi PID, tên (claude/codex)
+- **Khi khởi động:** kill tiến trình CLI còn sống của lần chạy trước chỉ khi PID, tên (claude/codex/agy)
   và thời điểm bắt đầu đều khớp bản ghi; task `running` → `queued` (giữ `session_ref`),
   `cancelling` → `cancelled`.
 
@@ -127,14 +127,29 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
   chạy lệnh với quyền người dùng, kể cả trong phiên duyệt chỉ đọc). CLAUDE.md của dự án do nền tảng
   đọc (file thường, có giới hạn) và đặt đầu prompt. Codex: `codex exec --json --ignore-user-config`
   gọi thẳng CLI (không dùng `@openai/codex-sdk`).
+- Antigravity: `agy --input-format stream-json --output-format stream-json --disable-slash-commands
+--settings <JSON> [--model <tên>] [--conversation <id>]`; prompt là một sự kiện NDJSON trên stdin
+  (không `-p`, `--mode`, sandbox). Quyền đi qua `--settings` (allow/deny); luật lệnh là regex cả dòng,
+  không phân biệt hoa thường, không chứa dấu `\` (agy giải mã chuỗi luật hai lần). `denied_actions`
+  mà câu trả lời rỗng = task `failed` (`ENGINE_PERMISSION_DENIED`); backend quá tải hoặc luồng đứt =
+  `ENGINE_UNAVAILABLE` (retry được). agy vẫn nạp hook/MCP/plugin cá nhân từ `~/.gemini/config` (chấp
+  nhận). CLAUDE.md của dự án do nền tảng đặt đầu prompt (Codex thì không). Đăng nhập dùng chung
+  với Antigravity IDE (kho khoá của hệ điều hành), nền tảng không giữ token; trạng thái suy ra từ
+  `agy models`.
 - Skill của phòng (module skills): file ở `~/.aiteam/data/skills/<id>/`, mỗi lượt chép đúng skill được
   gán vào `.aiteam-skills/` (dựng lại, loại khỏi git). ZIP đọc bằng `zip-archive.ts` (không thêm thư
   viện, chặn zip slip/zip bomb/symlink); GitHub chỉ tải từ host của GitHub, không gửi token.
+- Thư mục do engine tự quản: `.agents`, `.agent`, `_agents`, `_agent`, `.gemini` (cả thư mục, ở thư
+  mục làm việc và mọi thư mục cha tới gốc worktree) bị xoá trước mỗi lượt Antigravity. Dự án đã
+  commit gì dưới các tên đó (không phân biệt hoa thường) thì engine từ chối chạy
+  (`ENGINE_WORKSPACE_UNSUPPORTED`) và không xoá gì. Mọi engine: checkpoint không thêm nội dung mới
+  dưới các tên đó (pathspec loại trừ khi `git add`); file dự án đã theo dõi vẫn được checkpoint.
 - git trên worktree luôn chạy với `core.fsmonitor=false`, hook trỏ về null device,
   `commit.gpgsign=false`, diff `--no-ext-diff`. Không mở thứ không phải file thường trong worktree.
 - Chọn model cho agent: Claude dùng tên ngắn (`opus`/`sonnet`/`haiku`/`fable`, ở
   `providers/domain/claude-code-models.ts`); Codex đọc `codex debug models` (lệnh gỡ lỗi: parse bằng
-  zod, lọc tên model an toàn, lỗi thì trả `problem` để người dùng tự nhập, không bao giờ 500).
+  zod, lọc tên model an toàn, lỗi thì trả `problem` để người dùng tự nhập, không bao giờ 500);
+  Antigravity đọc `agy models` (danh sách tab-separated, cache 10 phút, cùng cách xử lý lỗi).
 - Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
   đầu bằng `-`.
   Ngoại lệ duy nhất: lệnh kiểm thử và lệnh chạy giao diện (xem trước) của task do người dùng viết

@@ -17,7 +17,7 @@ Tài liệu nối từng phần của giao diện mẫu (`docs/design/aiteam-ui.
   - Nội dung agent (tin nhắn, code, tài liệu, output terminal) luôn hiển thị dạng text, không dùng `dangerouslySetInnerHTML`.
   - Markdown render bằng renderer chỉ cho phép thẻ an toàn.
   - Bản xem trước giao diện chạy trong `<iframe sandbox>`.
-- **Chi phí:** agent dùng tài khoản đăng nhập (Claude Code, Codex) hiển thị token và số lượt. Tiền chỉ hiển thị cho Custom API. Đây là điểm khác với bản thiết kế, cần sửa khi code.
+- **Chi phí:** agent dùng tài khoản đăng nhập (Claude Code, Codex, Antigravity) hiển thị token và số lượt. Tiền chỉ hiển thị cho Custom API. Đây là điểm khác với bản thiết kế, cần sửa khi code.
 
 ## 2. Cấu trúc thư mục giao diện
 
@@ -50,7 +50,7 @@ apps/web/src/
 | `AppSidebar` | mọi trang | điều hướng, danh sách phòng ban, đồng hồ ngân sách/hạn mức |
 | `AppTopbar` | mọi trang | tiêu đề, ô tìm kiếm toàn cục, chuông duyệt, nút hành động chính |
 | `StatusPill` | tree, bảng, ô agent | nhận `AgentStatus`, luôn có chữ, không chỉ màu |
-| `ProviderBadge` | tree, bảng, task | Claude Code / Codex / Custom API (+ tên kết nối) |
+| `ProviderBadge` | tree, bảng, task | Claude Code / Codex / Antigravity / Custom API (+ tên kết nối) |
 | `ToggleSwitch` | agent, phòng, luật, engine | `button` có `aria-pressed` |
 | `AgentAvatar` | khắp nơi | chữ viết tắt, viền theo trạng thái |
 | `KpiCard`, `MiniBars` | Tổng quan | thanh vẽ bằng CSS, không dùng thư viện chart |
@@ -106,7 +106,7 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 | Chi tiết agent: xoá khỏi phòng | `DELETE /api/departments/:id/members/:positionId` (chặn khi còn cấp dưới) | `RemoveDepartmentMemberUseCase` (xoá ghế + agent) · departments | 1 |
 | Chi tiết agent: đổi bộ não và quyền (provider, kết nối, model, quyền trong thư mục, mạng) | `PATCH /api/agents/:id/configuration` (phát `AgentConfigurationChanged`) | `ChangeAgentConfigurationUseCase` · agents | 2 |
 | Cấu hình Custom API của agent (kết nối + model) | `GET /api/provider-connections`, `PATCH /api/agents/:id/configuration` | như trên · agents + providers | 2 |
-| Model của agent Claude Code / Codex (chọn nhanh, mặc định engine, hoặc tự nhập; cả lúc thêm thành viên). Claude: `opus` / `sonnet` / `haiku` / `fable` (tên ngắn, CLI tự lên bản mới nhất). Codex: danh sách của chính Codex (`codex debug models`, mục `visibility: list`, cache 10 phút; đọc lỗi thì chỉ còn tự nhập). Sơ đồ hiện model cạnh vai trò | `GET /api/local-engines/:engine/models`, `POST /api/departments/:id/members` `{ model? }`, `PATCH /api/agents/:id/configuration` | `ListLocalEngineModelsUseCase` (+ `CliCodexModelCatalog`), như trên; engine chạy `claude --model <tên>` / `codex exec -m <tên>` · agents + providers | 5 |
+| Model của agent Claude Code / Codex / Antigravity (chọn nhanh, mặc định engine, hoặc tự nhập; cả lúc thêm thành viên). Claude: `opus` / `sonnet` / `haiku` / `fable` (tên ngắn, CLI tự lên bản mới nhất). Codex: danh sách của chính Codex (`codex debug models`, mục `visibility: list`, cache 10 phút; đọc lỗi thì chỉ còn tự nhập). Antigravity: danh sách của `agy models` (tab-separated, cache 10 phút). Sơ đồ hiện model cạnh vai trò | `GET /api/local-engines/:engine/models`, `POST /api/departments/:id/members` `{ model? }`, `PATCH /api/agents/:id/configuration` | `ListLocalEngineModelsUseCase` (+ `CliCodexModelCatalog`, `CliAntigravityModelCatalog`), như trên; engine chạy `claude --model <tên>` / `codex exec -m <tên>` / `agy --model <tên>` · agents + providers | 5 |
 | "Xem trực tiếp agent này" | điều hướng `/monitor?agent=…` | — | 4 |
 
 Quy tắc domain cần test: không tạo vòng lặp báo cáo; một ghế chỉ có một agent; tắt phòng thì task mới bị từ chối.
@@ -186,7 +186,7 @@ Loại việc của agent (code, giao diện, tài liệu, kiểm thử…) khô
 
 | Thành phần UI | API | Use case / module | GĐ |
 |---|---|---|---|
-| Thẻ Claude Code / Codex: đã cài, tài khoản đăng nhập | `GET /api/local-engines` | `ListLocalEnginesUseCase` (`claude --version`, `claude auth status`, `codex --version`, `codex login status`) · providers | 2 |
+| Thẻ Claude Code / Codex / Antigravity: đã cài, tài khoản đăng nhập | `GET /api/local-engines` | `ListLocalEnginesUseCase` (`claude --version`, `claude auth status`, `codex --version`, `codex login status`, `agy --version`, `agy models` (không có lệnh trạng thái riêng: danh sách model chạy được = đã đăng nhập)) · providers | 2 |
 | Model mặc định, chặn lệnh nguy hiểm, cho phép mạng (giới hạn trên; quyền thật do từng agent quyết) | `PATCH /api/local-engines/:engine/settings` | `UpdateLocalEngineSettingsUseCase` · providers | 2 |
 | Chạy thử trên máy | `POST /api/local-engines/:engine/test-runs`, SSE `GET /api/engine-test-runs/:testRunId/events`, huỷ `POST /api/engine-test-runs/:testRunId/cancellation` | `StartLocalEngineTestRunUseCase` (thư mục tạm, chỉ đọc, không mạng), `WatchEngineTestRunUseCase`, `CancelEngineTestRunUseCase` · providers | 2 |
 | Chạy thử một kết nối Custom API | `POST /api/provider-connections/:id/test-runs` `{ model }` + cùng SSE | `StartConnectionTestRunUseCase` · providers | 2 |
