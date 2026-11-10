@@ -127,11 +127,23 @@ git commit -m "docs: record agy verification results"
   - `interface AntigravitySettings { allowNonWorkspaceAccess: false; permissions: { allow: string[]; deny: string[] } }`
   - `buildAntigravitySettings(permissions: SessionPermissions): AntigravitySettings`
 
+Kết quả kiểm chứng (spec mục 8) đã chốt cú pháp:
+
+- Luật lệnh dạng tiền tố `command(git push)` trên Windows chỉ khớp khi trùng **nguyên dòng lệnh**. Phải dùng regex khớp cả dòng: `command(regex:(?i).*<đầu lệnh>.*)`, trong đó mỗi dấu cách của đầu lệnh thay bằng `[ ]+`. **Không được có dấu `\`** trong luật (`agy` giải mã chuỗi hai lần: `\s` bị từ chối, `\b` thành ký tự backspace). Ví dụ `git reset --hard` → `command(regex:(?i).*git[ ]+reset[ ]+--hard.*)`.
+- Cấm ghi vào thư mục cấu hình: với mỗi mục `d` của `ENGINE_MANAGED_WORKSPACE_PATHS` (tạo ở task này, xem Interfaces) thêm hai luật `write_file(d/)` và `write_file(d)`.
+
+Thêm vào Interfaces của task này (Task 4 dùng lại, không tạo lại): file `apps/server/src/shared/runtime/engine-managed-paths.ts` xuất `ENGINE_MANAGED_WORKSPACE_PATHS: readonly string[]` = `['.agents', '.agent', '_agents', '_agent', '.gemini']`. Chú thích: thư mục trong worktree mà CLI engine tự nạp cấu hình chạy được lệnh (hook, MCP, plugin, subagent, chuyển hướng thư mục cấu hình); không bao giờ được commit, bị xoá trước lượt chạy của engine đọc chúng.
+
 - [ ] **Step 1: Viết test fail**
 
 ```ts
 const readOnlyOffline = { accessLevel: 'read_only', networkAccess: false, blockDangerousCommands: true } as const;
 const editOnline = { accessLevel: 'edit_workspace', networkAccess: true, blockDangerousCommands: false } as const;
+const MANAGED_WRITE_DENIES = [
+  'write_file(.agents/)', 'write_file(.agents)', 'write_file(.agent/)', 'write_file(.agent)',
+  'write_file(_agents/)', 'write_file(_agents)', 'write_file(_agent/)', 'write_file(_agent)',
+  'write_file(.gemini/)', 'write_file(.gemini)',
+];
 
 it('read-only, offline: denies writes, commands, urls, MCP and the browser', () => {
   expect(buildAntigravitySettings(readOnlyOffline)).toEqual({
@@ -140,30 +152,37 @@ it('read-only, offline: denies writes, commands, urls, MCP and the browser', () 
       allow: [],
       deny: [
         'mcp(*)', 'execute_url(*)', 'write_file(*)', 'command(*)', 'read_url(*)',
-        'command(curl)', 'command(wget)', 'command(Invoke-WebRequest)',
-        'command(rm -rf)', 'command(git push)', 'command(git reset --hard)',
-        'command(npm publish)', 'command(Remove-Item)',
+        'command(regex:(?i).*curl.*)', 'command(regex:(?i).*wget.*)', 'command(regex:(?i).*Invoke-WebRequest.*)',
+        'command(regex:(?i).*rm[ ]+-rf.*)', 'command(regex:(?i).*git[ ]+push.*)',
+        'command(regex:(?i).*git[ ]+reset[ ]+--hard.*)', 'command(regex:(?i).*npm[ ]+publish.*)',
+        'command(regex:(?i).*Remove-Item.*)',
       ],
     },
   });
 });
 
-it('edit, online, dangerous commands allowed: commands and urls pre-approved', () => {
+it('edit, online, dangerous commands allowed: commands and urls pre-approved, config folders write-protected', () => {
   expect(buildAntigravitySettings(editOnline)).toEqual({
     allowNonWorkspaceAccess: false,
-    permissions: { allow: ['command(*)', 'read_url(*)'], deny: ['mcp(*)', 'execute_url(*)'] },
+    permissions: { allow: ['command(*)', 'read_url(*)'], deny: ['mcp(*)', 'execute_url(*)', ...MANAGED_WRITE_DENIES] },
   });
 });
 
 it('edit, offline, blocking: dangerous and network commands denied although commands are allowed', () => {
   const settings = buildAntigravitySettings({ ...editOnline, networkAccess: false, blockDangerousCommands: true });
   expect(settings.permissions.allow).toEqual(['command(*)']);
-  expect(settings.permissions.deny).toEqual(expect.arrayContaining(['read_url(*)', 'command(curl)', 'command(git push)']));
+  expect(settings.permissions.deny).toEqual(expect.arrayContaining([
+    'read_url(*)', 'command(regex:(?i).*curl.*)', 'command(regex:(?i).*git[ ]+push.*)',
+  ]));
   expect(settings.permissions.deny).not.toContain('command(*)');
 });
-```
 
-Nếu kiểm chứng B buộc dùng regex hoặc H đạt: đổi các chuỗi kỳ vọng tương ứng trước khi viết code.
+it('no rule contains a backslash (agy decodes rule strings twice)', () => {
+  for (const permissions of [readOnlyOffline, editOnline, { ...editOnline, networkAccess: false, blockDangerousCommands: true }]) {
+    expect(JSON.stringify(buildAntigravitySettings(permissions).permissions)).not.toContain('\\');
+  }
+});
+```
 
 - [ ] **Step 2: Chạy, xác nhận fail** — `npx vitest run apps/server/src/modules/providers/infrastructure/adapters/engines/antigravity-settings.test.ts` → FAIL (module chưa tồn tại).
 
@@ -256,6 +275,14 @@ it('ignores non-JSON lines, unknown events and tool steps with missing fields', 
 
 - [ ] **Step 4: Chạy, xác nhận fail.**
 
+Bổ sung từ kiểm chứng (spec mục 8), thêm test tương ứng ở Step 3:
+
+- Output của `run_command` khi chạy được có dạng `Command exited with code <N>.\n\nCommand output:\n<văn bản>` hoặc `Command exited with code <N>.\n\nNo output from the command.` → `exitCode: N`, `output` là phần văn bản (rỗng ở dạng thứ hai). Không khớp mẫu → `exitCode: null`, `output` nguyên văn.
+- `step_type` `error_message`, `system_message`, `subagent`: bỏ qua.
+- `status: "ERROR"` vẫn là `failed` kể cả khi `response` không rỗng.
+- Phân loại lỗi thêm: `UNAVAILABLE|code 503|No capacity available|stream was interrupted` → `{ code: 'ENGINE_UNAVAILABLE', retryable: true }`; `invalid model selection|not recognized as a known model` → `MODEL_NOT_FOUND` (trường hợp này không có dòng `init`, `conversation_id` rỗng, mã thoát 1).
+- Luật `deny` tường minh từ chối một tool thì **không** có `denied_actions`; agent nhận lỗi tool và trả lời bình thường → `completed`.
+
 - [ ] **Step 5: Viết translator** theo bảng ở spec 5.4. `classifyAntigravityFailure(message)` cùng dạng `classifyCodexFailure` (auth: `authentication required|sign in|log ?in|unauthori[sz]ed|401`; rate: `rate limit|quota|too many requests|429|RESOURCE_EXHAUSTED`; model: mẫu từ kiểm chứng G; còn lại `ENGINE_REPORTED_ERROR`). Thông báo `ENGINE_PERMISSION_DENIED`: `Antigravity từ chối hành động (<display_name, …>) và không trả lời. Kiểm tra quyền của agent (mức truy cập, mạng).`
 
 - [ ] **Step 6: Thêm contract test trên bản ghi** vào `engine-stream.contract.test.ts` (hàm `translateAntigravityFixture` cùng dạng hai hàm sẵn có): read-only → có `session_started`, ít nhất một `tool_call`, kết thúc `completed`, không có `file_change`; edit → có `file_change` của `hello.txt` và một `command`; denied-command → kết thúc `failed` mã `ENGINE_PERMISSION_DENIED` hoặc `completed` (theo bản ghi thật: khẳng định đúng cái đã ghi được); cancelled (exit `cancelled: true`) → đúng một `cancelled`; invalid-model → `failed` mã `MODEL_NOT_FOUND`, không retry. Mọi bản ghi: đúng một sự kiện kết thúc.
@@ -277,7 +304,7 @@ it('ignores non-JSON lines, unknown events and tool steps with missing fields', 
 
 **Interfaces:**
 - Produces:
-  - `ENGINE_MANAGED_WORKSPACE_PATHS: readonly string[]` = `['.agents/hooks.json', '.agents/mcp_config.json', '.agents/plugins']` (+ đường dẫn từ kiểm chứng C nếu có). Chú thích: file/thư mục trong worktree mà CLI engine tự nạp và chạy được lệnh; không bao giờ được commit.
+  - Consumes `ENGINE_MANAGED_WORKSPACE_PATHS` = `['.agents', '.agent', '_agents', '_agent', '.gemini']` (đã tạo ở Task 2 trong `shared/runtime/engine-managed-paths.ts`; không tạo lại). Kiểm chứng C cho thấy `agy` nạp hook từ `.agents/` của thư mục làm việc **và** của mọi thư mục cha tới gốc git, và tài liệu liệt kê nhiều thứ chạy được lệnh trong đó (hook, MCP, plugin, subagent, manifest trỏ ra ngoài, `.gemini/config.json` chuyển hướng thư mục cấu hình), nên quản lý **cả thư mục** thay vì ba file. Mọi chỗ trong task này nói "ba đường dẫn" hay `.agents/hooks.json`… đều hiểu là năm thư mục này; test dùng `.agents/hooks.json` làm ví dụ file bên trong, và ca "leaves other files in .agents/ alone" đổi thành "removes the whole .agents directory, keeps other files of the working directory".
   - `SAFE_GIT_OPTIONS: readonly string[]` (chuyển nguyên từ `git-task-workspace.ts`)
   - `clearEngineManagedPaths(workingDirectory: string): Promise<void>` — ném `AppError` mã `ENGINE_WORKSPACE_UNSUPPORTED`, `retryable: false`
 

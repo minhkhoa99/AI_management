@@ -293,6 +293,26 @@ chậm tới mức hết giờ). Mỗi mục ghi lại kết quả vào file nà
 | G | Hình dạng lỗi khi model sai và khi hết hạn mức (dòng `result`/`AGY_ERROR`) | Bổ sung mẫu phân loại ở 5.4. |
 | H | Luật `deny: write_file` vào `.agents/` viết đường dẫn thế nào thì khớp trên Windows? | Bỏ luật này; 5.5 vẫn đủ. |
 
+## 8. Kết quả kiểm chứng (2026-11-10/11, `agy` 1.5.4, Windows 11)
+
+| # | Kết quả | Bằng chứng |
+|---|---|---|
+| A | Đạt | Với `deny: write_file(*), command(*)`: đọc `note.txt` được; `write_file` và `run_command` trả `TOOL_ERROR … Matches user-configured deny rule`; `x.txt` không được tạo; agent vẫn trả lời. |
+| B | Đạt với regex | `allow: command(*)` cho chạy `node --version`. Luật tiền tố chỉ khớp khi trùng nguyên dòng: `command(git push)` chặn `git push` nhưng `command(Remove-Item)` để lọt `Remove-Item note.txt` (file bị xoá), `command(npm publish)` để lọt `npm publish --dry-run`. Regex khớp **cả dòng**: `(?i)rm[ ]+-rf` không chặn `rm -rf sub`; `(?i).*remove-item.*`, `(?i).*npm[ ]+publish.*`, `(?i).*git[ ]+push.*` chặn được, kể cả `cmd /c "git push"`. Luật chứa `\s` bị từ chối khi khởi động (`invalid escape sequence`), `\b` bị hiểu thành backspace: không dùng dấu `\`. |
+| C | Hook chạy | `.agents/hooks.json` ở thư mục làm việc và ở gốc git (khi chạy từ thư mục con) đều được nạp và thực thi ở chế độ headless (`JSON hook "jsonhook__probe_PreToolUse_0_0" …`). Hook do agent ghi giữa lượt **không** có hiệu lực trong lượt đó, có hiệu lực ở lượt sau. Tài liệu còn liệt kê trong `.agents/`: plugin, MCP, subagent (`agents/*.md` có `commandExecutionPolicy`), manifest trỏ ra ngoài; thư mục tương đương `.agent/`, `_agents/`, `_agent/`; và `.gemini/config.json` chuyển hướng thư mục cấu hình. |
+| D | Đạt | Lượt 2 với `--conversation <id>` trả đúng số đã nhớ, cùng `conversation_id`. |
+| E | Đạt | `--settings` nhận JSON inline khi spawn không qua shell. |
+| F | Đạt | Chỉ có một tiến trình `agy.exe`; sau `taskkill /T /F` không còn gì. |
+| G | Ghi nhận | Model sai: `result.status: "ERROR"`, `error: "invalid model selection (--model …): model … is not recognized as a known model…"`, không có `init`, mã thoát 1. Quá tải: `API error (attempt 5): UNAVAILABLE (code 503): No capacity available for model …`. Rớt luồng: `The stream was interrupted. Please continue the task you were working on.` |
+| H | Đạt | `deny: write_file(.agents/), write_file(.agents)` chặn tạo `.agents/hooks.json`, vẫn cho tạo `x.txt`. |
+
+Hệ quả so với mục 5:
+
+- 5.3: mọi luật lệnh dùng `command(regex:(?i).*<đầu lệnh, dấu cách → [ ]+>.*)`, không có dấu `\`.
+- 5.5: "ba đường dẫn" mở rộng thành **năm thư mục** `.agents`, `.agent`, `_agents`, `_agent`, `.gemini` (cả thư mục), ở thư mục làm việc và mọi thư mục cha tới gốc worktree. Dự án đã commit một trong các thư mục này thì engine Antigravity từ chối chạy.
+- 5.4: thêm `ENGINE_UNAVAILABLE` (retry được) cho quá tải/rớt luồng; output lệnh có dòng `Command exited with code N.`; luật `deny` tường minh không sinh `denied_actions`.
+- Thêm loại bước `error_message`, `system_message`, `subagent`: bỏ qua.
+
 ## 7. Quyết định của ai
 
 **Chủ dự án đã chốt:** thêm engine Antigravity chạy bằng CLI `agy`, dùng đăng nhập sẵn có trên máy;
