@@ -109,6 +109,10 @@ describe('GitTaskWorkspace with agent-planted files', () => {
     mkdirSync(path.join(worktreePath, '.agents'));
     writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
     writeFileSync(path.join(worktreePath, 'sub', '_agent', 'plugins', 'p', 'hooks.json'), '{}');
+    mkdirSync(path.join(worktreePath, '.Gemini'));
+    writeFileSync(path.join(worktreePath, '.Gemini', 'x'), '{}');
+    // A rule the agent wrote must not bring the folders back.
+    writeFileSync(path.join(worktreePath, '.gitignore'), '!.agents/\n!_agent/\n');
     writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
 
     expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
@@ -116,5 +120,12 @@ describe('GitTaskWorkspace with agent-planted files', () => {
     const tracked = execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
     expect(tracked).toContain('normal.txt');
     expect(tracked).not.toContain('hooks.json');
+    expect(tracked.toLowerCase()).not.toContain('.gemini');
+    // Nothing leaks into the exclude file shared with the user's own checkout.
+    const exclude = path.join(repositoryDirectory, '.git', 'info', 'exclude');
+    const excludeText = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+    for (const name of ['.agents', '.agent', '_agents', '_agent', '.gemini']) {
+      expect(excludeText).not.toContain(name);
+    }
   });
 });

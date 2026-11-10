@@ -110,10 +110,6 @@ export class GitTaskWorkspace implements TaskWorkspace {
     mkdirSync(agentDirectory, { recursive: true });
     // An agent could have replaced the folder with a link to somewhere else.
     if (relativeFolder !== '') resolveInsideWorktree(worktreePath, relativeFolder);
-    // Engine-managed folders (config an engine loads) are never committed, whatever the engine.
-    for (const folder of ENGINE_MANAGED_WORKSPACE_PATHS) {
-      await this.excludeFromGit(worktreePath, folder);
-    }
     const qaDocumentPaths = await this.copyQaDocuments(
       worktreePath,
       agentDirectory,
@@ -129,7 +125,16 @@ export class GitTaskWorkspace implements TaskWorkspace {
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
     if (!existsSync(worktreePath)) return null;
-    await this.runGit(worktreePath, ['add', '-A']);
+    // Engine-managed folders (config an engine loads) are never committed, whatever the engine.
+    // Pathspecs, not info/exclude: that file is shared with the user's own checkout and loses
+    // against a `!` rule in a .gitignore the agent wrote.
+    await this.runGit(worktreePath, [
+      'add',
+      '-A',
+      '--',
+      '.',
+      ...ENGINE_MANAGED_WORKSPACE_PATHS.map((name) => `:(exclude,icase,glob)**/${name}/**`),
+    ]);
     const hasChanges = !(await this.succeeds(worktreePath, [
       'diff',
       '--no-ext-diff',
