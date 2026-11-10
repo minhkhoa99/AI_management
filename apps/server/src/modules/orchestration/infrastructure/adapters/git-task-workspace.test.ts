@@ -171,4 +171,42 @@ describe('GitTaskWorkspace with agent-planted files', () => {
     expect(changed).toContain('normal.txt');
     expect(changed).not.toContain('hooks.json');
   });
+
+  describe('in a repository without tracked files (task without a chosen folder)', () => {
+    function prepareWithoutFolder() {
+      return workspace.prepareTaskWorkspace({
+        taskId: 'task-empty',
+        workingDirectory: null,
+        worktreePath: null,
+        qaDocuments: [],
+      });
+    }
+
+    function listTracked(worktreePath: string): string {
+      return execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
+    }
+
+    it('checkpoints a file the agent created', async () => {
+      const { worktreePath } = await prepareWithoutFolder();
+      writeFileSync(path.join(worktreePath, 'hello.txt'), 'hi');
+
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+      expect(listTracked(worktreePath)).toContain('hello.txt');
+    });
+
+    it('commits nothing when only an engine-managed folder was created', async () => {
+      const { worktreePath } = await prepareWithoutFolder();
+      mkdirSync(path.join(worktreePath, '.agents'));
+      writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).toBeNull();
+      expect(listTracked(worktreePath)).not.toContain('hooks.json');
+    });
+
+    it('returns null when nothing changed', async () => {
+      const { worktreePath } = await prepareWithoutFolder();
+
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).toBeNull();
+    });
+  });
 });

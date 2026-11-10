@@ -128,8 +128,9 @@ export class GitTaskWorkspace implements TaskWorkspace {
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
     if (!existsSync(worktreePath)) return null;
-    // Changes to files the project already tracks are always saved, whatever their name.
-    await this.runGit(worktreePath, ['add', '-u', '--', '.']);
+    // Changes to files the project already tracks are always saved, whatever their name. No
+    // pathspec: `-u -- .` fails when nothing is tracked yet, and git runs from the worktree root.
+    await this.runGit(worktreePath, ['add', '-u']);
     // New files under engine-managed folder names are never committed, whatever the engine.
     // Pathspecs, not info/exclude: that file is shared with the user's own checkout and loses
     // against a `!` rule in a .gitignore the agent wrote.
