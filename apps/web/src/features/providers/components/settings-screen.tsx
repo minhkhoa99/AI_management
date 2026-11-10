@@ -20,7 +20,11 @@ claude            # gõ /login trong cửa sổ này
 npm install -g @openai/codex
 codex login
 
-# 3. Kiểm tra cả hai
+# 3. Antigravity CLI
+irm https://antigravity.google/cli/install.ps1 | iex
+agy   # chạy một lần để đăng nhập
+
+# 4. Kiểm tra cả ba
 aimanagement doctor`;
 
 type ConnectionPanel =
@@ -39,7 +43,7 @@ export function SettingsScreen() {
         <div className={styles.sectionHeader}>
           <div>
             <h2 id="local-engines-heading" className={controlStyles.panelTitle}>
-              Bộ não lập trình: Claude Code và Codex
+              Bộ não lập trình: Claude Code, Codex và Antigravity
             </h2>
             <p className={styles.sectionIntro}>
               Chạy ngay trên máy này bằng tài khoản bạn đã đăng nhập, không dùng API key. Quyền của
@@ -57,7 +61,9 @@ export function SettingsScreen() {
         </div>
         {isGuideOpen && <pre className={styles.codeBlock}>{INSTALL_GUIDE}</pre>}
         {engines.status === 'loading' && (
-          <p className={styles.fieldHint}>Đang kiểm tra Claude Code và Codex trên máy…</p>
+          <p className={styles.fieldHint}>
+            Đang kiểm tra Claude Code, Codex và Antigravity trên máy…
+          </p>
         )}
         {engines.status === 'error' && (
           <StatusNotice outcome={{ tone: 'error', error: engines.error }} />

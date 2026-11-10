@@ -10,6 +10,12 @@ import styles from './settings.module.css';
 const ENGINE_DEFAULT_OPTION = '';
 const CUSTOM_MODEL_OPTION = '__custom__';
 
+const MODEL_NAME_PLACEHOLDER: Record<LocalEngine, string> = {
+  claude_code: 'vd. claude-sonnet-5-5',
+  codex: 'vd. gpt-5.6-terra',
+  antigravity: 'vd. gemini-3.8-flash-high',
+};
+
 interface LocalEngineModelFieldProps {
   engine: LocalEngine;
   /** '' = the engine's default model (Cài đặt API). */
@@ -18,8 +24,9 @@ interface LocalEngineModelFieldProps {
 }
 
 /**
- * Model of one agent on Claude Code / Codex: a quick pick, the engine default or any name.
- * Claude's picks are aliases (newest model of each family); Codex's come from its own catalog.
+ * Model of one agent on Claude Code / Codex / Antigravity: a quick pick, the engine default or any
+ * name. Claude's picks are aliases (newest model of each family); Codex's and Antigravity's come
+ * from their own catalogs.
  */
 export function LocalEngineModelField({ engine, value, onChange }: LocalEngineModelFieldProps) {
   const modelList = useApiQuery(`local-engine-models:${engine}`, () =>
@@ -72,7 +79,7 @@ export function LocalEngineModelField({ engine, value, onChange }: LocalEngineMo
             type="text"
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            placeholder={engine === 'claude_code' ? 'vd. claude-sonnet-5-5' : 'vd. gpt-5.6-terra'}
+            placeholder={MODEL_NAME_PLACEHOLDER[engine]}
             className={`${controlStyles.fieldInput} ${styles.monoInput}`}
           />
         </label>
