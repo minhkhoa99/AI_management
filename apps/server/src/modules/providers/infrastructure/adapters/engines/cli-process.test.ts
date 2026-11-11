@@ -82,4 +82,46 @@ describe('streamCliOutput', () => {
     expect(childPid).toBeDefined();
     expect(() => process.kill(childPid as number, 0)).toThrow();
   });
+
+  describe('stdin handling', () => {
+    const script = `
+      process.stdin.on('data', () => console.log('received'));
+      process.stdin.on('end', () => { console.log('stdin-ended'); process.exit(0); });
+      process.stdin.resume();
+      setTimeout(() => process.exit(0), 5000);`;
+    const lineTexts = (outputs: CliOutput[]) =>
+      outputs.flatMap((output) => (output.kind === 'line' ? [output.text] : []));
+
+    it('closes stdin after the prompt by default', async () => {
+      const outputs = await collectOutputs(
+        streamCliOutput(
+          {
+            executable: fakeCli(script),
+            args: [],
+            workingDirectory: process.cwd(),
+            stdinText: 'x\n',
+          },
+          AbortSignal.timeout(10_000),
+        ),
+      );
+      expect(lineTexts(outputs)).toContain('stdin-ended');
+    });
+
+    it('keeps stdin open when keepStdinOpen is true', async () => {
+      const outputs = await collectOutputs(
+        streamCliOutput(
+          {
+            executable: fakeCli(script),
+            args: [],
+            workingDirectory: process.cwd(),
+            stdinText: 'x\n',
+            keepStdinOpen: true,
+          },
+          AbortSignal.timeout(800),
+        ),
+      );
+      expect(lineTexts(outputs)).toContain('received');
+      expect(lineTexts(outputs)).not.toContain('stdin-ended');
+    });
+  });
 });

@@ -9,6 +9,11 @@ function readFixtureLines(fixtureName: string): string[] {
     .filter((line) => line !== '');
 }
 
+it('keeps the fixture a valid recording', () => {
+  const lines = readFixtureLines('codex-rate-limits.jsonl');
+  expect(() => lines.forEach((line) => JSON.parse(line))).not.toThrow();
+});
+
 describe('parseCodexRateLimitLine', () => {
   it('reads primary and secondary windows from a real recording', () => {
     const readings = readFixtureLines('codex-rate-limits.jsonl')
@@ -88,6 +93,20 @@ describe('parseCodexRateLimitLine', () => {
       ['Named', 'other', '2 giờ'],
       ['Named', 'other', '2 ngày'],
     ]);
+  });
+
+  it('falls back to rateLimits when rateLimitsByLimitId is empty', () => {
+    const line = JSON.stringify({
+      id: 2,
+      result: {
+        rateLimits: {
+          limitId: 'codex',
+          primary: { usedPercent: 10, windowDurationMins: 300, resetsAt: 1794433541 },
+        },
+        rateLimitsByLimitId: {},
+      },
+    });
+    expect(parseCodexRateLimitLine(line)?.buckets[0]?.remainingPercent).toBe(90);
   });
 
   it('ignores other lines', () => {

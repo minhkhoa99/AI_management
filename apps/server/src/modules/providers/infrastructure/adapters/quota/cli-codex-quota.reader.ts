@@ -104,11 +104,12 @@ export function parseCodexRateLimitLine(line: string): EngineQuotaReading | null
   }
   const result = parsed.data.result;
   if (result === undefined) return { state: 'unreadable', buckets: [] };
-  const snapshots: Snapshot[] = result.rateLimitsByLimitId
-    ? Object.values(result.rateLimitsByLimitId)
-    : result.rateLimits
-      ? [result.rateLimits]
-      : [];
+  const snapshots: Snapshot[] =
+    result.rateLimitsByLimitId && Object.keys(result.rateLimitsByLimitId).length > 0
+      ? Object.values(result.rateLimitsByLimitId)
+      : result.rateLimits
+        ? [result.rateLimits]
+        : [];
   const buckets: EngineQuotaBucket[] = [];
   for (const snapshot of snapshots) {
     for (const window of [snapshot.primary, snapshot.secondary]) {
