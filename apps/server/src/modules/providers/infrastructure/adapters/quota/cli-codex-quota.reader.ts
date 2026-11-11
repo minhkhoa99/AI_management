@@ -113,15 +113,15 @@ export function parseCodexRateLimitLine(line: string): EngineQuotaReading | null
         : [];
   const buckets: EngineQuotaBucket[] = [];
   for (const snapshot of snapshots) {
-    for (const window of [snapshot.primary, snapshot.secondary]) {
-      if (!window) continue;
-      const exhausted = Boolean(snapshot.rateLimitReachedType);
+    const windows = [snapshot.primary, snapshot.secondary].filter((window): window is CodexWindow =>
+      Boolean(window),
+    );
+    const reachedWindow = snapshot.rateLimitReachedType ? findReachedWindow(windows) : null;
+    for (const window of windows) {
       const checked = engineQuotaBucketSchema.safeParse({
         group: snapshot.limitName ?? snapshot.limitId ?? null,
         ...describeWindow(window.windowDurationMins),
-        remainingPercent: exhausted
-          ? 0
-          : Math.min(100, Math.max(0, Math.round(100 - window.usedPercent))),
+        remainingPercent: window === reachedWindow ? 0 : remainingPercentOf(window),
         resetsAt: epochSecondsToIso(window.resetsAt),
         appliesToModels: null,
       });
@@ -130,6 +130,37 @@ export function parseCodexRateLimitLine(line: string): EngineQuotaReading | null
     }
   }
   return { state: buckets.length === 0 ? 'not_applicable' : 'ok', buckets };
+}
+
+type CodexWindow = z.infer<typeof windowSchema>;
+
+function remainingPercentOf(window: CodexWindow): number {
+  return Math.min(100, Math.max(0, Math.round(100 - window.usedPercent)));
+}
+
+/**
+ * Codex says the limit is reached but not which window: when no window already shows 0% left, the
+ * fullest one (on a tie, the one that resets first) is the one that ran out. The others keep
+ * their real numbers, so the wait is for that window's reset and nothing is made up.
+ */
+function findReachedWindow(windows: readonly CodexWindow[]): CodexWindow | null {
+  if (windows.some((window) => remainingPercentOf(window) === 0)) return null;
+  let fullest: CodexWindow | null = null;
+  for (const window of windows) {
+    if (
+      fullest === null ||
+      window.usedPercent > fullest.usedPercent ||
+      (window.usedPercent === fullest.usedPercent &&
+        resetOrInfinity(window) < resetOrInfinity(fullest))
+    ) {
+      fullest = window;
+    }
+  }
+  return fullest;
+}
+
+function resetOrInfinity(window: CodexWindow): number {
+  return window.resetsAt ?? Number.POSITIVE_INFINITY;
 }
 
 function describeWindow(minutes: number): Pick<EngineQuotaBucket, 'window' | 'windowLabel'> {

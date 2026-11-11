@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import type { EngineQuotaBucket } from '@aiteam/contracts';
 import { describe, expect, it } from 'vitest';
+import { QuotaWaitPlanner } from '../../../../orchestration/application/use-cases/quota-wait-planner';
 import { CODEX_QUOTA_REQUEST_LINES, parseCodexRateLimitLine } from './cli-codex-quota.reader';
 
 function readFixtureLines(fixtureName: string): string[] {
@@ -57,6 +59,52 @@ describe('parseCodexRateLimitLine', () => {
       },
     });
     expect(parseCodexRateLimitLine(line)?.buckets[0]?.remainingPercent).toBe(0);
+  });
+
+  describe('a reached limit with two windows', () => {
+    const FIVE_HOUR_RESET = Math.floor(Date.now() / 1000) + 2 * 3600;
+    const WEEK_RESET = Math.floor(Date.now() / 1000) + 3 * 86_400;
+    const reachedLine = (fiveHourUsed: number, weekUsed: number) =>
+      JSON.stringify({
+        id: 2,
+        result: {
+          rateLimits: {
+            limitId: 'codex',
+            rateLimitReachedType: 'rate_limit_reached',
+            primary: {
+              usedPercent: fiveHourUsed,
+              windowDurationMins: 300,
+              resetsAt: FIVE_HOUR_RESET,
+            },
+            secondary: { usedPercent: weekUsed, windowDurationMins: 10080, resetsAt: WEEK_RESET },
+          },
+          rateLimitsByLimitId: null,
+        },
+      });
+    const plannerOver = (buckets: EngineQuotaBucket[]) =>
+      new QuotaWaitPlanner({
+        readFreshEngineQuota: (engine) =>
+          Promise.resolve({ engine, state: 'ok', buckets, checkedAt: null, lastSuccessAt: null }),
+        requestEngineQuotaRefresh: () => undefined,
+      });
+
+    it('keeps the real percentages when a window is already full', async () => {
+      const buckets = parseCodexRateLimitLine(reachedLine(100, 40))?.buckets ?? [];
+      expect(buckets.map((bucket) => bucket.remainingPercent)).toEqual([0, 60]);
+      const wait = await plannerOver(buckets).planQuotaWait({ provider: 'codex', model: null });
+      expect(wait?.runAfter).toBe(new Date(FIVE_HOUR_RESET * 1000 + 60_000).toISOString());
+      expect(wait?.windowLabel).toBe('5 giờ');
+    });
+
+    it('zeroes only the fullest window when none is at 0%', () => {
+      const buckets = parseCodexRateLimitLine(reachedLine(80, 95))?.buckets ?? [];
+      expect(buckets.map((bucket) => bucket.remainingPercent)).toEqual([20, 0]);
+    });
+
+    it('zeroes the window that resets first on a tie', () => {
+      const buckets = parseCodexRateLimitLine(reachedLine(90, 90))?.buckets ?? [];
+      expect(buckets.map((bucket) => bucket.remainingPercent)).toEqual([0, 10]);
+    });
   });
 
   it('maps a broken login to not_signed_in', () => {
