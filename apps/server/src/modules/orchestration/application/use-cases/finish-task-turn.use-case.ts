@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { formatQuotaResumeTime, localEngineSchema } from '@aiteam/contracts';
+import { localEngineSchema } from '@aiteam/contracts';
 import type { TerminalEngineEvent } from '../../../../shared/runtime/agent-session-supervisor';
 import { interpretAgentReport, type AgentReport } from '../../domain/agent-report';
 import { formatTaskCode, type Task } from '../../domain/entities/task';
@@ -15,7 +15,7 @@ import {
   type TestCommandRunner,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
-import { QuotaWaitPlanner } from './quota-wait-planner';
+import { buildQuotaWaitNote, QuotaWaitPlanner } from './quota-wait-planner';
 import { StepReviewLauncher } from './step-review-launcher';
 import { TaskCheckpoints } from './task-checkpoints';
 import { TaskProgression } from './task-progression';
@@ -274,10 +274,7 @@ export class FinishTaskTurnUseCase {
       code: terminal.code,
       message: terminal.message,
     });
-    task.waitForQuota({
-      runAfter: wait.runAfter,
-      note: `⏸ Chờ hạn mức ${wait.windowLabel} của ${wait.engineLabel} · tự chạy tiếp lúc ${formatQuotaResumeTime(wait.runAfter)}`,
-    });
+    task.waitForQuota({ runAfter: wait.runAfter, note: buildQuotaWaitNote(wait) });
     return true;
   }
 

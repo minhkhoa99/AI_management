@@ -50,6 +50,8 @@ export interface TaskState {
   baseSha: string | null;
   /** Set on a subtask: the task whose agent split its step into this one (one level deep). */
   parentTaskId: string | null;
+  /** The superior's review of the current step waits for the plan quota: reopen it next turn. */
+  reviewPending: boolean;
 }
 
 export interface TaskContent {
@@ -102,6 +104,7 @@ export class Task {
       statusNote: null,
       baseSha: null,
       parentTaskId: null,
+      reviewPending: false,
     });
   }
 
@@ -225,6 +228,7 @@ export class Task {
   /** An agent session starts on `stepId` (null: no workflow) with the agent's current engine. */
   startTurn(stepId: string | null, snapshot: EngineSnapshot): void {
     this.state.status = 'running';
+    this.state.reviewPending = false;
     this.state.currentStepId = stepId;
     this.state.assigneeAgentId = snapshot.agentId;
     this.state.engineSnapshot = snapshot;
@@ -259,6 +263,7 @@ export class Task {
     note?: string;
   }): void {
     this.state.status = 'queued';
+    this.state.reviewPending = false;
     this.state.currentStepId = input.stepId;
     this.state.stepAttempt = input.retriesUsed;
     this.state.runAfter = input.runAfter ?? null;
@@ -273,6 +278,29 @@ export class Task {
     this.state.status = 'queued';
     this.state.runAfter = input.runAfter;
     this.state.statusNote = input.note;
+  }
+
+  /**
+   * The superior's review hit the reviewer's plan quota: back in the queue until it resets, and
+   * the next turn opens the review again (the step's work is done and stays as it is).
+   */
+  waitForReviewQuota(input: { runAfter: string; note: string }): void {
+    this.waitForQuota(input);
+    this.state.reviewPending = true;
+  }
+
+  /** Whether the next turn is the superior's review; the answer is given once. */
+  takePendingReview(): boolean {
+    const pending = this.state.reviewPending;
+    this.state.reviewPending = false;
+    return pending;
+  }
+
+  /** The reopened review runs: the task is busy again, on the same step and worker. */
+  startPendingReview(): void {
+    this.state.status = 'running';
+    this.state.runAfter = null;
+    this.state.statusNote = null;
   }
 
   /** Returns how many retryable engine failures happened in a row. */
@@ -305,22 +333,26 @@ export class Task {
 
   waitForApproval(note: string): void {
     this.state.status = 'waiting_approval';
+    this.state.reviewPending = false;
     this.state.statusNote = note;
   }
 
   succeed(): void {
     this.state.status = 'succeeded';
+    this.state.reviewPending = false;
     this.state.statusNote = null;
     this.state.pendingFeedback = null;
   }
 
   fail(note: string): void {
     this.state.status = 'failed';
+    this.state.reviewPending = false;
     this.state.statusNote = note;
   }
 
   beginCancelling(): void {
     this.state.status = 'cancelling';
+    this.state.reviewPending = false;
     this.state.statusNote = 'Đã gửi tín hiệu huỷ, chờ agent dừng…';
   }
 

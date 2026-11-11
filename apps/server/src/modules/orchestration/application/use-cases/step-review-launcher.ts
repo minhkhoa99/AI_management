@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { buildCompletionGoal } from '@aiteam/contracts';
+import { buildCompletionGoal, type AgentProvider } from '@aiteam/contracts';
 import { APP_LOGGER, type AppLogger } from '../../../../shared/logging/app-logger';
 import {
   AgentSessionSupervisor,
@@ -25,15 +25,25 @@ import {
   type TaskEventLog,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
+import { buildQuotaWaitNote, QuotaWaitPlanner } from './quota-wait-planner';
 import { SessionEventRecorder } from './session-event-recorder';
 import { TaskProgression } from './task-progression';
 import { TaskRemoval } from './task-removal';
 import { TaskRunRegistry } from './task-run-registry';
 
+/** Who reviews, with the engine and model the review session started on. */
+interface ReviewerEngine {
+  agentId: string;
+  name: string;
+  provider: AgentProvider;
+  model: string | null;
+}
+
 /**
  * Gate "Cấp trên duyệt": the superior of whoever did the step reviews it in a read-only session
  * and answers pass or fail. Without an available superior (or if the review cannot run), the
- * user approves instead.
+ * user approves instead. A review stopped by the reviewer's plan quota waits for the reset and
+ * is opened again (StartTaskTurnUseCase).
  */
 @Injectable()
 export class StepReviewLauncher {
@@ -51,6 +61,7 @@ export class StepReviewLauncher {
     private readonly approvalRequests: ApprovalRequests,
     private readonly sessionEventRecorder: SessionEventRecorder,
     private readonly taskRemoval: TaskRemoval,
+    private readonly quotaWaitPlanner: QuotaWaitPlanner,
   ) {}
 
   /** Starts the review, or asks the user; the caller must not touch the task afterwards. */
@@ -138,6 +149,8 @@ export class StepReviewLauncher {
         this.finishStepReview(task.id, terminal, step, worker, workerSummary, {
           agentId: superiorSnapshot.agentId,
           name: superiorSnapshot.name,
+          provider: superiorSnapshot.provider,
+          model: superiorSnapshot.model,
         }),
     });
     this.runRegistry.attachStopHandle(task.id, () =>
@@ -151,7 +164,7 @@ export class StepReviewLauncher {
     step: WorkflowStepState,
     worker: { agentId: string; name: string },
     workerSummary: string,
-    reviewer: { agentId: string; name: string },
+    reviewer: ReviewerEngine,
   ): Promise<void> {
     const stopReason = this.runRegistry.releaseRun(taskId);
     const task = this.taskRepository.findTaskById(taskId);
@@ -163,6 +176,9 @@ export class StepReviewLauncher {
     if (stopReason === 'pause') {
       task.pause();
       this.taskRepository.updateTask(task);
+      return;
+    }
+    if (terminal.kind === 'failed' && (await this.waitForReviewQuota(task, terminal, reviewer))) {
       return;
     }
     if (terminal.kind !== 'completed') {
@@ -183,6 +199,36 @@ export class StepReviewLauncher {
       passed ? null : `${reviewer.name} (cấp trên) yêu cầu sửa: ${report.summary}`,
     );
     this.taskRepository.updateTask(task);
+  }
+
+  /**
+   * The reviewer's plan quota is used up: the task waits for the reset, then the review is opened
+   * again. A review only reads, so there is no checkpoint to save.
+   */
+  private async waitForReviewQuota(
+    task: Task,
+    terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
+    reviewer: ReviewerEngine,
+  ): Promise<boolean> {
+    if (terminal.code !== 'RATE_LIMITED') return false;
+    const wait = await this.quotaWaitPlanner.planQuotaWait(reviewer);
+    if (wait === null) return false;
+    this.eventLog.recordTaskEvent({
+      taskId: task.id,
+      agentId: reviewer.agentId,
+      kind: 'quota_wait',
+      payload: {
+        engine: wait.engineLabel,
+        windowLabel: wait.windowLabel,
+        runAfter: wait.runAfter,
+        code: terminal.code,
+        message: terminal.message,
+        reviewerName: reviewer.name,
+      },
+    });
+    task.waitForReviewQuota({ runAfter: wait.runAfter, note: buildQuotaWaitNote(wait) });
+    this.taskRepository.updateTask(task);
+    return true;
   }
 
   private askUserInstead(

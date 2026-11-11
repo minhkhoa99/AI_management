@@ -31,12 +31,13 @@ interface TaskRow {
   status_note: string | null;
   base_sha: string | null;
   parent_task_id: string | null;
+  review_pending: number;
 }
 
 const TASK_COLUMNS = `id, sequence_number, department_id, workflow_id, title, description, criteria,
   priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, test_command,
   engine_snapshot_json, step_attempt, engine_failures, run_after, worktree_path, pending_feedback,
-  status_note, base_sha, preview_command, parent_task_id`;
+  status_note, base_sha, preview_command, review_pending, parent_task_id`;
 
 @Injectable()
 export class SqliteTaskRepository implements TaskRepository {
@@ -58,13 +59,13 @@ export class SqliteTaskRepository implements TaskRepository {
       'SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_number FROM tasks',
     );
     this.insertStatement = database.prepare(
-      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 24 }, () => '?').join(', ')})`,
+      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 25 }, () => '?').join(', ')})`,
     );
     this.updateStatement = database.prepare(
       `UPDATE tasks SET workflow_id = ?, title = ?, description = ?, criteria = ?, priority = ?,
          assignee_agent_id = ?, current_step_id = ?, status = ?, working_dir = ?, session_ref = ?,
          test_command = ?, engine_snapshot_json = ?, step_attempt = ?, engine_failures = ?,
-         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, preview_command = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, preview_command = ?, review_pending = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE id = ?`,
     );
     this.deleteStatement = database.prepare('DELETE FROM tasks WHERE id = ?');
@@ -208,6 +209,7 @@ function restoreTask(row: TaskRow): Task {
     baseSha: row.base_sha,
     previewCommand: row.preview_command,
     parentTaskId: row.parent_task_id,
+    reviewPending: Number(row.review_pending) === 1,
   });
 }
 
@@ -222,5 +224,6 @@ function executionColumns(state: ReturnType<Task['toState']>) {
     state.statusNote,
     state.baseSha,
     state.previewCommand,
+    state.reviewPending ? 1 : 0,
   ] as const;
 }

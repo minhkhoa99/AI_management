@@ -4,15 +4,17 @@ import path from 'node:path';
 import {
   type AgentDetail,
   agentDetailSchema,
+  approvalListSchema,
   type Department,
   departmentSchema,
   type EngineQuotaBucket,
   type EngineQuotaReport,
   taskDetailSchema,
   taskEventListSchema,
+  workflowSchema,
 } from '@aiteam/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ScriptedEngine, waitFor } from '../../test-support/scripted-engine';
+import { ScriptedEngine, stepNameOf, waitFor } from '../../test-support/scripted-engine';
 import {
   DEFAULT_FAKE_LOCAL_ENGINES,
   startTestApplication,
@@ -213,4 +215,121 @@ describe('quota wait', () => {
       'quota read',
     );
   }, 60_000);
+  describe('superior review', () => {
+    let reviewWorkflowId: string;
+
+    beforeEach(async () => {
+      const pm = agentDetailSchema.parse(
+        (
+          await app.callApi('POST', `/api/departments/${department.id}/members`, {
+            name: 'PM Linh',
+            role: 'pm',
+            provider: 'claude_code',
+            reportsToPositionId: departmentHead.positionId,
+          })
+        ).body,
+      );
+      await app.callApi('PATCH', `/api/agents/${pm.id}/configuration`, {
+        provider: 'claude_code',
+        accessLevel: 'edit_workspace',
+        networkAccess: false,
+      });
+      // Tiếp nhận (manager) → Chia task (pm, reviewed by the manager) → Phát triển (no dev here).
+      reviewWorkflowId = workflowSchema.parse(
+        (
+          await app.callApi('POST', `/api/departments/${department.id}/workflows`, {
+            name: 'Phần mềm',
+            source: { kind: 'template', templateId: 'software' },
+          })
+        ).body,
+      ).id;
+    });
+
+    async function startReviewedTask(): Promise<string> {
+      const response = await app.callApi('POST', '/api/tasks', {
+        departmentId: department.id,
+        title: 'API đăng nhập',
+        criteria: 'Sai mật khẩu trả 401',
+        priority: 1,
+        workingDirectory: path.join(project, 'shop'),
+        workflowId: reviewWorkflowId,
+      });
+      expect(response.statusCode, JSON.stringify(response.body)).toBe(201);
+      return taskDetailSchema.parse(response.body).id;
+    }
+
+    const readReviewPending = (taskId: string) =>
+      (
+        app.database.prepare('SELECT review_pending FROM tasks WHERE id = ?').get(taskId) as {
+          review_pending: number;
+        }
+      ).review_pending;
+    const pendingApprovals = async () =>
+      approvalListSchema.parse((await app.callApi('GET', '/api/approvals?status=pending')).body);
+    const workedSteps = () => engine.requests.map((request) => stepNameOf(request.prompt));
+
+    it('waits for the quota reset, then opens the review again', async () => {
+      let reviewAttempts = 0;
+      engine.failWith = (request) => {
+        if (stepNameOf(request.prompt) !== 'review') return null;
+        reviewAttempts += 1;
+        return reviewAttempts === 1 ? RATE_LIMIT : null;
+      };
+      const reset = Date.now() + 2 * 3_600_000;
+      quotaBuckets = [bucket({ resetsAt: new Date(reset).toISOString() })];
+      const taskId = await startReviewedTask();
+
+      const waiting = await waitForRateLimitRecord(taskId);
+      expect(waiting.statusNote).toMatch(
+        /^⏸ Chờ hạn mức 5 giờ của Claude Code · tự chạy tiếp lúc \d{2}:\d{2} \d{2}\/\d{2}$/,
+      );
+      expect(readReviewPending(taskId)).toBe(1);
+      expect(Date.parse(readStoredTask(taskId).run_after!)).toBe(reset + 60_000);
+      expect(await pendingApprovals()).toEqual([]);
+      expect(workedSteps()).toEqual(['Tiếp nhận và lập kế hoạch', 'Chia task', 'review']);
+      const events = taskEventListSchema.parse(
+        (await app.callApi('GET', `/api/tasks/${taskId}/events?limit=200`)).body,
+      );
+      expect(events.map((event) => event.kind)).not.toContain('engine_failed');
+      const quotaWait = app.database
+        .prepare("SELECT payload_json FROM task_events WHERE task_id = ? AND kind = 'quota_wait'")
+        .all(taskId) as Array<{ payload_json: string }>;
+      expect(quotaWait).toHaveLength(1);
+      expect(JSON.parse(quotaWait[0]!.payload_json)).toMatchObject({
+        engine: 'Claude Code',
+        windowLabel: '5 giờ',
+        reviewerName: 'Manager Dev',
+        code: 'RATE_LIMITED',
+      });
+
+      // The reset time passed: the next turn is the superior's review again, not the PM's step.
+      app.database
+        .prepare('UPDATE tasks SET run_after = ? WHERE id = ?')
+        .run(new Date(Date.now() - 1000).toISOString(), taskId);
+      await waitFor(
+        () => readTask(taskId),
+        (detail) => detail.currentStep?.name === 'Phát triển',
+        'review passed',
+      );
+      expect(workedSteps()).toEqual(['Tiếp nhận và lập kế hoạch', 'Chia task', 'review', 'review']);
+      expect(engine.requests[3]?.permissions.accessLevel).toBe('read_only');
+      expect(readReviewPending(taskId)).toBe(0);
+    }, 60_000);
+
+    it('asks the user when the rate-limited review has no exhausted bucket', async () => {
+      engine.failWith = (request) => (stepNameOf(request.prompt) === 'review' ? RATE_LIMIT : null);
+      quotaBuckets = [bucket({ remainingPercent: 60 })];
+      const taskId = await startReviewedTask();
+
+      await waitFor(
+        () => readTask(taskId),
+        (detail) => detail.status === 'waiting_approval',
+        'user approval',
+      );
+      const [approval] = await pendingApprovals();
+      expect(approval).toMatchObject({ kind: 'step_gate', stepName: 'Chia task' });
+      expect(approval?.summary).toContain('Manager Dev không duyệt được');
+      expect(readReviewPending(taskId)).toBe(0);
+    }, 60_000);
+  });
 });

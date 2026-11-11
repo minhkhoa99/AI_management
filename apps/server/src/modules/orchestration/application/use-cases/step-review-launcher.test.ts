@@ -27,6 +27,7 @@ describe('StepReviewLauncher', () => {
       approvalRequests as never,
       {} as never,
       {} as never,
+      {} as never,
     );
 
     launcher.startStepReview(task, step, { agentId: 'worker-1', name: 'An' }, 'Xong việc', '/work');

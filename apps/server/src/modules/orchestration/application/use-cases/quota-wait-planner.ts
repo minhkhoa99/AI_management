@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   findQuotaExhaustion,
+  formatQuotaResumeTime,
   localEngineSchema,
   selectApplicableQuotaBuckets,
   type AgentProvider,
@@ -15,6 +16,11 @@ export interface QuotaWait {
   runAfter: string;
   engineLabel: string;
   windowLabel: string;
+}
+
+/** The task's status note while it waits (worker turn or superior's review alike). */
+export function buildQuotaWaitNote(wait: QuotaWait): string {
+  return `⏸ Chờ hạn mức ${wait.windowLabel} của ${wait.engineLabel} · tự chạy tiếp lúc ${formatQuotaResumeTime(wait.runAfter)}`;
 }
 
 const ENGINE_LABELS: Record<LocalEngine, string> = {
