@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Sse } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query, Sse } from '@nestjs/common';
 import {
   entityIdSchema,
   type LocalEngine,
@@ -35,12 +35,15 @@ export class LocalEnginesController {
     return this.listLocalEnginesUseCase.listLocalEngines();
   }
 
-  /** Quick picks of the agent model picker; Codex's come from its own catalog. */
+  /** Quick picks of the agent model picker, read from the installed CLI; `?refresh=1` re-reads. */
   @Get(':engine/models')
   listLocalEngineModels(
     @Param('engine', enginePipe) engine: LocalEngine,
+    @Query('refresh') refresh: unknown,
   ): Promise<LocalEngineModelList> {
-    return this.listLocalEngineModelsUseCase.listLocalEngineModels(engine);
+    return this.listLocalEngineModelsUseCase.listLocalEngineModels(engine, {
+      refresh: refresh === '1',
+    });
   }
 
   @Patch(':engine/settings')

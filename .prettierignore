@@ -14,3 +14,4 @@ UI_MAPPING.md
 index.html
 .superpowers
 apps/server/src/modules/providers/infrastructure/adapters/quota/__fixtures__
+apps/server/src/modules/providers/infrastructure/adapters/__fixtures__

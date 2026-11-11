@@ -1,53 +1,78 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../../../shared/errors/app-error';
-import { parseCodexModelCatalog } from './cli-codex-model-catalog';
+import { CODEX_MODEL_LIST_REQUEST_LINES, parseCodexModelListLine } from './cli-codex-model-catalog';
 
-const catalog = (models: unknown[]) => JSON.stringify({ models });
+function readFixtureLines(fixtureName: string): string[] {
+  return readFileSync(path.join(import.meta.dirname, '__fixtures__', fixtureName), 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => line !== '');
+}
 
-describe('parseCodexModelCatalog', () => {
-  it('keeps the models Codex lists, in its priority order, with label and note', () => {
-    const choices = parseCodexModelCatalog(
-      catalog([
-        {
-          slug: 'gpt-5.6-luna',
-          display_name: 'GPT-5.6-Luna',
-          description: 'Fast.',
-          visibility: 'list',
-          priority: 8,
-          base_instructions: 'x'.repeat(1000),
-        },
-        {
-          slug: 'gpt-6-astra',
-          display_name: 'GPT-6-Astra',
-          description: 'Most capable.',
-          visibility: 'list',
-          priority: 1,
-        },
-        { slug: 'codex-auto-review', display_name: 'Auto Review', visibility: 'hide', priority: 2 },
-      ]),
-    );
-    expect(choices).toEqual([
-      { model: 'gpt-6-astra', label: 'GPT-6-Astra', note: 'Most capable.' },
-      { model: 'gpt-5.6-luna', label: 'GPT-5.6-Luna', note: 'Fast.' },
+const answer = (data: unknown[]) => JSON.stringify({ id: 2, result: { data, nextCursor: null } });
+
+describe('parseCodexModelListLine', () => {
+  it('asks for the visible models after the JSON-RPC handshake', () => {
+    expect(CODEX_MODEL_LIST_REQUEST_LINES.map((line) => JSON.parse(line) as unknown)).toEqual([
+      { id: 1, method: 'initialize', params: { clientInfo: { name: 'aiteam', version: '1' } } },
+      { method: 'initialized' },
+      { id: 2, method: 'model/list', params: { includeHidden: false, limit: 100 } },
     ]);
   });
 
-  it('drops slugs that are not safe model names (CLI flag injection) and clips long text', () => {
-    const choices = parseCodexModelCatalog(
-      catalog([
-        { slug: '--dangerously-bypass', visibility: 'list' },
-        { slug: 'gpt x', visibility: 'list' },
-        { slug: 'gpt-7', display_name: null, description: 'd'.repeat(500), visibility: 'list' },
-      ]),
+  it('reads the models Codex offers, in its order (real recording, Codex 0.167.2)', () => {
+    const lists = readFixtureLines('codex-model-list.jsonl')
+      .map(parseCodexModelListLine)
+      .filter((list) => list !== null);
+    expect(lists).toHaveLength(1);
+    const choices = lists[0] ?? [];
+    expect(choices.map((choice) => choice.model)).toEqual([
+      'gpt-6.1-sol',
+      'gpt-6-astra',
+      'gpt-6.1-terra',
+      'gpt-6-sol',
+      'gpt-6-luna',
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+    ]);
+    expect(choices[0]?.label).toBe('GPT-6.1-Sol');
+    expect(choices.filter((choice) => choice.note.startsWith('mặc định của Codex'))).toHaveLength(
+      1,
     );
-    expect(choices).toHaveLength(1);
-    expect(choices[0]?.label).toBe('gpt-7');
-    expect(choices[0]?.note.length).toBe(160);
-    expect(choices[0]?.note.endsWith('…')).toBe(true);
   });
 
-  it('turns an unknown format into an AppError instead of crashing', () => {
-    expect(() => parseCodexModelCatalog('not json')).toThrow(AppError);
-    expect(() => parseCodexModelCatalog(JSON.stringify({ items: [] }))).toThrow(AppError);
+  it('ignores other lines', () => {
+    expect(parseCodexModelListLine('not json')).toBeNull();
+    expect(parseCodexModelListLine(JSON.stringify({ id: 1, result: {} }))).toBeNull();
+    expect(parseCodexModelListLine(JSON.stringify({ method: 'account/updated' }))).toBeNull();
+  });
+
+  it('drops hidden models and unsafe names; clips long text', () => {
+    const choices = parseCodexModelListLine(
+      answer([
+        { id: 'secret', hidden: true },
+        { id: '--dangerously-bypass' },
+        { id: 'gpt x' },
+        { id: 'gpt-7', model: 'gpt-7', displayName: null, description: 'd'.repeat(500) },
+        { id: 'gpt-7-mini', isDefault: true, description: null },
+      ]),
+    );
+    expect(choices).toEqual([
+      { model: 'gpt-7', label: 'gpt-7', note: `${'d'.repeat(159)}…` },
+      { model: 'gpt-7-mini', label: 'gpt-7-mini', note: 'mặc định của Codex' },
+    ]);
+  });
+
+  it('reports an error answer (e.g. signed out) as an unreadable list', () => {
+    let caught: unknown;
+    try {
+      parseCodexModelListLine(JSON.stringify({ id: 2, error: { message: '401 Unauthorized' } }));
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(AppError);
+    expect((caught as AppError).code).toBe('CODEX_MODEL_CATALOG_FAILED');
   });
 });

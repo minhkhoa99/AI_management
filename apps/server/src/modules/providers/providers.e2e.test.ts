@@ -508,7 +508,11 @@ describe('local engines', () => {
       ] as const) {
         const response = await failingApp.callApi('GET', `/api/local-engines/${engine}/models`);
         expect(response.statusCode).toBe(200);
-        expect(localEngineModelListSchema.parse(response.body)).toEqual({ models: [], problem });
+        expect(localEngineModelListSchema.parse(response.body)).toEqual({
+          models: [],
+          problem,
+          cliUpdate: null,
+        });
       }
     } finally {
       await failingApp.closeApplication();
