@@ -1,0 +1,165 @@
+.card {
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.title {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.summary:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 2px;
+}
+
+.rowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.levelDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  flex: none;
+  background: var(--color-success);
+}
+
+.engineName {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.engineMark {
+  display: none;
+}
+
+.headline {
+  font-size: 12px;
+  color: var(--color-text-soft);
+}
+
+.track {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+.levelNormal {
+  background: var(--color-success);
+}
+
+.levelWarning {
+  background: var(--color-warning);
+}
+
+.levelCritical {
+  background: var(--color-danger);
+}
+
+.levelMuted {
+  background: var(--color-text-muted);
+}
+
+.bucketList {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bucketItem {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.refreshButton {
+  border: 1px solid var(--color-border-input);
+  border-radius: 8px;
+  background: transparent;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.refreshButton:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
+.refreshButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Narrow screens: keep the level dot and the short engine name only. */
+@media (max-width: 640px) {
+  .headline,
+  .track,
+  .engineLabel,
+  .title,
+  .bucketList {
+    display: none;
+  }
+
+  .engineMark {
+    display: inline;
+  }
+
+  .list {
+    flex-direction: row;
+    gap: 12px;
+  }
+}

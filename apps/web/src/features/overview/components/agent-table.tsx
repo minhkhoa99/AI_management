@@ -172,7 +172,7 @@ export function AgentTable({ agents, departments }: AgentTableProps) {
                       </span>
                     </td>
                     <td>
-                      <ProviderBadge provider={agent.provider} />
+                      <ProviderBadge provider={agent.provider} model={agent.model} />
                       {agent.model !== null && (
                         <span className={styles.modelLine}>{agent.model}</span>
                       )}

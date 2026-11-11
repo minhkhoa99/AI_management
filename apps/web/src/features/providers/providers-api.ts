@@ -2,6 +2,7 @@ import {
   type ChangeAgentConfigurationRequest,
   agentDetailSchema,
   connectionCheckResultSchema,
+  engineQuotaReportListSchema,
   engineTestRunStartedSchema,
   type LocalEngine,
   localEngineModelListSchema,
@@ -27,6 +28,12 @@ const encodeId = encodeURIComponent;
 
 export const loadLocalEngines = () =>
   fetchApiJson('/api/local-engines', localEngineStatusListSchema);
+
+export const loadEngineQuotas = () =>
+  fetchApiJson('/api/local-engines/quota', engineQuotaReportListSchema);
+
+export const refreshEngineQuotas = () =>
+  sendApiJson('POST', '/api/local-engines/quota/refresh', undefined, engineQuotaReportListSchema);
 
 export const loadLocalEngineModels = (engine: LocalEngine) =>
   fetchApiJson(`/api/local-engines/${engine}/models`, localEngineModelListSchema);

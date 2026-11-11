@@ -7,6 +7,7 @@ import { fetchApiJson } from '../api/api-client';
 import { useApiQuery } from '../api/use-api-query';
 import { useEventStream } from '../api/use-event-stream';
 import { formatCount, loadUsageToday } from '../../features/overview/overview-api';
+import { EngineQuotaCard } from '../../features/providers/components/engine-quota-card';
 import { SidebarDepartmentList } from '../../features/organization/components/sidebar-department-list';
 import { StrokeIcon } from '../ui/stroke-icon';
 import { findNavigationItemForPath, NAVIGATION_ITEMS } from './navigation-items';
@@ -54,6 +55,7 @@ export function AppSidebar() {
       </section>
 
       <div className={styles.sidebarFooter}>
+        <EngineQuotaCard />
         <UsageTodayCard />
         <ServerStatusCard />
       </div>
