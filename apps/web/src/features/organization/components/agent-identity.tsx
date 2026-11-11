@@ -3,6 +3,7 @@ import {
   classifyQuotaLevel,
   type EngineQuotaReport,
   findLowestQuotaBucket,
+  formatQuotaResumeTime,
   type LocalEngine,
   localEngineSchema,
   selectApplicableQuotaBuckets,
@@ -10,18 +11,6 @@ import {
 import { controlStyles } from '../../../shared/ui/controls';
 import { useEngineQuotas } from '../../providers/engine-quota-store';
 import { buildInitials, PROVIDER_PRESENTATION } from '../organization-labels';
-
-function formatResetMoment(isoTimestamp: string): string {
-  const moment = new Date(isoTimestamp);
-  const clock = moment.toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  const day = String(moment.getDate()).padStart(2, '0');
-  const month = String(moment.getMonth() + 1).padStart(2, '0');
-  return `${clock} ${day}/${month}`;
-}
 
 /** The warning for a local engine whose limit that applies to `model` is almost used up. */
 function describeQuotaWarning(
@@ -34,7 +23,7 @@ function describeQuotaWarning(
   const lowest = findLowestQuotaBucket(selectApplicableQuotaBuckets(report, model));
   if (lowest === null || classifyQuotaLevel(lowest.remainingPercent) !== 'critical') return null;
   const resetText =
-    lowest.resetsAt === null ? '' : ` · reset ${formatResetMoment(lowest.resetsAt)}`;
+    lowest.resetsAt === null ? '' : ` · reset ${formatQuotaResumeTime(lowest.resetsAt)}`;
   return `Hạn mức ${lowest.windowLabel} của ${PROVIDER_PRESENTATION[engine].label} còn ${lowest.remainingPercent}%${resetText}`;
 }
 
