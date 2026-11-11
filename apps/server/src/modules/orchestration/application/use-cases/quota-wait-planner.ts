@@ -3,6 +3,7 @@ import {
   findQuotaExhaustion,
   formatQuotaResumeTime,
   localEngineSchema,
+  QUOTA_RESET_HORIZON_MS,
   selectApplicableQuotaBuckets,
   type AgentProvider,
   type LocalEngine,
@@ -49,8 +50,15 @@ export class QuotaWaitPlanner {
     const exhaustion = findQuotaExhaustion(selectApplicableQuotaBuckets(report, snapshot.model));
     if (exhaustion === null) return null;
     const runAfterEpochMs = Date.parse(exhaustion.resetsAt) + QUOTA_RESUME_MARGIN_MS;
-    // A reset that already passed is stale data: waiting would loop with no failure cap.
-    if (Number.isNaN(runAfterEpochMs) || runAfterEpochMs <= nowEpochMs) return null;
+    // A reset that already passed is stale data: waiting would loop with no failure cap. One
+    // further away than the longest plan window is misread: never park a task that long.
+    if (
+      Number.isNaN(runAfterEpochMs) ||
+      runAfterEpochMs <= nowEpochMs ||
+      runAfterEpochMs > nowEpochMs + QUOTA_RESET_HORIZON_MS
+    ) {
+      return null;
+    }
     return {
       runAfter: new Date(runAfterEpochMs).toISOString(),
       engineLabel: ENGINE_LABELS[engine.data],

@@ -1,4 +1,8 @@
-import { type EngineQuotaBucket, engineQuotaBucketSchema } from '@aiteam/contracts';
+import {
+  type EngineQuotaBucket,
+  engineQuotaBucketSchema,
+  QUOTA_RESET_HORIZON_MS,
+} from '@aiteam/contracts';
 import { z } from 'zod';
 import { AppError } from '../../../../../shared/errors/app-error';
 import type {
@@ -129,7 +133,11 @@ function describeLabel(label: string): BucketDescription | null {
   };
 }
 
-/** "Nov 11, 11:59pm (Asia/Ho_Chi_Minh)" -> next such moment (UTC ISO) at or after now - 1 min. */
+/**
+ * "Nov 11, 11:59pm (Asia/Ho_Chi_Minh)" -> that moment this year (UTC ISO) if it is at or after
+ * now - 1 min; next year only across the new year (within 8 days of now). A reset that already
+ * passed otherwise is stale: null, never a date a year away.
+ */
 export function parseClaudeResetTime(text: string, now: Date): string | null {
   const match = RESET_TIME_PATTERN.exec(text.trim());
   if (match === null) return null;
@@ -140,19 +148,22 @@ export function parseClaudeResetTime(text: string, now: Date): string | null {
   if (hour12 < 1 || hour12 > 12) return null;
   const hour = (hour12 % 12) + (meridiem?.toLowerCase() === 'pm' ? 12 : 0);
   const earliest = now.getTime() - ONE_MINUTE_MS;
+  const momentIn = (year: number) =>
+    zonedTimeToUtc(
+      { year, month, day: Number(dayText), hour, minute: Number(minuteText ?? 0) },
+      timeZone,
+    );
   try {
-    for (const year of [now.getUTCFullYear(), now.getUTCFullYear() + 1]) {
-      const moment = zonedTimeToUtc(
-        { year, month, day: Number(dayText), hour, minute: Number(minuteText ?? 0) },
-        timeZone,
-      );
-      if (moment >= earliest) return new Date(moment).toISOString();
-    }
+    const thisYear = momentIn(now.getUTCFullYear());
+    if (thisYear >= earliest) return new Date(thisYear).toISOString();
+    const nextYear = momentIn(now.getUTCFullYear() + 1);
+    return nextYear - now.getTime() <= QUOTA_RESET_HORIZON_MS
+      ? new Date(nextYear).toISOString()
+      : null;
   } catch {
     // Unknown IANA zone: the reset time is simply not known.
     return null;
   }
-  return null;
 }
 
 interface LocalTime {

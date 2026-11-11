@@ -6,6 +6,8 @@ import { localEngineSchema } from './providers';
 
 export const QUOTA_WARNING_PERCENT = 20;
 export const QUOTA_CRITICAL_PERCENT = 10;
+/** The longest plan window is a week: a reset further away than this is stale or misread. */
+export const QUOTA_RESET_HORIZON_MS = 8 * 24 * 60 * 60 * 1000;
 
 export const engineQuotaBucketSchema = z.object({
   /** Group shown by the engine (a model family); null when the limit is not grouped. */

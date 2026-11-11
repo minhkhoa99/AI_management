@@ -70,4 +70,13 @@ describe('parseClaudeResetTime', () => {
     );
     expect(parseClaudeResetTime('Nov 18, 7pm (Mars/Base)', NOW)).toBeNull();
   });
+
+  it('never rolls a reset that just passed into next year', () => {
+    // 23:26 in Ho Chi Minh: read two minutes after the reset.
+    expect(parseClaudeResetTime('Nov 11, 11:26pm (Asia/Ho_Chi_Minh)', NOW)).toBeNull();
+    expect(parseClaudeResetTime('Jan 2, 9am (UTC)', new Date('2026-12-30T00:00:00Z'))).toBe(
+      '2027-01-02T09:00:00.000Z',
+    );
+    expect(parseClaudeResetTime('Jan 20, 9am (UTC)', new Date('2026-12-30T00:00:00Z'))).toBeNull();
+  });
 });

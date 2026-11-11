@@ -90,6 +90,17 @@ describe('QuotaWaitPlanner', () => {
     ).not.toBeNull();
   });
 
+  it('treats a reset more than 8 days ahead as unknown', async () => {
+    gateway.buckets = [bucket({ resetsAt: '2026-12-11T10:00:00.000Z' })];
+    expect(
+      await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, BEFORE_RESET),
+    ).toBeNull();
+    gateway.buckets = [bucket({ window: 'weekly', resetsAt: '2026-11-18T10:00:00.000Z' })];
+    expect(
+      await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, BEFORE_RESET),
+    ).not.toBeNull();
+  });
+
   it('returns null when the quota is unreadable', async () => {
     gateway.state = 'unreadable';
     expect(
