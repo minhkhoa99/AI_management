@@ -169,15 +169,18 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
 --output-format json --setting-sources "" --settings {"disableAllHooks":true} --strict-mcp-config`
   (đọc dòng "Current session/week", giờ reset kèm múi giờ → UTC), `codex app-server` (JSON-RPC stdio:
   `initialize` → `initialized` → `account/rateLimits/read`, giữ stdin mở tới khi có câu trả lời `id:2`,
-  rồi kill cây tiến trình; không có tiến trình con), `agy -p "/usage" --output-format json` (dọn thư mục do
+  rồi kill cây tiến trình; không khởi động MCP server hay tiến trình công cụ nào, trên Windows chỉ có
+  `conhost.exe`), `agy -p "/usage" --output-format json` (dọn thư mục do
   engine quản lý trước mỗi lần). Đọc khi khởi động, mỗi 5 phút, sau lượt agent (cách nhau ≥ 30 s) và khi bấm
   ↻ (`POST /api/local-engines/quota/refresh`); kết quả qua `GET /api/local-engines/quota` và SSE
   `engine_quota.changed`. Lỗi đọc giữ số cũ kèm `lastSuccessAt`, không bao giờ 500. Quy tắc chờ
   (`QuotaWaitPlanner`): lượt worker hoặc lượt cấp trên duyệt gặp lỗi hạn mức mà bucket áp dụng cho model đó về
   0% → task `queued` kèm ghi chú "Chờ hạn mức", tự chạy lúc reset + 60 s (5 giờ và tuần cùng 0 → chờ reset
   muộn nhất; sau reset vẫn hết thì chờ tiếp, không tăng bộ đếm lỗi, không `failed`; bucket model khác hết thì
-  không chờ). Review chờ hạn mức giữ cờ `review_pending` (migration 014). Chờ được đánh thức sớm khi đổi
-  engine/người nhận. Không bao giờ log stdout thô hay `accountId`.
+  không chờ; giờ reset đã qua hoặc xa hơn 8 ngày = không biết, giữ back-off cũ). Review chờ hạn mức giữ cờ
+  `review_pending` (migration 014). Chờ được đánh thức sớm khi đổi engine/người nhận. Kết quả áp lên task
+  đọc lại sau lần hỏi hạn mức (không ghi đè việc giao/sửa xảy ra trong lúc hỏi). Không bao giờ log stdout
+  thô hay `accountId`.
 - Định dạng JSONL của CLI có contract test trên bản ghi thật đã làm sạch
   (`scripts/record-engine-streams.mjs`); CLI đổi định dạng thì ghi lại và chỉ sửa translator.
 
