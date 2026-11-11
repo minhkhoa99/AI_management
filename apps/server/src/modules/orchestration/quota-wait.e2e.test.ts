@@ -32,6 +32,7 @@ describe('quota wait', () => {
   let quotaState: EngineQuotaReport['state'];
   let quotaBuckets: EngineQuotaBucket[];
   let quotaReads: number;
+  let quotaReadGate: Promise<void> | null;
 
   const bucket = (over: Partial<EngineQuotaBucket>): EngineQuotaBucket => ({
     group: null,
@@ -52,6 +53,7 @@ describe('quota wait', () => {
     quotaState = 'ok';
     quotaBuckets = [];
     quotaReads = 0;
+    quotaReadGate = null;
     app = await startTestApplication(':memory:', {
       agentEngineOverride: engine,
       localEngineAdaptersOverride: {
@@ -59,9 +61,11 @@ describe('quota wait', () => {
         quotaReaders: [
           {
             engine: 'claude_code',
-            readEngineQuota: () => {
+            readEngineQuota: async () => {
               quotaReads += 1;
-              return Promise.resolve({ state: quotaState, buckets: quotaBuckets });
+              // A slow CLI: the test decides when the read ends.
+              if (quotaReadGate !== null) await quotaReadGate;
+              return { state: quotaState, buckets: quotaBuckets };
             },
           },
         ],
@@ -110,13 +114,32 @@ describe('quota wait', () => {
     taskDetailSchema.parse((await app.callApi('GET', `/api/tasks/${taskId}`)).body);
   const readStoredTask = (taskId: string) =>
     app.database
-      .prepare('SELECT status, run_after, engine_failures, session_ref FROM tasks WHERE id = ?')
+      .prepare(
+        'SELECT status, run_after, engine_failures, session_ref, assignee_agent_id FROM tasks WHERE id = ?',
+      )
       .get(taskId) as {
       status: string;
+      assignee_agent_id: string | null;
       run_after: string | null;
       engine_failures: number;
       session_ref: string | null;
     };
+  /** Holds every quota read until the returned function is called. */
+  const holdQuotaReads = (): (() => void) => {
+    let release = () => undefined as void;
+    quotaReadGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return release;
+  };
+  const countQuotaWaitEvents = (taskId: string) =>
+    (
+      app.database
+        .prepare(
+          "SELECT COUNT(*) AS total FROM task_events WHERE task_id = ? AND kind = 'quota_wait'",
+        )
+        .get(taskId) as { total: number }
+    ).total;
   const waitForRateLimitRecord = (taskId: string) =>
     waitFor(
       () => readTask(taskId),
@@ -289,6 +312,51 @@ describe('quota wait', () => {
 
       expect(delegation.statusCode, JSON.stringify(delegation.body)).toBe(201);
       await waitUntilDone(taskId);
+    }, 60_000);
+
+    it('keeps a delegation made while the quota is being read', async () => {
+      const pm = agentDetailSchema.parse(
+        (
+          await app.callApi('POST', `/api/departments/${department.id}/members`, {
+            name: 'PM Linh',
+            role: 'pm',
+            provider: 'claude_code',
+            reportsToPositionId: departmentHead.positionId,
+          })
+        ).body,
+      );
+      await app.callApi('PATCH', `/api/agents/${pm.id}/configuration`, {
+        provider: 'claude_code',
+        accessLevel: 'edit_workspace',
+        networkAccess: false,
+      });
+      quotaBuckets = [bucket({})];
+      const releaseQuotaRead = holdQuotaReads();
+      const taskId = await startTask();
+      await waitFor(
+        () => quotaReads,
+        (count) => count >= 1,
+        'quota read started',
+      );
+      engine.failWith = () => null;
+
+      const delegation = await app.callApi('POST', `/api/tasks/${taskId}/delegations`, {
+        toAgentId: pm.id,
+      });
+      expect(delegation.statusCode, JSON.stringify(delegation.body)).toBe(201);
+      releaseQuotaRead();
+
+      const settled = await waitFor(
+        () => readStoredTask(taskId),
+        (stored) => stored.status !== 'running',
+        'turn settled',
+      );
+      expect(settled.assignee_agent_id).toBe(pm.id);
+      expect(settled.run_after).toBeNull();
+      expect(countQuotaWaitEvents(taskId)).toBe(0);
+      const done = await waitUntilDone(taskId);
+      expect(done.assignee?.id).toBe(pm.id);
+      expect(engine.requests).toHaveLength(2);
     }, 60_000);
   });
 
@@ -479,6 +547,41 @@ describe('quota wait', () => {
         () => workedSteps().length,
         (count) => count >= 4,
         'worker turn',
+      );
+      expect(workedSteps()[3]).not.toBe('review');
+    }, 60_000);
+
+    it('keeps an assignee edit made while the reviewer quota is being read', async () => {
+      engine.failWith = (request) => (stepNameOf(request.prompt) === 'review' ? RATE_LIMIT : null);
+      quotaBuckets = [bucket({})];
+      const releaseQuotaRead = holdQuotaReads();
+      const taskId = await startReviewedTask();
+      await waitFor(
+        () => workedSteps().includes('review') && quotaReads >= 1,
+        (started) => started,
+        'review quota read started',
+      );
+      engine.failWith = () => null;
+
+      const edit = await app.callApi('PATCH', `/api/tasks/${taskId}`, {
+        assigneeAgentId: departmentHead.id,
+      });
+      expect(edit.statusCode, JSON.stringify(edit.body)).toBe(200);
+      releaseQuotaRead();
+
+      const settled = await waitFor(
+        () => readStoredTask(taskId),
+        (stored) => stored.status !== 'running',
+        'review settled',
+      );
+      expect(settled.assignee_agent_id).toBe(departmentHead.id);
+      expect(settled.run_after).toBeNull();
+      expect(countQuotaWaitEvents(taskId)).toBe(0);
+      expect(readReviewPending(taskId)).toBe(0);
+      await waitFor(
+        () => workedSteps().length,
+        (count) => count >= 4,
+        'turn of the new assignee',
       );
       expect(workedSteps()[3]).not.toBe('review');
     }, 60_000);

@@ -25,7 +25,11 @@ import {
   type TaskEventLog,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
-import { buildQuotaWaitNote, QuotaWaitPlanner } from './quota-wait-planner';
+import {
+  buildQuotaWaitNote,
+  QuotaWaitPlanner,
+  reloadTaskAfterQuotaRead,
+} from './quota-wait-planner';
 import { SessionEventRecorder } from './session-event-recorder';
 import { TaskProgression } from './task-progression';
 import { TaskRemoval } from './task-removal';
@@ -178,7 +182,17 @@ export class StepReviewLauncher {
       this.taskRepository.updateTask(task);
       return;
     }
-    if (terminal.kind === 'failed' && (await this.waitForReviewQuota(task, terminal, reviewer))) {
+    if (terminal.kind === 'failed' && terminal.code === 'RATE_LIMITED') {
+      const current = await this.waitForReviewQuota(task, terminal, reviewer);
+      if (current !== undefined) {
+        this.askUserInstead(
+          current,
+          step,
+          worker,
+          workerSummary,
+          `${reviewer.name} không duyệt được`,
+        );
+      }
       return;
     }
     if (terminal.kind !== 'completed') {
@@ -203,18 +217,21 @@ export class StepReviewLauncher {
 
   /**
    * The reviewer's plan quota is used up: the task waits for the reset, then the review is opened
-   * again. A review only reads, so there is no checkpoint to save.
+   * again. A review only reads, so there is no checkpoint to save. The quota read is slow, so the
+   * outcome goes to the task as stored after it. Returns that task when the quota is not used up
+   * (the caller asks the user); undefined when it now waits or changed meanwhile (left alone).
    */
   private async waitForReviewQuota(
     task: Task,
     terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
     reviewer: ReviewerEngine,
-  ): Promise<boolean> {
-    if (terminal.code !== 'RATE_LIMITED') return false;
+  ): Promise<Task | undefined> {
+    const assigneeBeforeRead = task.assigneeAgentId;
     const wait = await this.quotaWaitPlanner.planQuotaWait(reviewer);
-    if (wait === null) return false;
+    const current = reloadTaskAfterQuotaRead(this.taskRepository, task.id, assigneeBeforeRead);
+    if (current === undefined || wait === null) return current;
     this.eventLog.recordTaskEvent({
-      taskId: task.id,
+      taskId: current.id,
       agentId: reviewer.agentId,
       kind: 'quota_wait',
       payload: {
@@ -226,9 +243,9 @@ export class StepReviewLauncher {
         reviewerName: reviewer.name,
       },
     });
-    task.waitForReviewQuota({ runAfter: wait.runAfter, note: buildQuotaWaitNote(wait) });
-    this.taskRepository.updateTask(task);
-    return true;
+    current.waitForReviewQuota({ runAfter: wait.runAfter, note: buildQuotaWaitNote(wait) });
+    this.taskRepository.updateTask(current);
+    return undefined;
   }
 
   private askUserInstead(

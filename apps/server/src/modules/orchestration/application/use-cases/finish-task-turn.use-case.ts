@@ -15,7 +15,11 @@ import {
   type TestCommandRunner,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
-import { buildQuotaWaitNote, QuotaWaitPlanner } from './quota-wait-planner';
+import {
+  buildQuotaWaitNote,
+  QuotaWaitPlanner,
+  reloadTaskAfterQuotaRead,
+} from './quota-wait-planner';
 import { StepReviewLauncher } from './step-review-launcher';
 import { TaskCheckpoints } from './task-checkpoints';
 import { TaskProgression } from './task-progression';
@@ -88,7 +92,6 @@ export class FinishTaskTurnUseCase {
     }
     if (terminal.kind === 'failed') {
       await this.handleEngineFailure(task, terminal);
-      this.taskRepository.updateTask(task);
       return;
     }
 
@@ -257,34 +260,52 @@ export class FinishTaskTurnUseCase {
     if (engine.success) this.quotaGateway.requestEngineQuotaRefresh(engine.data);
   }
 
-  /** A rate limit that is really the plan quota: wait for the reset instead of failing. */
-  private async waitForQuotaReset(
+  /**
+   * A rate limit that is really the plan quota waits for the reset instead of failing; anything
+   * else takes the retry back-off. The quota read is slow and no run is registered meanwhile, so
+   * the outcome is applied to the task as stored after it (and again after the checkpoint), never
+   * to the copy loaded before: a handover or an edit made in between is kept.
+   */
+  private async handleEngineFailure(
     task: Task,
     terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
-  ): Promise<boolean> {
+  ): Promise<void> {
     const snapshot = task.toState().engineSnapshot;
-    if (terminal.code !== 'RATE_LIMITED' || snapshot === null) return false;
+    if (!terminal.retryable || terminal.code !== 'RATE_LIMITED' || snapshot === null) {
+      this.applyEngineFailure(task, terminal);
+      this.taskRepository.updateTask(task);
+      return;
+    }
+    const assigneeBeforeRead = task.assigneeAgentId;
     const wait = await this.quotaWaitPlanner.planQuotaWait(snapshot);
-    if (wait === null) return false;
-    await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi hết hạn mức');
-    this.recordEvent(task, 'quota_wait', {
+    const current = reloadTaskAfterQuotaRead(this.taskRepository, task.id, assigneeBeforeRead);
+    if (current === undefined) return;
+    if (wait === null) {
+      this.applyEngineFailure(current, terminal);
+      this.taskRepository.updateTask(current);
+      return;
+    }
+    await this.checkpoints.saveTaskCheckpoint(current, 'aiteam: lưu mốc khi hết hạn mức');
+    const latest = reloadTaskAfterQuotaRead(this.taskRepository, task.id, assigneeBeforeRead);
+    if (latest === undefined) return;
+    // A quota wait is one timeline line (quota_wait); engine_failed only on the other paths.
+    this.recordEvent(latest, 'quota_wait', {
       engine: wait.engineLabel,
       windowLabel: wait.windowLabel,
       runAfter: wait.runAfter,
       code: terminal.code,
       message: terminal.message,
     });
-    task.waitForQuota({ runAfter: wait.runAfter, note: buildQuotaWaitNote(wait) });
-    return true;
+    latest.waitForQuota({ runAfter: wait.runAfter, note: buildQuotaWaitNote(wait) });
+    this.taskRepository.updateTask(latest);
   }
 
-  private async handleEngineFailure(
+  /** The old back-off: retry after 30 s, 60 s, 120 s, then fail; non-retryable fails at once. */
+  private applyEngineFailure(
     task: Task,
     terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
-  ): Promise<void> {
+  ): void {
     const state = task.toState();
-    // A quota wait is one timeline line (quota_wait); engine_failed only on the other paths.
-    if (terminal.retryable && (await this.waitForQuotaReset(task, terminal))) return;
     this.recordEvent(task, 'engine_failed', { code: terminal.code, message: terminal.message });
     if (!terminal.retryable) {
       task.fail(`Bộ não báo lỗi (${terminal.code}): ${terminal.message}`);
