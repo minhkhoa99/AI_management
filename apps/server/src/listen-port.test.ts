@@ -99,6 +99,8 @@ describe('startAiteamServer port selection', () => {
       dataDirectory: path.join(aiteamHome, 'data'),
       logDirectory: path.join(aiteamHome, 'logs'),
       logLevel: 'silent',
+      // Booting with real adapters would spawn the engine CLIs in the data directory.
+      localEngineAdaptersOverride: { quotaReaders: [] },
     });
     try {
       expect(runningServer.listenPort).toBeGreaterThan(preferredPort);

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
-import { SESSION_COOKIE_NAME } from '@aiteam/contracts';
+import { LOCAL_ENGINES, SESSION_COOKIE_NAME } from '@aiteam/contracts';
 import { createAiteamApplication } from '../app-factory';
 import { applyPendingMigrations } from '../shared/database/migration-runner';
 import { ALL_MIGRATIONS } from '../shared/database/migrations';
@@ -34,6 +34,10 @@ const DEFAULT_FAKE_LOCAL_ENGINES: LocalEngineAdaptersOverride = {
   },
   codexModelCatalog: { listCodexModels: () => Promise.resolve([]) },
   antigravityModelCatalog: { listAntigravityModels: () => Promise.resolve([]) },
+  quotaReaders: LOCAL_ENGINES.map((engine) => ({
+    engine,
+    readEngineQuota: () => Promise.resolve({ state: 'not_installed' as const, buckets: [] }),
+  })),
 };
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
