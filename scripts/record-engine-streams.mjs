@@ -413,38 +413,79 @@ function sanitiseQuotaValue(value, parentKey) {
   return value;
 }
 
-function writeQuotaFixture(fixtureName, text) {
-  const cleaned = text
-    .split('\n')
+function parseJsonLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    // Progress text or a broken line: not part of the recording (never echoed: it is raw CLI text).
+    return undefined;
+  }
+}
+
+/**
+ * The sanitised fixture text, or null when the output holds no usable recording (no JSON line,
+ * or no answer to request id 2 for Codex): the existing fixture must then be left as it is.
+ */
+export function buildQuotaFixtureText(fixtureName, text) {
+  const entries = text
+    .split(/\r?\n/)
     .filter((line) => line.trim() !== '')
-    .map((line) => {
-      const entry = sanitiseQuotaValue(JSON.parse(line));
-      // The Claude /usage text lists personal tips and skill names after the limits: keep the limits only.
-      if (typeof entry.result === 'string' && entry.local_command === 'usage') {
-        entry.result = entry.result.split("\n\nWhat's contributing")[0];
-      }
-      return JSON.stringify(entry);
-    });
-  writeFileSync(path.join(quotaFixtureDirectory, fixtureName), `${cleaned.join('\n')}\n`);
+    .map(parseJsonLine)
+    .filter((entry) => entry !== null && typeof entry === 'object');
+  if (entries.length === 0) return null;
+  if (fixtureName.startsWith('codex') && !entries.some((entry) => entry.id === 2)) return null;
+  const cleaned = entries.map((parsed) => {
+    const entry = sanitiseQuotaValue(parsed);
+    // The Claude /usage text lists personal tips and skill names after the limits: keep the limits only.
+    if (typeof entry.result === 'string' && entry.local_command === 'usage') {
+      entry.result = entry.result.split("\n\nWhat's contributing")[0];
+    }
+    return JSON.stringify(entry);
+  });
+  return `${cleaned.join('\n')}\n`;
+}
+
+/** Returns whether the fixture was written. */
+function writeQuotaFixture(fixtureName, text) {
+  const fixtureText = buildQuotaFixtureText(fixtureName, text);
+  if (fixtureText === null) return false;
+  writeFileSync(path.join(quotaFixtureDirectory, fixtureName), fixtureText);
+  return true;
 }
 
 function killProcessTree(child) {
+  if (child.pid === undefined) return;
   if (process.platform === 'win32') spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
   else child.kill('SIGTERM');
 }
 
-function readOneShot(command, args, workspace) {
+/** A CLI that cannot start (not installed, not on PATH): a fixed message, never raw output. */
+function reportSpawnFailure(command, error) {
+  console.error(`${command}: could not start (${error.code ?? 'unknown error'}); is it installed?`);
+}
+
+function ignoreClosedStdin() {
+  // The CLI exited (or never started) before reading stdin: nothing left to send.
+}
+
+export function readOneShot(command, args, workspace) {
   return new Promise((resolve) => {
     const child = spawn(command, args, { cwd: workspace, windowsHide: true, shell: false });
     let stdout = '';
-    child.stdout.on('data', (chunk) => (stdout += chunk));
-    child.stderr.resume();
-    child.stdin.end();
     const timer = setTimeout(() => killProcessTree(child), 30000);
-    child.on('close', () => {
+    const finish = () => {
       clearTimeout(timer);
       resolve(stdout);
+    };
+    child.on('error', (error) => {
+      reportSpawnFailure(command, error);
+      finish();
     });
+    child.stdout.on('data', (chunk) => (stdout += chunk));
+    child.stderr.resume();
+    child.stdin.on('error', ignoreClosedStdin);
+    child.stdin.end();
+    child.on('close', finish);
   });
 }
 
@@ -467,6 +508,10 @@ function readCodexRateLimits(workspace) {
       resolve(lines.join('\n'));
     };
     const timer = setTimeout(finish, 30000);
+    child.on('error', (error) => {
+      reportSpawnFailure('codex', error);
+      finish();
+    });
     child.stderr.resume();
     child.stdout.on('data', (chunk) => {
       buffer += chunk;
@@ -475,14 +520,11 @@ function readCodexRateLimits(workspace) {
       for (const line of parts) {
         if (line.trim() === '') continue;
         lines.push(line);
-        try {
-          if (JSON.parse(line).id === 2) finish();
-        } catch {
-          // A non-JSON line is not the answer being waited for.
-        }
+        if (parseJsonLine(line)?.id === 2) finish();
       }
     });
     child.on('close', finish);
+    child.stdin.on('error', ignoreClosedStdin);
     child.stdin.write(
       QUOTA_CODEX_REQUESTS.map((request) => JSON.stringify(request)).join('\n') + '\n',
     );
@@ -502,8 +544,13 @@ async function recordQuota(onlyName) {
     ];
     for (const [fixtureName, readOutput] of jobs) {
       if (onlyName !== undefined && fixtureName !== onlyName) continue;
-      writeQuotaFixture(fixtureName, await readOutput());
-      console.log(`${fixtureName}: recorded`);
+      if (writeQuotaFixture(fixtureName, await readOutput())) {
+        console.log(`${fixtureName}: recorded`);
+      } else {
+        // Fixed text only: the CLI output may hold account details.
+        console.error(`${fixtureName}: no usable answer in the CLI output; fixture left unchanged`);
+        process.exitCode = 1;
+      }
     }
   } finally {
     try {
@@ -514,14 +561,19 @@ async function recordQuota(onlyName) {
   }
 }
 
-const selection = process.argv[2] ?? 'all';
-const onlyFixture = process.argv[3];
-if (selection === 'quota') {
-  await recordQuota(onlyFixture);
-  process.exit(0);
-}
-for (const engineName of selection === 'all' ? Object.keys(RECORDINGS) : [selection]) {
-  for (const recording of RECORDINGS[engineName]) {
-    if (onlyFixture === undefined || recording[0] === onlyFixture) await recordOne(recording);
+// Only records when run as a script: tests import the pure helpers without touching any CLI.
+const startedFromCommandLine =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (startedFromCommandLine) {
+  const selection = process.argv[2] ?? 'all';
+  const onlyFixture = process.argv[3];
+  if (selection === 'quota') {
+    await recordQuota(onlyFixture);
+    process.exit(process.exitCode ?? 0);
+  }
+  for (const engineName of selection === 'all' ? Object.keys(RECORDINGS) : [selection]) {
+    for (const recording of RECORDINGS[engineName]) {
+      if (onlyFixture === undefined || recording[0] === onlyFixture) await recordOne(recording);
+    }
   }
 }
