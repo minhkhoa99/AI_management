@@ -177,6 +177,10 @@ export class StepReviewLauncher {
       await this.taskRemoval.removeTask(task);
       return;
     }
+    // A rate-limited review is followed by the planner's fresh quota read: no second CLI read.
+    const quotaReadFollows =
+      terminal.kind === 'failed' && terminal.code === 'RATE_LIMITED' && stopReason !== 'pause';
+    if (!quotaReadFollows) this.quotaWaitPlanner.requestQuotaRefreshAfterTurn(reviewer.provider);
     if (stopReason === 'pause') {
       task.pause();
       this.taskRepository.updateTask(task);

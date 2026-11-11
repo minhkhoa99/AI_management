@@ -27,7 +27,10 @@ class FakeQuotaGateway implements EngineQuotaGateway {
       lastSuccessAt: null,
     });
   }
-  requestEngineQuotaRefresh(): void {}
+  readonly refreshes: LocalEngine[] = [];
+  requestEngineQuotaRefresh(engine: LocalEngine): void {
+    this.refreshes.push(engine);
+  }
 }
 
 const BEFORE_RESET = Date.parse('2026-11-11T10:00:00.000Z');
@@ -107,6 +110,14 @@ describe('QuotaWaitPlanner', () => {
       await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, BEFORE_RESET),
     ).toBeNull();
     gateway.state = 'ok';
+  });
+
+  it('asks a refresh after a turn of a local engine only', () => {
+    gateway.refreshes.length = 0;
+    planner.requestQuotaRefreshAfterTurn('custom_api');
+    planner.requestQuotaRefreshAfterTurn(undefined);
+    planner.requestQuotaRefreshAfterTurn('codex');
+    expect(gateway.refreshes).toEqual(['codex']);
   });
 
   it('never reads the quota for Custom API', async () => {

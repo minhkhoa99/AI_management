@@ -1,11 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { localEngineSchema } from '@aiteam/contracts';
 import type { TerminalEngineEvent } from '../../../../shared/runtime/agent-session-supervisor';
 import { interpretAgentReport, type AgentReport } from '../../domain/agent-report';
 import { formatTaskCode, type Task } from '../../domain/entities/task';
 import type { WorkflowStepState } from '../../domain/entities/workflow';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
-import { ENGINE_QUOTA_GATEWAY, type EngineQuotaGateway } from '../ports/engine-quota.port';
 import {
   STAFF_DIRECTORY,
   TASK_EVENT_LOG,
@@ -51,7 +49,6 @@ export class FinishTaskTurnUseCase {
     private readonly taskRemoval: TaskRemoval,
     private readonly taskSplitter: TaskSplitter,
     private readonly quotaWaitPlanner: QuotaWaitPlanner,
-    @Inject(ENGINE_QUOTA_GATEWAY) private readonly quotaGateway: EngineQuotaGateway,
   ) {}
 
   async finishTaskTurn(taskId: string, terminal: TerminalEngineEvent): Promise<void> {
@@ -67,7 +64,9 @@ export class FinishTaskTurnUseCase {
     // A rate-limited turn is followed by the planner's fresh quota read: no second CLI read.
     const quotaReadFollows =
       terminal.kind === 'failed' && terminal.code === 'RATE_LIMITED' && stopReason !== 'pause';
-    if (!quotaReadFollows) this.requestQuotaRefreshAfterTurn(state.engineSnapshot?.provider);
+    if (!quotaReadFollows) {
+      this.quotaWaitPlanner.requestQuotaRefreshAfterTurn(state.engineSnapshot?.provider);
+    }
 
     if (stopReason === 'pause') {
       await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi tạm dừng');
@@ -253,11 +252,6 @@ export class FinishTaskTurnUseCase {
     });
     this.progression.applyGateResult(task, passed, feedback);
     this.taskRepository.updateTask(task);
-  }
-
-  private requestQuotaRefreshAfterTurn(provider: string | undefined): void {
-    const engine = localEngineSchema.safeParse(provider);
-    if (engine.success) this.quotaGateway.requestEngineQuotaRefresh(engine.data);
   }
 
   /**

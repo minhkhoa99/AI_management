@@ -61,6 +61,12 @@ const ENGINE_LABELS: Record<LocalEngine, string> = {
 export class QuotaWaitPlanner {
   constructor(@Inject(ENGINE_QUOTA_GATEWAY) private readonly quotaGateway: EngineQuotaGateway) {}
 
+  /** After any turn (worker or review) on a local engine: re-read its quota (merged, spaced). */
+  requestQuotaRefreshAfterTurn(provider: AgentProvider | undefined): void {
+    const engine = localEngineSchema.safeParse(provider);
+    if (engine.success) this.quotaGateway.requestEngineQuotaRefresh(engine.data);
+  }
+
   async planQuotaWait(
     snapshot: { provider: AgentProvider; model: string | null },
     nowEpochMs: number = Date.now(),

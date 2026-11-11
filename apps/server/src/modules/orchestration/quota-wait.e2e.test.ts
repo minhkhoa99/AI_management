@@ -13,8 +13,9 @@ import {
   taskEventListSchema,
   workflowSchema,
 } from '@aiteam/contracts';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScriptedEngine, stepNameOf, waitFor } from '../../test-support/scripted-engine';
+import { EngineQuotaMonitor } from '../providers/application/use-cases/engine-quota-monitor';
 import {
   DEFAULT_FAKE_LOCAL_ENGINES,
   startTestApplication,
@@ -584,6 +585,37 @@ describe('quota wait', () => {
         'turn of the new assignee',
       );
       expect(workedSteps()[3]).not.toBe('review');
+    }, 60_000);
+
+    /** The step that ran last each time a turn's end asked for a quota refresh. */
+    const recordRefreshRequests = (): string[] => {
+      const requestedAfter: string[] = [];
+      const monitor = app.application.get(EngineQuotaMonitor);
+      const original = monitor.requestEngineQuotaRefresh.bind(monitor);
+      vi.spyOn(monitor, 'requestEngineQuotaRefresh').mockImplementation((quotaEngine) => {
+        requestedAfter.push(workedSteps().at(-1) ?? '');
+        original(quotaEngine);
+      });
+      return requestedAfter;
+    };
+
+    it('asks for a quota refresh after a review turn', async () => {
+      const requestedAfter = recordRefreshRequests();
+      engine.failWith = () => null;
+      const taskId = await startReviewedTask();
+      await waitFor(
+        () => readTask(taskId),
+        (detail) => detail.currentStep?.name === 'Phát triển',
+        'review passed',
+      );
+      expect(requestedAfter).toContain('review');
+    }, 60_000);
+
+    it('asks no extra refresh after a rate-limited review (the planner reads it)', async () => {
+      const requestedAfter = recordRefreshRequests();
+      const taskId = await waitForReviewQuotaWait();
+      expect(readReviewPending(taskId)).toBe(1);
+      expect(requestedAfter).not.toContain('review');
     }, 60_000);
 
     it('asks the user when the rate-limited review has no exhausted bucket', async () => {
