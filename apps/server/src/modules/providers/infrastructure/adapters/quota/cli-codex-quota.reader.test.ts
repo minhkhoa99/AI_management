@@ -9,12 +9,12 @@ function readFixtureLines(fixtureName: string): string[] {
     .filter((line) => line !== '');
 }
 
-it('keeps the fixture a valid recording', () => {
-  const lines = readFixtureLines('codex-rate-limits.jsonl');
-  expect(() => lines.forEach((line) => JSON.parse(line))).not.toThrow();
-});
-
 describe('parseCodexRateLimitLine', () => {
+  it('keeps the fixture a valid recording', () => {
+    const lines = readFixtureLines('codex-rate-limits.jsonl');
+    expect(() => lines.forEach((line) => JSON.parse(line))).not.toThrow();
+  });
+
   it('reads primary and secondary windows from a real recording', () => {
     const readings = readFixtureLines('codex-rate-limits.jsonl')
       .map(parseCodexRateLimitLine)
