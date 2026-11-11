@@ -11,6 +11,12 @@ export type ScriptedResponse = (
   signal: AbortSignal,
 ) => Promise<string>;
 
+export interface ScriptedFailure {
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
 /** The report block an agent ends its turn with. */
 export function agentReport(
   outcome: string,
@@ -40,6 +46,8 @@ export function stepNameOf(prompt: string): string {
  */
 export class ScriptedEngine implements AgentEnginePort {
   readonly requests: AgentSessionRequest[] = [];
+  /** When it returns a failure the turn ends with that failed event instead of answering. */
+  failWith: (request: AgentSessionRequest) => ScriptedFailure | null = () => null;
   respond: ScriptedResponse = (request) =>
     Promise.resolve(agentReport(defaultOutcome(request.prompt), 'xong'));
 
@@ -49,6 +57,11 @@ export class ScriptedEngine implements AgentEnginePort {
   ): AsyncGenerator<AgentEngineEvent> {
     this.requests.push(request);
     yield { kind: 'session_started', sessionRef: `session-${this.requests.length}`, model: 'fake' };
+    const failure = this.failWith(request);
+    if (failure !== null) {
+      yield { kind: 'failed', ...failure };
+      return;
+    }
     let answer: string;
     try {
       answer = await this.respond(request, signal);

@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { formatQuotaResumeTime, localEngineSchema } from '@aiteam/contracts';
 import type { TerminalEngineEvent } from '../../../../shared/runtime/agent-session-supervisor';
 import { interpretAgentReport, type AgentReport } from '../../domain/agent-report';
 import { formatTaskCode, type Task } from '../../domain/entities/task';
 import type { WorkflowStepState } from '../../domain/entities/workflow';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
+import { ENGINE_QUOTA_GATEWAY, type EngineQuotaGateway } from '../ports/engine-quota.port';
 import {
   STAFF_DIRECTORY,
   TASK_EVENT_LOG,
@@ -13,6 +15,7 @@ import {
   type TestCommandRunner,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
+import { QuotaWaitPlanner } from './quota-wait-planner';
 import { StepReviewLauncher } from './step-review-launcher';
 import { TaskCheckpoints } from './task-checkpoints';
 import { TaskProgression } from './task-progression';
@@ -43,6 +46,8 @@ export class FinishTaskTurnUseCase {
     private readonly reviewLauncher: StepReviewLauncher,
     private readonly taskRemoval: TaskRemoval,
     private readonly taskSplitter: TaskSplitter,
+    private readonly quotaWaitPlanner: QuotaWaitPlanner,
+    @Inject(ENGINE_QUOTA_GATEWAY) private readonly quotaGateway: EngineQuotaGateway,
   ) {}
 
   async finishTaskTurn(taskId: string, terminal: TerminalEngineEvent): Promise<void> {
@@ -55,6 +60,7 @@ export class FinishTaskTurnUseCase {
       return;
     }
     const state = task.toState();
+    this.requestQuotaRefreshAfterTurn(state.engineSnapshot?.provider);
 
     if (stopReason === 'pause') {
       await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi tạm dừng');
@@ -78,7 +84,7 @@ export class FinishTaskTurnUseCase {
       return;
     }
     if (terminal.kind === 'failed') {
-      this.handleEngineFailure(task, terminal);
+      await this.handleEngineFailure(task, terminal);
       this.taskRepository.updateTask(task);
       return;
     }
@@ -243,16 +249,46 @@ export class FinishTaskTurnUseCase {
     this.taskRepository.updateTask(task);
   }
 
-  private handleEngineFailure(
+  private requestQuotaRefreshAfterTurn(provider: string | undefined): void {
+    const engine = localEngineSchema.safeParse(provider);
+    if (engine.success) this.quotaGateway.requestEngineQuotaRefresh(engine.data);
+  }
+
+  /** A rate limit that is really the plan quota: wait for the reset instead of failing. */
+  private async waitForQuotaReset(
     task: Task,
     terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
-  ): void {
+  ): Promise<boolean> {
+    const snapshot = task.toState().engineSnapshot;
+    if (terminal.code !== 'RATE_LIMITED' || snapshot === null) return false;
+    const wait = await this.quotaWaitPlanner.planQuotaWait(snapshot);
+    if (wait === null) return false;
+    await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi hết hạn mức');
+    this.recordEvent(task, 'quota_wait', {
+      engine: wait.engineLabel,
+      windowLabel: wait.windowLabel,
+      runAfter: wait.runAfter,
+      code: terminal.code,
+      message: terminal.message,
+    });
+    task.waitForQuota({
+      runAfter: wait.runAfter,
+      note: `⏸ Chờ hạn mức ${wait.windowLabel} của ${wait.engineLabel} · tự chạy tiếp lúc ${formatQuotaResumeTime(wait.runAfter)}`,
+    });
+    return true;
+  }
+
+  private async handleEngineFailure(
+    task: Task,
+    terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
+  ): Promise<void> {
     const state = task.toState();
     this.recordEvent(task, 'engine_failed', { code: terminal.code, message: terminal.message });
     if (!terminal.retryable) {
       task.fail(`Bộ não báo lỗi (${terminal.code}): ${terminal.message}`);
       return;
     }
+    if (await this.waitForQuotaReset(task, terminal)) return;
     const failures = task.countEngineFailure();
     if (failures > MAX_ENGINE_FAILURES) {
       task.fail(`Bộ não lỗi ${failures} lần liên tiếp (${terminal.code}): ${terminal.message}`);

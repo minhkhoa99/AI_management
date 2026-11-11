@@ -73,3 +73,9 @@ export function describeEngineQuota(report: EngineQuotaReport, now: Date): Engin
       return { headline: 'không đọc được hạn mức', level: 'muted', percent: null };
   }
 }
+
+/** `HH:mm dd/MM` in the machine's local time zone (the server and the UI share one machine). */
+export function formatQuotaResumeTime(iso: string): string {
+  const moment = new Date(iso);
+  return `${formatClock(moment)} ${formatDayMonth(moment)}`;
+}

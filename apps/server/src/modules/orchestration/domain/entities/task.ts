@@ -265,6 +265,16 @@ export class Task {
     this.state.statusNote = input.note ?? null;
   }
 
+  /**
+   * The engine's plan quota is used up: back in the queue until it resets. Same step, same session,
+   * and not an engine failure (the failure counter and the step attempt stay as they were).
+   */
+  waitForQuota(input: { runAfter: string; note: string }): void {
+    this.state.status = 'queued';
+    this.state.runAfter = input.runAfter;
+    this.state.statusNote = input.note;
+  }
+
   /** Returns how many retryable engine failures happened in a row. */
   countEngineFailure(): number {
     this.state.engineFailures += 1;

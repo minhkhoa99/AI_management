@@ -21,7 +21,7 @@ import type { ProcessTerminator } from '../shared/runtime/process-termination';
 export const TEST_SESSION_TOKEN = 'test-session-token-0123456789abcdef0123456789';
 export const TEST_LISTEN_PORT = 7419;
 
-const DEFAULT_FAKE_LOCAL_ENGINES: LocalEngineAdaptersOverride = {
+export const DEFAULT_FAKE_LOCAL_ENGINES: LocalEngineAdaptersOverride = {
   probe: {
     probeLocalEngine: () =>
       Promise.resolve({

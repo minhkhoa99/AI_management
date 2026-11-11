@@ -44,6 +44,7 @@ import { SessionEventRecorder } from './application/use-cases/session-event-reco
 import { StartTaskTurnUseCase } from './application/use-cases/start-task-turn.use-case';
 import { ResumeSplitTasksUseCase } from './application/use-cases/resume-split-tasks.use-case';
 import { StepReviewLauncher } from './application/use-cases/step-review-launcher';
+import { QuotaWaitPlanner } from './application/use-cases/quota-wait-planner';
 import { TaskCheckpoints } from './application/use-cases/task-checkpoints';
 import { TaskHandover } from './application/use-cases/task-handover';
 import { TaskProgression } from './application/use-cases/task-progression';
@@ -193,6 +194,7 @@ import { SkillsModule } from '../skills/skills.module';
     ApprovalPresenter,
     TaskRemoval,
     TaskCheckpoints,
+    QuotaWaitPlanner,
     TaskHandover,
     SessionEventRecorder,
     StepReviewLauncher,

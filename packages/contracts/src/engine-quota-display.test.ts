@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EngineQuotaBucket, EngineQuotaReport } from './engine-quota';
-import { describeEngineQuota } from './engine-quota-display';
+import { describeEngineQuota, formatQuotaResumeTime } from './engine-quota-display';
 
 const now = new Date('2026-11-11T10:00:00.000Z');
 const bucket = (over: Partial<EngineQuotaBucket>): EngineQuotaBucket => ({
@@ -100,5 +100,17 @@ describe('describeEngineQuota', () => {
       level: 'muted',
       percent: null,
     });
+  });
+});
+
+describe('formatQuotaResumeTime', () => {
+  it('formats HH:mm dd/MM in the local time zone', () => {
+    const iso = '2026-11-11T17:00:00.000Z';
+    const moment = new Date(iso);
+    const two = (value: number) => String(value).padStart(2, '0');
+    expect(formatQuotaResumeTime(iso)).toBe(
+      `${two(moment.getHours())}:${two(moment.getMinutes())} ${two(moment.getDate())}/${two(moment.getMonth() + 1)}`,
+    );
+    expect(formatQuotaResumeTime(iso)).toMatch(/^\d{2}:\d{2} \d{2}\/\d{2}$/);
   });
 });
