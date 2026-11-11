@@ -434,6 +434,22 @@ describe('quota wait', () => {
       expect(workedSteps().filter((step) => step === 'review')).toHaveLength(2);
     }, 60_000);
 
+    it('keeps the review wait when an edit sends the same assignee', async () => {
+      const taskId = await waitForReviewQuotaWait();
+      const before = readStoredTask(taskId).run_after;
+      const waiting = await readTask(taskId);
+
+      const edit = await app.callApi('PATCH', `/api/tasks/${taskId}`, {
+        title: 'API đăng nhập v2',
+        assigneeAgentId: waiting.assignee!.id,
+      });
+
+      expect(edit.statusCode, JSON.stringify(edit.body)).toBe(200);
+      expect(readStoredTask(taskId)).toMatchObject({ status: 'queued', run_after: before });
+      expect((await readTask(taskId)).statusNote).toBe(waiting.statusNote);
+      expect(readReviewPending(taskId)).toBe(1);
+    }, 60_000);
+
     it('drops the pending review when the task is delegated during the wait', async () => {
       const taskId = await waitForReviewQuotaWait();
       engine.failWith = () => null;
