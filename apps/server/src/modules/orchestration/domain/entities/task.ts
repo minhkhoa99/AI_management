@@ -193,12 +193,13 @@ export class Task {
   }
 
   /**
-   * A queued task that waited for a quota reset (or a retry back-off) runs at once under its new
-   * assignee, and a reopened review of the old worker's report is dropped: the new one does the step.
+   * A queued task that waited for a quota reset (or a retry back-off) runs at once under a new
+   * assignee (the same assignee changes nothing), and a reopened review of the old worker's report is dropped: the new one does the step.
    */
   assignTo(agentId: string): void {
+    const assigneeChanges = agentId !== this.state.assigneeAgentId;
     this.state.assigneeAgentId = agentId;
-    if (this.state.status === 'queued') {
+    if (assigneeChanges && this.state.status === 'queued') {
       this.clearRunAfter();
       this.state.reviewPending = false;
     }

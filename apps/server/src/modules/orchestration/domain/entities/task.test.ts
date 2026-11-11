@@ -101,4 +101,17 @@ describe('Task quota wait cleanup', () => {
     task.assignTo('agent-2');
     expect(task.toState().runAfter).toBe(WAIT.runAfter);
   });
+
+  it('assignTo with the same assignee keeps the wait and the pending review', () => {
+    const task = newTask();
+    task.waitForReviewQuota({ runAfter: WAIT.runAfter, note: `${QUOTA_WAIT_NOTE_PREFIX} 5 giờ` });
+
+    task.assignTo('agent-1');
+
+    expect(task.toState()).toMatchObject({
+      runAfter: WAIT.runAfter,
+      statusNote: `${QUOTA_WAIT_NOTE_PREFIX} 5 giờ`,
+      reviewPending: true,
+    });
+  });
 });

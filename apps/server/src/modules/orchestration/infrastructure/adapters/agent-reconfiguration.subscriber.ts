@@ -29,17 +29,17 @@ export class AgentReconfigurationSubscriber implements OnModuleInit, OnModuleDes
     this.unsubscribe = this.domainEventBus.subscribeToDomainEvent<AgentConfigurationChanged>(
       AGENT_CONFIGURATION_CHANGED,
       (event) => {
+        if (event.reducesPermissions) this.stopTurnsOf(event.agentId);
         if (changesEngine(event)) this.runWaitingTasksAtOnce(event.agentId);
-        if (!event.reducesPermissions) return;
-        for (const taskId of this.runRegistry.listTaskIdsRunBy(event.agentId)) {
-          this.logger.info(
-            { taskId, agentId: event.agentId },
-            'stopping turn: permissions reduced',
-          );
-          this.runRegistry.requestStop(taskId, 'reconfigure');
-        }
       },
     );
+  }
+
+  private stopTurnsOf(agentId: string): void {
+    for (const taskId of this.runRegistry.listTaskIdsRunBy(agentId)) {
+      this.logger.info({ taskId, agentId }, 'stopping turn: permissions reduced');
+      this.runRegistry.requestStop(taskId, 'reconfigure');
+    }
   }
 
   /**
@@ -48,6 +48,14 @@ export class AgentReconfigurationSubscriber implements OnModuleInit, OnModuleDes
    * that still hits the quota simply waits again).
    */
   private runWaitingTasksAtOnce(agentId: string): void {
+    try {
+      this.clearWaitsOfQueuedTasks(agentId);
+    } catch (error) {
+      this.logger.warn({ agentId, err: error }, 'could not wake waiting tasks after engine change');
+    }
+  }
+
+  private clearWaitsOfQueuedTasks(agentId: string): void {
     const taskIds = new Set([
       ...this.taskRepository.listQueuedTaskIdsAssignedTo(agentId),
       ...this.taskRepository.listQueuedTaskIdsWaitingForReview(),

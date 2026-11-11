@@ -245,6 +245,23 @@ describe('quota wait', () => {
       expect(readStoredTask(taskId)).toMatchObject({ status: 'queued', run_after: before });
     }, 60_000);
 
+    it('keeps the wait when an edit sends the same assignee', async () => {
+      quotaBuckets = [bucket({})];
+      const taskId = await startTask();
+      await waitForRateLimitRecord(taskId);
+      const before = readStoredTask(taskId).run_after;
+      const noteBefore = (await readTask(taskId)).statusNote;
+
+      const edit = await app.callApi('PATCH', `/api/tasks/${taskId}`, {
+        title: 'API đăng nhập v2',
+        assigneeAgentId: departmentHead.id,
+      });
+
+      expect(edit.statusCode, JSON.stringify(edit.body)).toBe(200);
+      expect(readStoredTask(taskId)).toMatchObject({ status: 'queued', run_after: before });
+      expect((await readTask(taskId)).statusNote).toBe(noteBefore);
+    }, 60_000);
+
     it('runs a waiting task at once after it is delegated to a subordinate', async () => {
       const pm = agentDetailSchema.parse(
         (
