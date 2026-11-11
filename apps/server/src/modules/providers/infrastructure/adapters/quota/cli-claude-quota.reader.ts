@@ -126,11 +126,13 @@ function describeLabel(label: string): BucketDescription | null {
       appliesToModels: null,
     };
   }
+  // "Sonnet only" covers the `sonnet` model: the first word is the model name to look for.
+  const modelName = week.split(/\s+/)[0]?.toLowerCase() ?? '';
   return {
     group: truncateQuotaGroup(week),
     window: 'weekly',
     windowLabel: 'tuần',
-    appliesToModels: [week.toLowerCase()],
+    appliesToModels: modelName === '' ? null : [modelName],
   };
 }
 

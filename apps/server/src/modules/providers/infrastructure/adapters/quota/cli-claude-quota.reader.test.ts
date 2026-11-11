@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { selectApplicableQuotaBuckets } from '@aiteam/contracts';
 import { describe, expect, it } from 'vitest';
 import { parseClaudeResetTime, parseClaudeUsage } from './cli-claude-quota.reader';
 
@@ -47,6 +48,25 @@ describe('parseClaudeUsage', () => {
       parseClaudeUsage('{"result":"Current session: 140% used"}', NOW).buckets[0]?.remainingPercent,
     ).toBe(0);
     expect(parseClaudeUsage('garbage', NOW).state).toBe('unreadable');
+  });
+
+  it('matches a model-specific week by the first word of its label', () => {
+    const reading = parseClaudeUsage(
+      JSON.stringify({
+        result: 'Current week (Sonnet only): 100% used · resets Nov 18, 7pm (UTC)',
+      }),
+      NOW,
+    );
+    expect(reading.buckets[0]).toMatchObject({ group: 'Sonnet only', appliesToModels: ['sonnet'] });
+    const report = {
+      engine: 'claude_code' as const,
+      state: 'ok' as const,
+      buckets: reading.buckets,
+      checkedAt: null,
+      lastSuccessAt: null,
+    };
+    expect(selectApplicableQuotaBuckets(report, 'sonnet')).toHaveLength(1);
+    expect(selectApplicableQuotaBuckets(report, 'claude-sonnet-4-5')).toHaveLength(1);
   });
 
   it('cuts a long group name instead of rejecting the engine', () => {
