@@ -150,7 +150,10 @@ describe('GitTaskWorkspace with agent-planted files', () => {
 
   it('lists the new engine-managed paths that checkpoints leave out (capped at 20)', async () => {
     const { worktreePath } = await prepare();
-    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toEqual([]);
+    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toEqual({
+      paths: [],
+      total: 0,
+    });
     mkdirSync(path.join(worktreePath, '.agents', 'skills', 'foo'), { recursive: true });
     writeFileSync(path.join(worktreePath, '.agents', 'skills', 'foo', 'SKILL.md'), 's');
     mkdirSync(path.join(worktreePath, 'sub'));
@@ -158,17 +161,18 @@ describe('GitTaskWorkspace with agent-planted files', () => {
     writeFileSync(path.join(worktreePath, '.gemini'), 'file');
     writeFileSync(path.join(worktreePath, 'my.agents.txt'), 'n');
 
-    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toEqual([
-      '.agents/skills/foo/SKILL.md',
-      '.gemini',
-      'sub/_agent',
-    ]);
+    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toEqual({
+      paths: ['.agents/skills/foo/SKILL.md', '.gemini', 'sub/_agent'],
+      total: 3,
+    });
 
     mkdirSync(path.join(worktreePath, '_agents'));
     for (let index = 0; index < 30; index += 1) {
       writeFileSync(path.join(worktreePath, '_agents', `f${index}.md`), 'x');
     }
-    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toHaveLength(20);
+    const capped = await workspace.listUncommittedEngineManagedPaths(worktreePath);
+    expect(capped.paths).toHaveLength(20);
+    expect(capped.total).toBe(33);
   });
 
   it('still excludes managed folders when the environment forces literal pathspecs', async () => {
