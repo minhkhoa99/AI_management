@@ -70,6 +70,7 @@ Ký hiệu cột GĐ: giai đoạn thực hiện trong `IMPLEMENTATION_PLAN.md`.
 |---|---|---|---|
 | Danh sách phòng ban + số agent | `GET /api/departments` | `ListDepartmentsUseCase` · departments | 1 |
 | Ô hạn mức hôm nay (token, số lượt; giới hạn ngân sách tạm bỏ ở Giai đoạn 5) | `GET /api/overview/usage-today` | `SummarizeUsageTodayUseCase` · tracing | 4 |
+| Thẻ "Hạn mức còn lại" (Claude Code, Codex, Antigravity: % còn lại từng cửa sổ, giờ reset, nút ↻ đọc lại) | `GET /api/local-engines/quota`, `POST /api/local-engines/quota/refresh`, SSE `engine_quota.changed` | `EngineQuotaMonitor` (+ `CliClaudeQuotaReader`, `CliCodexQuotaReader`, `CliAntigravityQuotaReader`) · providers; task chờ hạn mức do `QuotaWaitPlanner` · orchestration | sau 5 |
 | Tìm agent hoặc task | lọc phía client trên dữ liệu đã tải; nếu nhiều thì `GET /api/search?q=` | `SearchWorkspaceUseCase` · orchestration | 3 |
 | Chuông + số yêu cầu chờ duyệt | `GET /api/approvals?status=pending`, SSE `approval.*` | `ListPendingApprovalsUseCase` · orchestration | 3 |
 | Nút "Chạy mô phỏng" | bỏ khi làm thật, thay bằng "Tạo task" | — | — |
