@@ -30,6 +30,8 @@ class FakeQuotaGateway implements EngineQuotaGateway {
   requestEngineQuotaRefresh(): void {}
 }
 
+const BEFORE_RESET = Date.parse('2026-11-11T10:00:00.000Z');
+
 describe('QuotaWaitPlanner', () => {
   const gateway = new FakeQuotaGateway();
   const planner = new QuotaWaitPlanner(gateway);
@@ -44,7 +46,10 @@ describe('QuotaWaitPlanner', () => {
         resetsAt: '2026-11-18T11:59:00.000Z',
       }),
     ];
-    const wait = await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' });
+    const wait = await planner.planQuotaWait(
+      { provider: 'claude_code', model: 'opus' },
+      BEFORE_RESET,
+    );
     expect(QUOTA_RESUME_MARGIN_MS).toBe(60_000);
     expect(wait).toEqual({
       runAfter: '2026-11-18T12:00:00.000Z',
@@ -55,11 +60,12 @@ describe('QuotaWaitPlanner', () => {
 
   it('labels each local engine', async () => {
     gateway.buckets = [bucket({})];
-    expect((await planner.planQuotaWait({ provider: 'codex', model: null }))?.engineLabel).toBe(
-      'Codex',
-    );
     expect(
-      (await planner.planQuotaWait({ provider: 'antigravity', model: null }))?.engineLabel,
+      (await planner.planQuotaWait({ provider: 'codex', model: null }, BEFORE_RESET))?.engineLabel,
+    ).toBe('Codex');
+    expect(
+      (await planner.planQuotaWait({ provider: 'antigravity', model: null }, BEFORE_RESET))
+        ?.engineLabel,
     ).toBe('Antigravity');
   });
 
@@ -68,18 +74,35 @@ describe('QuotaWaitPlanner', () => {
       bucket({ remainingPercent: 60 }),
       bucket({ group: 'Fable', window: 'weekly', appliesToModels: ['fable'] }),
     ];
-    expect(await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' })).toBeNull();
+    expect(
+      await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, BEFORE_RESET),
+    ).toBeNull();
+  });
+
+  it('treats a reset that already passed as unknown', async () => {
+    gateway.buckets = [bucket({ resetsAt: '2026-11-11T16:59:00.000Z' })];
+    const afterMargin = Date.parse('2026-11-11T17:00:00.000Z');
+    expect(
+      await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, afterMargin),
+    ).toBeNull();
+    expect(
+      await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, afterMargin - 1),
+    ).not.toBeNull();
   });
 
   it('returns null when the quota is unreadable', async () => {
     gateway.state = 'unreadable';
-    expect(await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' })).toBeNull();
+    expect(
+      await planner.planQuotaWait({ provider: 'claude_code', model: 'opus' }, BEFORE_RESET),
+    ).toBeNull();
     gateway.state = 'ok';
   });
 
   it('never reads the quota for Custom API', async () => {
     gateway.reads.length = 0;
-    expect(await planner.planQuotaWait({ provider: 'custom_api', model: 'x' })).toBeNull();
+    expect(
+      await planner.planQuotaWait({ provider: 'custom_api', model: 'x' }, BEFORE_RESET),
+    ).toBeNull();
     expect(gateway.reads).toEqual([]);
   });
 });

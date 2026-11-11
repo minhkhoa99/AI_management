@@ -60,7 +60,10 @@ export class FinishTaskTurnUseCase {
       return;
     }
     const state = task.toState();
-    this.requestQuotaRefreshAfterTurn(state.engineSnapshot?.provider);
+    // A rate-limited turn is followed by the planner's fresh quota read: no second CLI read.
+    const quotaReadFollows =
+      terminal.kind === 'failed' && terminal.code === 'RATE_LIMITED' && stopReason !== 'pause';
+    if (!quotaReadFollows) this.requestQuotaRefreshAfterTurn(state.engineSnapshot?.provider);
 
     if (stopReason === 'pause') {
       await this.checkpoints.saveTaskCheckpoint(task, 'aiteam: lưu mốc khi tạm dừng');
@@ -283,12 +286,13 @@ export class FinishTaskTurnUseCase {
     terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
   ): Promise<void> {
     const state = task.toState();
+    // A quota wait is one timeline line (quota_wait); engine_failed only on the other paths.
+    if (terminal.retryable && (await this.waitForQuotaReset(task, terminal))) return;
     this.recordEvent(task, 'engine_failed', { code: terminal.code, message: terminal.message });
     if (!terminal.retryable) {
       task.fail(`Bộ não báo lỗi (${terminal.code}): ${terminal.message}`);
       return;
     }
-    if (await this.waitForQuotaReset(task, terminal)) return;
     const failures = task.countEngineFailure();
     if (failures > MAX_ENGINE_FAILURES) {
       task.fail(`Bộ não lỗi ${failures} lần liên tiếp (${terminal.code}): ${terminal.message}`);

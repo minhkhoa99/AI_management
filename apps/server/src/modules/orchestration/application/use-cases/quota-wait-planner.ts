@@ -31,18 +31,21 @@ const ENGINE_LABELS: Record<LocalEngine, string> = {
 export class QuotaWaitPlanner {
   constructor(@Inject(ENGINE_QUOTA_GATEWAY) private readonly quotaGateway: EngineQuotaGateway) {}
 
-  async planQuotaWait(snapshot: {
-    provider: AgentProvider;
-    model: string | null;
-  }): Promise<QuotaWait | null> {
+  async planQuotaWait(
+    snapshot: { provider: AgentProvider; model: string | null },
+    nowEpochMs: number = Date.now(),
+  ): Promise<QuotaWait | null> {
     const engine = localEngineSchema.safeParse(snapshot.provider);
     if (!engine.success) return null;
     const report = await this.quotaGateway.readFreshEngineQuota(engine.data);
     if (report.state !== 'ok') return null;
     const exhaustion = findQuotaExhaustion(selectApplicableQuotaBuckets(report, snapshot.model));
     if (exhaustion === null) return null;
+    const runAfterEpochMs = Date.parse(exhaustion.resetsAt) + QUOTA_RESUME_MARGIN_MS;
+    // A reset that already passed is stale data: waiting would loop with no failure cap.
+    if (Number.isNaN(runAfterEpochMs) || runAfterEpochMs <= nowEpochMs) return null;
     return {
-      runAfter: new Date(Date.parse(exhaustion.resetsAt) + QUOTA_RESUME_MARGIN_MS).toISOString(),
+      runAfter: new Date(runAfterEpochMs).toISOString(),
       engineLabel: ENGINE_LABELS[engine.data],
       windowLabel: exhaustion.bucket.windowLabel,
     };

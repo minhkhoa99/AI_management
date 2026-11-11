@@ -148,6 +148,7 @@ describe('quota wait', () => {
       (await app.callApi('GET', `/api/tasks/${taskId}/events?limit=200`)).body,
     );
     expect(events.map((event) => event.kind)).toContain('quota_wait');
+    expect(events.map((event) => event.kind)).not.toContain('engine_failed');
     expect(events.find((event) => event.kind === 'quota_wait')?.text).toMatch(
       /^dừng vì hết hạn mức tuần của Claude Code, tự chạy tiếp lúc \d{2}:\d{2} \d{2}\/\d{2}$/,
     );
@@ -161,6 +162,14 @@ describe('quota wait', () => {
     const taskId = await startTask();
     const waiting = await waitForRateLimitRecord(taskId);
     expect(waiting.statusNote).toContain('Bộ não tạm lỗi (RATE_LIMITED)');
+    expect(readStoredTask(taskId).engine_failures).toBe(1);
+  }, 60_000);
+
+  it('keeps the old back-off when the reset time already passed', async () => {
+    quotaBuckets = [bucket({ resetsAt: new Date(Date.now() - 3_600_000).toISOString() })];
+    const taskId = await startTask();
+    const waiting = await waitForRateLimitRecord(taskId);
+    expect(waiting.statusNote).toContain('Bộ não tạm lỗi (RATE_LIMITED); thử lại sau 30 giây');
     expect(readStoredTask(taskId).engine_failures).toBe(1);
   }, 60_000);
 
