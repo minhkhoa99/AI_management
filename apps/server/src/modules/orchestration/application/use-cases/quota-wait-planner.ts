@@ -7,6 +7,7 @@ import {
   type AgentProvider,
   type LocalEngine,
 } from '@aiteam/contracts';
+import { QUOTA_WAIT_NOTE_PREFIX } from '../../domain/entities/task';
 import { ENGINE_QUOTA_GATEWAY, type EngineQuotaGateway } from '../ports/engine-quota.port';
 
 /** Extra wait after the engine's reset time, so the turn does not start a moment too early. */
@@ -20,7 +21,7 @@ export interface QuotaWait {
 
 /** The task's status note while it waits (worker turn or superior's review alike). */
 export function buildQuotaWaitNote(wait: QuotaWait): string {
-  return `⏸ Chờ hạn mức ${wait.windowLabel} của ${wait.engineLabel} · tự chạy tiếp lúc ${formatQuotaResumeTime(wait.runAfter)}`;
+  return `${QUOTA_WAIT_NOTE_PREFIX} ${wait.windowLabel} của ${wait.engineLabel} · tự chạy tiếp lúc ${formatQuotaResumeTime(wait.runAfter)}`;
 }
 
 const ENGINE_LABELS: Record<LocalEngine, string> = {

@@ -206,6 +206,75 @@ describe('quota wait', () => {
     expect(readStoredTask(taskId).engine_failures).toBe(0);
   }, 60_000);
 
+  describe('engine or assignee change', () => {
+    const waitUntilDone = (taskId: string) =>
+      waitFor(
+        () => readTask(taskId),
+        (detail) => detail.status === 'succeeded',
+        'task runs at once',
+      );
+
+    it('runs a waiting task at once after the model changes', async () => {
+      quotaBuckets = [bucket({})];
+      const taskId = await startTask();
+      await waitForRateLimitRecord(taskId);
+      engine.failWith = () => null;
+
+      await app.callApi('PATCH', `/api/agents/${departmentHead.id}/configuration`, {
+        provider: 'claude_code',
+        model: 'sonnet',
+        accessLevel: 'edit_workspace',
+        networkAccess: false,
+      });
+
+      await waitUntilDone(taskId);
+    }, 60_000);
+
+    it('keeps the wait when the change is not an engine change', async () => {
+      quotaBuckets = [bucket({})];
+      const taskId = await startTask();
+      await waitForRateLimitRecord(taskId);
+      const before = readStoredTask(taskId).run_after;
+
+      await app.callApi('PATCH', `/api/agents/${departmentHead.id}/configuration`, {
+        provider: 'claude_code',
+        accessLevel: 'edit_workspace',
+        networkAccess: true,
+      });
+
+      expect(readStoredTask(taskId)).toMatchObject({ status: 'queued', run_after: before });
+    }, 60_000);
+
+    it('runs a waiting task at once after it is delegated to a subordinate', async () => {
+      const pm = agentDetailSchema.parse(
+        (
+          await app.callApi('POST', `/api/departments/${department.id}/members`, {
+            name: 'PM Linh',
+            role: 'pm',
+            provider: 'claude_code',
+            reportsToPositionId: departmentHead.positionId,
+          })
+        ).body,
+      );
+      await app.callApi('PATCH', `/api/agents/${pm.id}/configuration`, {
+        provider: 'claude_code',
+        accessLevel: 'edit_workspace',
+        networkAccess: false,
+      });
+      quotaBuckets = [bucket({})];
+      const taskId = await startTask();
+      await waitForRateLimitRecord(taskId);
+      engine.failWith = () => null;
+
+      const delegation = await app.callApi('POST', `/api/tasks/${taskId}/delegations`, {
+        toAgentId: pm.id,
+      });
+
+      expect(delegation.statusCode, JSON.stringify(delegation.body)).toBe(201);
+      await waitUntilDone(taskId);
+    }, 60_000);
+  });
+
   it('asks for a quota refresh after a turn of a local engine', async () => {
     const taskId = await startTask();
     await waitForRateLimitRecord(taskId);
@@ -217,9 +286,10 @@ describe('quota wait', () => {
   }, 60_000);
   describe('superior review', () => {
     let reviewWorkflowId: string;
+    let pm: AgentDetail;
 
     beforeEach(async () => {
-      const pm = agentDetailSchema.parse(
+      pm = agentDetailSchema.parse(
         (
           await app.callApi('POST', `/api/departments/${department.id}/members`, {
             name: 'PM Linh',
@@ -314,6 +384,70 @@ describe('quota wait', () => {
       expect(workedSteps()).toEqual(['Tiếp nhận và lập kế hoạch', 'Chia task', 'review', 'review']);
       expect(engine.requests[3]?.permissions.accessLevel).toBe('read_only');
       expect(readReviewPending(taskId)).toBe(0);
+    }, 60_000);
+
+    async function waitForReviewQuotaWait(): Promise<string> {
+      engine.failWith = (request) => {
+        if (stepNameOf(request.prompt) !== 'review') return null;
+        return RATE_LIMIT;
+      };
+      quotaBuckets = [bucket({})];
+      const taskId = await startReviewedTask();
+      await waitForRateLimitRecord(taskId);
+      expect(readReviewPending(taskId)).toBe(1);
+      return taskId;
+    }
+
+    it('wakes a review that waits for the quota when the engine changes', async () => {
+      const taskId = await waitForReviewQuotaWait();
+      engine.failWith = () => null;
+
+      await app.callApi('PATCH', `/api/agents/${departmentHead.id}/configuration`, {
+        provider: 'claude_code',
+        model: 'sonnet',
+        accessLevel: 'edit_workspace',
+        networkAccess: false,
+      });
+
+      await waitFor(
+        () => readTask(taskId),
+        (detail) => detail.currentStep?.name === 'Phát triển',
+        'review runs at once',
+      );
+      expect(workedSteps().filter((step) => step === 'review')).toHaveLength(2);
+    }, 60_000);
+
+    it('drops the pending review when the task is delegated during the wait', async () => {
+      const taskId = await waitForReviewQuotaWait();
+      engine.failWith = () => null;
+      const developer = agentDetailSchema.parse(
+        (
+          await app.callApi('POST', `/api/departments/${department.id}/members`, {
+            name: 'Dev Nam',
+            role: 'dev',
+            provider: 'claude_code',
+            reportsToPositionId: pm.positionId,
+          })
+        ).body,
+      );
+      await app.callApi('PATCH', `/api/agents/${developer.id}/configuration`, {
+        provider: 'claude_code',
+        accessLevel: 'edit_workspace',
+        networkAccess: false,
+      });
+
+      const delegation = await app.callApi('POST', `/api/tasks/${taskId}/delegations`, {
+        toAgentId: developer.id,
+      });
+
+      expect(delegation.statusCode, JSON.stringify(delegation.body)).toBe(201);
+      expect(readReviewPending(taskId)).toBe(0);
+      await waitFor(
+        () => workedSteps().length,
+        (count) => count >= 4,
+        'worker turn',
+      );
+      expect(workedSteps()[3]).not.toBe('review');
     }, 60_000);
 
     it('asks the user when the rate-limited review has no exhausted bucket', async () => {

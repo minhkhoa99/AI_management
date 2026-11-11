@@ -65,6 +65,9 @@ export interface TaskContent {
 
 export const FEEDBACK_MAX_LENGTH = 8_000;
 
+/** Every status note of a task waiting for a plan quota reset starts with this. */
+export const QUOTA_WAIT_NOTE_PREFIX = '⏸ Chờ hạn mức';
+
 /** A unit of work for a department: what to do, who does it, where, and how far it got. */
 export class Task {
   private constructor(private state: TaskState) {}
@@ -189,8 +192,24 @@ export class Task {
     }
   }
 
+  /**
+   * A queued task that waited for a quota reset (or a retry back-off) runs at once under its new
+   * assignee, and a reopened review of the old worker's report is dropped: the new one does the step.
+   */
   assignTo(agentId: string): void {
     this.state.assigneeAgentId = agentId;
+    if (this.state.status === 'queued') {
+      this.clearRunAfter();
+      this.state.reviewPending = false;
+    }
+  }
+
+  /** The back-off or quota wait is over (the engine changed): the scheduler may pick the task now. */
+  clearRunAfter(): void {
+    this.state.runAfter = null;
+    if (this.state.statusNote?.startsWith(QUOTA_WAIT_NOTE_PREFIX) === true) {
+      this.state.statusNote = null;
+    }
   }
 
   /** The workflow and the folder are fixed once work has started. */

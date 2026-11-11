@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Task } from './task';
+import { QUOTA_WAIT_NOTE_PREFIX, Task } from './task';
 
 function newTask(): Task {
   return Task.createNew({
@@ -59,5 +59,46 @@ describe('Task pending review', () => {
 
       expect(task.toState().reviewPending).toBe(false);
     }
+  });
+});
+
+describe('Task quota wait cleanup', () => {
+  it('clearRunAfter drops the back-off and only a quota-wait note', () => {
+    const waiting = newTask();
+    waiting.waitForQuota({ runAfter: WAIT.runAfter, note: `${QUOTA_WAIT_NOTE_PREFIX} 5 giờ` });
+    waiting.clearRunAfter();
+    expect(waiting.toState()).toMatchObject({ runAfter: null, statusNote: null });
+
+    const backingOff = newTask();
+    backingOff.requeue({
+      stepId: null,
+      retriesUsed: 0,
+      runAfter: WAIT.runAfter,
+      note: 'Bộ não tạm lỗi',
+    });
+    backingOff.clearRunAfter();
+    expect(backingOff.toState()).toMatchObject({ runAfter: null, statusNote: 'Bộ não tạm lỗi' });
+  });
+
+  it('assignTo on a queued task clears the wait and the pending review', () => {
+    const task = newTask();
+    task.waitForReviewQuota({ runAfter: WAIT.runAfter, note: `${QUOTA_WAIT_NOTE_PREFIX} 5 giờ` });
+
+    task.assignTo('agent-2');
+
+    expect(task.toState()).toMatchObject({
+      assigneeAgentId: 'agent-2',
+      runAfter: null,
+      statusNote: null,
+      reviewPending: false,
+    });
+  });
+
+  it('assignTo leaves the wait of a task that is not queued', () => {
+    const task = newTask();
+    task.waitForQuota({ runAfter: WAIT.runAfter, note: `${QUOTA_WAIT_NOTE_PREFIX} 5 giờ` });
+    task.pause();
+    task.assignTo('agent-2');
+    expect(task.toState().runAfter).toBe(WAIT.runAfter);
   });
 });

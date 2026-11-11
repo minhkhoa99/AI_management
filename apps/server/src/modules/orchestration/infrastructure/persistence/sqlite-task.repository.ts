@@ -49,6 +49,8 @@ export class SqliteTaskRepository implements TaskRepository {
   private readonly runnableStatement: StatementSync;
   private readonly subtasksStatement: StatementSync;
   private readonly readyParentsStatement: StatementSync;
+  private readonly queuedAssignedStatement: StatementSync;
+  private readonly queuedReviewStatement: StatementSync;
 
   constructor(
     @Inject(SQLITE_DATABASE) database: DatabaseSync,
@@ -85,6 +87,12 @@ export class SqliteTaskRepository implements TaskRepository {
              WHERE c.parent_task_id = p.id
                AND c.status NOT IN (${FINISHED_TASK_STATUSES.map((status) => `'${status}'`).join(', ')}))
         ORDER BY p.sequence_number`,
+    );
+    this.queuedAssignedStatement = database.prepare(
+      "SELECT id FROM tasks WHERE status = 'queued' AND assignee_agent_id = ? ORDER BY sequence_number",
+    );
+    this.queuedReviewStatement = database.prepare(
+      "SELECT id FROM tasks WHERE status = 'queued' AND review_pending = 1 ORDER BY sequence_number",
     );
   }
 
@@ -169,6 +177,18 @@ export class SqliteTaskRepository implements TaskRepository {
 
   listSubtaskIds(parentTaskId: string): string[] {
     return (this.subtasksStatement.all(parentTaskId) as unknown as Array<{ id: string }>).map(
+      (row) => row.id,
+    );
+  }
+
+  listQueuedTaskIdsAssignedTo(agentId: string): string[] {
+    return (this.queuedAssignedStatement.all(agentId) as unknown as Array<{ id: string }>).map(
+      (row) => row.id,
+    );
+  }
+
+  listQueuedTaskIdsWaitingForReview(): string[] {
+    return (this.queuedReviewStatement.all() as unknown as Array<{ id: string }>).map(
       (row) => row.id,
     );
   }
