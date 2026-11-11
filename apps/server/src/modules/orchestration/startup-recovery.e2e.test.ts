@@ -133,7 +133,9 @@ describe('startup recovery after an abrupt stop', () => {
       app.database.prepare('SELECT COUNT(*) AS remaining FROM cli_process_records').get(),
     ).toEqual({ remaining: 0 });
     await app.closeApplication();
-  });
+    // The process inspector is a fake; the cost is booting the full Nest application, which is the
+    // first one of this file and can exceed the default 5 s when the whole suite runs in parallel.
+  }, 30_000);
 
   it('puts running tasks back in the queue keeping session_ref, and completes cancellations', async () => {
     const { app } = await restartApplication();

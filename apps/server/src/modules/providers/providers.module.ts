@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../app-runtime-config';
+import {
+  LOCAL_ENGINE_ADAPTERS_OVERRIDE,
+  type LocalEngineAdaptersOverride,
+} from '../../shared/runtime/local-engine-adapters-override';
 import { AgentsModule } from '../agents/agents.module';
 import { AGENT_ENGINE_RESOLVER } from '../orchestration/application/ports/agent-engine.port';
 import { AGENT_RUN_PREPARER } from '../orchestration/application/ports/task-execution.ports';
@@ -61,9 +65,24 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
         new AesGcmSecretVault(runtimeConfig.secretKeyFilePath),
     },
     { provide: MODEL_CATALOG, useClass: HttpModelCatalog },
-    { provide: LOCAL_ENGINE_PROBE, useClass: CliLocalEngineProbe },
-    { provide: CODEX_MODEL_CATALOG, useClass: CliCodexModelCatalog },
-    { provide: ANTIGRAVITY_MODEL_CATALOG, useClass: CliAntigravityModelCatalog },
+    {
+      provide: LOCAL_ENGINE_PROBE,
+      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (override: LocalEngineAdaptersOverride) =>
+        override?.probe ?? new CliLocalEngineProbe(),
+    },
+    {
+      provide: CODEX_MODEL_CATALOG,
+      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (override: LocalEngineAdaptersOverride) =>
+        override?.codexModelCatalog ?? new CliCodexModelCatalog(),
+    },
+    {
+      provide: ANTIGRAVITY_MODEL_CATALOG,
+      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (override: LocalEngineAdaptersOverride) =>
+        override?.antigravityModelCatalog ?? new CliAntigravityModelCatalog(),
+    },
     { provide: SAMPLE_WORKSPACE_FACTORY, useClass: TemporarySampleWorkspaceFactory },
     ClaudeCodeCliEngine,
     CodexCliEngine,
