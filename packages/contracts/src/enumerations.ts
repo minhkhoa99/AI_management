@@ -124,3 +124,19 @@ export type LineCommentStatus = z.infer<typeof lineCommentStatusSchema>;
 export const SKILL_SOURCE_KINDS = ['written', 'template', 'markdown', 'zip', 'github'] as const;
 export const skillSourceKindSchema = z.enum(SKILL_SOURCE_KINDS);
 export type SkillSourceKind = z.infer<typeof skillSourceKindSchema>;
+
+/** What the app could read about an engine's plan usage limits. */
+export const ENGINE_QUOTA_STATES = [
+  'ok',
+  'not_installed',
+  'not_signed_in',
+  'unreadable',
+  'not_applicable',
+] as const;
+export const engineQuotaStateSchema = z.enum(ENGINE_QUOTA_STATES);
+export type EngineQuotaState = z.infer<typeof engineQuotaStateSchema>;
+
+/** Kind of usage window a quota bucket measures. */
+export const QUOTA_WINDOWS = ['five_hour', 'weekly', 'other'] as const;
+export const quotaWindowSchema = z.enum(QUOTA_WINDOWS);
+export type QuotaWindow = z.infer<typeof quotaWindowSchema>;
