@@ -15,7 +15,8 @@ afterEach(async () => {
   );
 });
 
-describe('AntigravityCliEngine', () => {
+// These tests spawn real git (slow on Windows), so they get more than the default 5 s under load.
+describe('AntigravityCliEngine', { timeout: 30_000 }, () => {
   it('ends with one failed event and spawns nothing when the workspace guard refuses', async () => {
     const workingDirectory = await mkdtemp(path.join(tmpdir(), 'aiteam-agy-work-'));
     const unrelatedRoot = await mkdtemp(path.join(tmpdir(), 'aiteam-agy-root-'));

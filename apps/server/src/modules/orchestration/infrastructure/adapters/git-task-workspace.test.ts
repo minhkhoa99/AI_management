@@ -15,7 +15,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GitTaskWorkspace } from './git-task-workspace';
 
 /** The agent's worktree is untrusted: these cover what an agent could plant there. */
-describe('GitTaskWorkspace with agent-planted files', () => {
+// These tests spawn real git (slow on Windows), so they get more than the default 5 s under load.
+describe('GitTaskWorkspace with agent-planted files', { timeout: 30_000 }, () => {
   let rootDirectory: string;
   let repositoryDirectory: string;
   let workspace: GitTaskWorkspace;

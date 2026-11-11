@@ -15,7 +15,8 @@ import { clearEngineManagedPaths } from './antigravity-workspace-guard';
 
 const FOLDER_NAMES = ['.agents', '.agent', '_agents', '_agent', '.gemini'];
 
-describe('clearEngineManagedPaths', () => {
+// These tests spawn real git (slow on Windows), so they get more than the default 5 s under load.
+describe('clearEngineManagedPaths', { timeout: 30_000 }, () => {
   let sandbox: string;
   let root: string;
 
