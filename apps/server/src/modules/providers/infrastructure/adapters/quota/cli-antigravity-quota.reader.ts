@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { z } from 'zod';
 import { type EngineQuotaBucket, engineQuotaBucketSchema } from '@aiteam/contracts';
 import { AppError } from '../../../../../shared/errors/app-error';
@@ -9,11 +7,9 @@ import type {
 } from '../../../application/ports/engine-quota-reader.port';
 import { clearEngineManagedPaths } from '../engines/antigravity-workspace-guard';
 import { resolveCliExecutable } from '../engines/cli-process';
+import { readQuotaCommandOutput } from './quota-command';
 import { prepareQuotaProbeDirectory } from './quota-probe-directory';
 
-const runExecutable = promisify(execFile);
-const USAGE_TIMEOUT_MS = 20_000;
-const USAGE_MAX_BYTES = 1024 * 1024;
 const WINDOW_LABEL_MAX_LENGTH = 40;
 const MODELS_PREFIX = 'Models within this group:';
 const SIGNED_OUT_PATTERN = /authentication required|sign in|not logged in|unauthori[sz]ed|\b401\b/i;
@@ -45,18 +41,21 @@ export class CliAntigravityQuotaReader implements EngineQuotaReader {
       const executable = resolveCliExecutable('agy');
       const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
       await clearEngineManagedPaths(probeDirectory, null);
-      const { stdout } = await runExecutable(
-        executable.command,
-        [...executable.leadingArgs, '-p', '/usage', '--output-format', 'json'],
-        {
-          cwd: probeDirectory,
-          timeout: USAGE_TIMEOUT_MS,
-          maxBuffer: USAGE_MAX_BYTES,
-          windowsHide: true,
-          encoding: 'utf8',
-        },
-      );
-      return parseAntigravityUsage(stdout);
+      const output = await readQuotaCommandOutput({
+        executable,
+        args: ['-p', '/usage', '--output-format', 'json'],
+        workingDirectory: probeDirectory,
+      });
+      if (output.timedOut) return { state: 'unreadable', buckets: [] };
+      const reading = parseAntigravityUsage(output.stdout);
+      if (
+        reading.state !== 'ok' &&
+        SIGNED_OUT_PATTERN.test(`${output.stdout}
+${output.stderrTail}`)
+      ) {
+        return { state: 'not_signed_in', buckets: [] };
+      }
+      return reading;
     } catch (error) {
       return readingFromFailure(error);
     }
@@ -64,20 +63,8 @@ export class CliAntigravityQuotaReader implements EngineQuotaReader {
 }
 
 function readingFromFailure(error: unknown): EngineQuotaReading {
-  if (error instanceof AppError && error.code === 'ENGINE_NOT_INSTALLED') {
-    return { state: 'not_installed', buckets: [] };
-  }
-  // execFile failures carry the CLI's own output; a sign-in complaint may be in either stream.
-  const output = error instanceof Error ? failureOutput(error) : '';
-  return {
-    state: SIGNED_OUT_PATTERN.test(output) ? 'not_signed_in' : 'unreadable',
-    buckets: [],
-  };
-}
-
-function failureOutput(error: Error): string {
-  const { stdout, stderr } = error as { stdout?: unknown; stderr?: unknown };
-  return [stdout, stderr].filter((part) => typeof part === 'string').join('\n');
+  const notInstalled = error instanceof AppError && error.code === 'ENGINE_NOT_INSTALLED';
+  return { state: notInstalled ? 'not_installed' : 'unreadable', buckets: [] };
 }
 
 export function parseAntigravityUsage(stdout: string): EngineQuotaReading {

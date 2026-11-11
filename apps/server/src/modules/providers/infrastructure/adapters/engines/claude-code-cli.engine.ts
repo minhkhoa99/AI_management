@@ -52,7 +52,7 @@ function toClaudeCommandRules(prefixes: CommandPrefixes): string[] {
  * Settings from the command line outrank every settings file. With no settings source loaded this
  * is a second guard: hooks never run.
  */
-const FLAG_SETTINGS = JSON.stringify({ disableAllHooks: true });
+export const FLAG_SETTINGS = JSON.stringify({ disableAllHooks: true });
 
 /**
  * Claude Code with the user's signed-in account: `claude -p --output-format stream-json`.
