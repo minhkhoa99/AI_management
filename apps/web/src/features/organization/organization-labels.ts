@@ -19,6 +19,9 @@ export interface ProviderPresentation {
   foreground: string;
 }
 
+/** Short names of the local engines, for narrow spaces. */
+export const LOCAL_ENGINE_MARKS = { claude_code: 'CC', codex: 'CX', antigravity: 'AG' } as const;
+
 /** Colours follow the design mockup (Claude Code blue, Codex green, Custom API amber). */
 export const PROVIDER_PRESENTATION: Record<AgentProvider, ProviderPresentation> = {
   claude_code: {

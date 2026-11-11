@@ -11,11 +11,13 @@ const TICK_MILLISECONDS = 60_000;
 interface QuotaState {
   reports: EngineQuotaReport[] | null;
   refreshing: boolean;
+  /** Why the last manual refresh failed; cleared by the next success. */
+  refreshError: string | null;
   /** Wall clock of the last change, so components can show relative times without own timers. */
   now: number;
 }
 
-let state: QuotaState = { reports: null, refreshing: false, now: 0 };
+let state: QuotaState = { reports: null, refreshing: false, refreshError: null, now: 0 };
 const listeners = new Set<() => void>();
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let pendingLoad: Promise<void> | null = null;
@@ -29,8 +31,9 @@ function updateState(changes: Partial<QuotaState>): void {
 function reloadEngineQuotas(): Promise<void> {
   pendingLoad ??= loadEngineQuotas()
     .then((reports) => updateState({ reports }))
-    .catch(() => {
+    .catch((error: unknown) => {
       // Keep the numbers we have; the footer ages and the next tick or stream event retries.
+      console.warn('Không tải được hạn mức engine', error);
       updateState({});
     })
     .finally(() => {
@@ -41,11 +44,12 @@ function reloadEngineQuotas(): Promise<void> {
 
 async function refreshQuotasNow(): Promise<void> {
   if (state.refreshing) return;
-  updateState({ refreshing: true });
+  updateState({ refreshing: true, refreshError: null });
   try {
     updateState({ reports: await refreshEngineQuotas(), refreshing: false });
-  } catch {
-    updateState({ refreshing: false });
+  } catch (error: unknown) {
+    console.warn('Không đọc lại được hạn mức engine', error);
+    updateState({ refreshing: false, refreshError: 'Không đọc lại được hạn mức.' });
   }
 }
 
@@ -73,6 +77,7 @@ export function useEngineQuotas(): {
   reports: EngineQuotaReport[] | null;
   refresh: () => void;
   refreshing: boolean;
+  refreshError: string | null;
   now: number;
 } {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
@@ -89,6 +94,7 @@ export function useEngineQuotas(): {
     reports: snapshot.reports,
     refresh,
     refreshing: snapshot.refreshing,
+    refreshError: snapshot.refreshError,
     now: snapshot.now,
   };
 }

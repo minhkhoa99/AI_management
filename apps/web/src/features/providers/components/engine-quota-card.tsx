@@ -1,7 +1,7 @@
 'use client';
 
 import { describeEngineQuota, type EngineQuotaReport } from '@aiteam/contracts';
-import { PROVIDER_PRESENTATION } from '../../organization/organization-labels';
+import { LOCAL_ENGINE_MARKS, PROVIDER_PRESENTATION } from '../../organization/organization-labels';
 import { useEngineQuotas } from '../engine-quota-store';
 import styles from './engine-quota-card.module.css';
 
@@ -13,9 +13,6 @@ const LEVEL_CLASS: Record<QuotaLevel, string> = {
   critical: styles.levelCritical ?? '',
   muted: styles.levelMuted ?? '',
 };
-
-/** Short name for a narrow sidebar. */
-const ENGINE_MARK = { claude_code: 'CC', codex: 'CX', antigravity: 'AG' } as const;
 
 function describeBucketLine(report: EngineQuotaReport, bucketIndex: number, now: Date): string {
   const bucket = report.buckets[bucketIndex];
@@ -43,7 +40,7 @@ function EngineQuotaRow({ report, now }: { report: EngineQuotaReport; now: numbe
         <span className={`${styles.levelDot} ${LEVEL_CLASS[description.level]}`} aria-hidden />
         <span className={styles.engineName} title={presentation.label}>
           <span className={styles.engineMark} aria-hidden>
-            {ENGINE_MARK[report.engine]}
+            {LOCAL_ENGINE_MARKS[report.engine]}
           </span>
           <span className={styles.engineLabel}>{presentation.label}</span>
         </span>
@@ -82,7 +79,7 @@ function EngineQuotaRow({ report, now }: { report: EngineQuotaReport; now: numbe
 
 /** "Hạn mức còn lại": plan usage limits of the local engines, one row per engine. */
 export function EngineQuotaCard() {
-  const { reports, refresh, refreshing, now } = useEngineQuotas();
+  const { reports, refresh, refreshing, refreshError, now } = useEngineQuotas();
   if (reports === null || reports.length === 0) return null;
   const clock = now === 0 ? Date.now() : now;
   return (
@@ -105,6 +102,11 @@ export function EngineQuotaCard() {
           ↻
         </button>
       </div>
+      {refreshError !== null && (
+        <span role="alert" className={styles.refreshError}>
+          {refreshError}
+        </span>
+      )}
     </div>
   );
 }

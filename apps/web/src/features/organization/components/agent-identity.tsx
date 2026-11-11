@@ -1,6 +1,7 @@
 import {
   type AgentProvider,
   classifyQuotaLevel,
+  type EngineQuotaReport,
   findLowestQuotaBucket,
   type LocalEngine,
   localEngineSchema,
@@ -22,19 +23,34 @@ function formatResetMoment(isoTimestamp: string): string {
   return `${clock} ${day}/${month}`;
 }
 
-/** Warning for a local engine whose limit that applies to `model` is almost used up. */
-function useQuotaWarning(provider: AgentProvider, model: string | null | undefined) {
-  const { reports } = useEngineQuotas();
-  const engine = localEngineSchema.safeParse(provider);
-  if (model === undefined || !engine.success || reports === null) return null;
-  const localEngine: LocalEngine = engine.data;
-  const report = reports.find((candidate) => candidate.engine === localEngine);
+/** The warning for a local engine whose limit that applies to `model` is almost used up. */
+function describeQuotaWarning(
+  reports: EngineQuotaReport[] | null,
+  engine: LocalEngine,
+  model: string | null,
+): string | null {
+  const report = reports?.find((candidate) => candidate.engine === engine);
   if (report === undefined) return null;
   const lowest = findLowestQuotaBucket(selectApplicableQuotaBuckets(report, model));
   if (lowest === null || classifyQuotaLevel(lowest.remainingPercent) !== 'critical') return null;
   const resetText =
     lowest.resetsAt === null ? '' : ` · reset ${formatResetMoment(lowest.resetsAt)}`;
-  return `Hạn mức ${lowest.windowLabel} của ${PROVIDER_PRESENTATION[provider].label} còn ${lowest.remainingPercent}%${resetText}`;
+  return `Hạn mức ${lowest.windowLabel} của ${PROVIDER_PRESENTATION[engine].label} còn ${lowest.remainingPercent}%${resetText}`;
+}
+
+/** Only mounted for local engines with a model, so other badges never start the quota store. */
+function QuotaWarningMark({ engine, model }: { engine: LocalEngine; model: string | null }) {
+  const { reports } = useEngineQuotas();
+  const warning = describeQuotaWarning(reports, engine, model);
+  if (warning === null) return null;
+  return (
+    <>
+      {' '}
+      <span role="img" aria-label={warning} title={warning}>
+        ⚠
+      </span>
+    </>
+  );
 }
 
 export function ProviderBadge({
@@ -45,15 +61,16 @@ export function ProviderBadge({
   model?: string | null;
 }) {
   const presentation = PROVIDER_PRESENTATION[provider];
-  const warning = useQuotaWarning(provider, model);
+  const engine = localEngineSchema.safeParse(provider);
   return (
     <span
       className={controlStyles.badge}
       style={{ background: presentation.background, color: presentation.foreground }}
-      title={warning ?? undefined}
     >
       {presentation.label}
-      {warning !== null && ' ⚠'}
+      {model !== undefined && engine.success && (
+        <QuotaWarningMark engine={engine.data} model={model} />
+      )}
     </span>
   );
 }

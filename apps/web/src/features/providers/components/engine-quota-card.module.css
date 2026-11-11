@@ -39,6 +39,25 @@
   gap: 4px;
   cursor: pointer;
   border-radius: 6px;
+  position: relative;
+  padding-right: 16px;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary::before {
+  content: '▸';
+  position: absolute;
+  right: 0;
+  color: var(--color-text-muted);
+  transition: transform 0.15s;
+}
+
+.details[open] > .summary::before {
+  transform: rotate(90deg);
 }
 
 .summary:focus-visible {
@@ -162,4 +181,18 @@
     flex-direction: row;
     gap: 12px;
   }
+}
+
+.refreshError {
+  font-size: 12px;
+  color: var(--color-danger);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
