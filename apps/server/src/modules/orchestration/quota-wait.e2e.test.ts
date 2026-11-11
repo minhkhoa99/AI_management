@@ -585,6 +585,12 @@ describe('quota wait', () => {
         'turn of the new assignee',
       );
       expect(workedSteps()[3]).not.toBe('review');
+      // Let the step finish (checkpoint and review included) before the app and its folders close.
+      await waitFor(
+        () => readTask(taskId),
+        (detail) => detail.currentStep?.name === 'Phát triển',
+        'step passed after the edit',
+      );
     }, 60_000);
 
     /** The step that ran last each time a turn's end asked for a quota refresh. */
