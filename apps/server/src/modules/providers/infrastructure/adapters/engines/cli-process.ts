@@ -18,6 +18,8 @@ export interface CliInvocation {
   workingDirectory: string;
   /** Prompt text; sent on stdin so it never goes through argument parsing or a shell. */
   stdinText: string;
+  /** Keep stdin open after writing (JSON-RPC servers quit on EOF); the process is killed on abort. */
+  keepStdinOpen?: boolean;
 }
 
 export type CliOutput =
@@ -141,7 +143,11 @@ export async function* streamCliOutput(
   child.stdin?.on('error', () => {
     // EPIPE when the CLI exits before reading stdin; the exit code reports the real problem.
   });
-  child.stdin?.end(invocation.stdinText);
+  if (invocation.keepStdinOpen === true) {
+    child.stdin?.write(invocation.stdinText);
+  } else {
+    child.stdin?.end(invocation.stdinText);
+  }
 
   try {
     if (child.stdout !== null) {
