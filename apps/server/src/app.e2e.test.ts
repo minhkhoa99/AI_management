@@ -56,6 +56,8 @@ describe('aiteam HTTP application (e2e)', () => {
       database,
       logger: createAppLogger({ level: 'silent' }),
       webRootDirectory,
+      // Never spawns the real engine CLIs.
+      localEngineAdaptersOverride: { quotaReaders: [] },
     });
   });
 

@@ -26,7 +26,7 @@ export class CliClaudeQuotaReader implements EngineQuotaReader {
 
   constructor(private readonly dataDirectory: string) {}
 
-  async readEngineQuota(): Promise<EngineQuotaReading> {
+  async readEngineQuota(signal?: AbortSignal): Promise<EngineQuotaReading> {
     try {
       const executable = resolveCliExecutable('claude');
       const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
@@ -44,6 +44,7 @@ export class CliClaudeQuotaReader implements EngineQuotaReader {
           '--strict-mcp-config',
         ],
         workingDirectory: probeDirectory,
+        signal,
       });
       if (output.timedOut) return { state: 'unreadable', buckets: [] };
       const reading = parseClaudeUsage(output.stdout, new Date());

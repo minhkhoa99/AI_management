@@ -27,6 +27,8 @@ export class EngineQuotaMonitor implements EngineQuotaGateway, OnModuleInit, OnM
   private readonly reports = new Map<LocalEngine, EngineQuotaReport>();
   private readonly readsInFlight = new Map<LocalEngine, Promise<EngineQuotaReport>>();
   private readonly lastReadStartedAt = new Map<LocalEngine, number>();
+  private readonly trailingTimers = new Map<LocalEngine, NodeJS.Timeout>();
+  private readonly shutdown = new AbortController();
   private pollTimer: NodeJS.Timeout | null = null;
 
   constructor(
@@ -49,13 +51,18 @@ export class EngineQuotaMonitor implements EngineQuotaGateway, OnModuleInit, OnM
     this.pollTimer.unref();
   }
 
-  onModuleDestroy(): void {
+  /** Stops polling, aborts the CLIs still being read and waits for them to finish. */
+  async onModuleDestroy(): Promise<void> {
     if (this.pollTimer !== null) clearInterval(this.pollTimer);
     this.pollTimer = null;
+    for (const timer of this.trailingTimers.values()) clearTimeout(timer);
+    this.trailingTimers.clear();
+    this.shutdown.abort();
+    await Promise.allSettled([...this.readsInFlight.values()]);
   }
 
   listEngineQuotas(): EngineQuotaReport[] {
-    return LOCAL_ENGINES.map((engine) => this.reports.get(engine) ?? neverReadReport(engine));
+    return LOCAL_ENGINES.map((engine) => this.currentReport(engine));
   }
 
   refreshAllEngineQuotas(): Promise<EngineQuotaReport[]> {
@@ -65,6 +72,7 @@ export class EngineQuotaMonitor implements EngineQuotaGateway, OnModuleInit, OnM
   readFreshEngineQuota(engine: LocalEngine): Promise<EngineQuotaReport> {
     const running = this.readsInFlight.get(engine);
     if (running !== undefined) return running;
+    if (this.shutdown.signal.aborted) return Promise.resolve(this.currentReport(engine));
     const started = this.readAndStoreEngineQuota(engine).finally(() => {
       this.readsInFlight.delete(engine);
     });
@@ -72,14 +80,34 @@ export class EngineQuotaMonitor implements EngineQuotaGateway, OnModuleInit, OnM
     return started;
   }
 
+  /**
+   * Requests that fall inside the 30 s spacing (or during a read) merge into one trailing read
+   * that starts when the spacing ends, so the latest state is never missed.
+   */
   requestEngineQuotaRefresh(engine: LocalEngine): void {
-    if (this.readsInFlight.has(engine)) return;
+    if (this.shutdown.signal.aborted || this.trailingTimers.has(engine)) return;
     const lastStartedAt = this.lastReadStartedAt.get(engine);
-    if (lastStartedAt !== undefined && Date.now() - lastStartedAt < ENGINE_QUOTA_MIN_SPACING_MS) {
+    const spacingEndsAt =
+      lastStartedAt === undefined ? 0 : lastStartedAt + ENGINE_QUOTA_MIN_SPACING_MS;
+    const delayMs = spacingEndsAt - Date.now();
+    if (delayMs <= 0 && !this.readsInFlight.has(engine)) {
+      // readFreshEngineQuota never rejects.
+      void this.readFreshEngineQuota(engine);
       return;
     }
-    // readFreshEngineQuota never rejects.
-    void this.readFreshEngineQuota(engine);
+    const timer = setTimeout(
+      () => {
+        this.trailingTimers.delete(engine);
+        void this.readFreshEngineQuota(engine);
+      },
+      Math.max(delayMs, 0),
+    );
+    timer.unref();
+    this.trailingTimers.set(engine, timer);
+  }
+
+  private currentReport(engine: LocalEngine): EngineQuotaReport {
+    return this.reports.get(engine) ?? neverReadReport(engine);
   }
 
   private async readAndStoreEngineQuota(engine: LocalEngine): Promise<EngineQuotaReport> {
@@ -106,7 +134,7 @@ export class EngineQuotaMonitor implements EngineQuotaGateway, OnModuleInit, OnM
     const reader = this.readersByEngine.get(engine);
     if (reader === undefined) return { state: 'unreadable', buckets: [] };
     try {
-      return await reader.readEngineQuota();
+      return await reader.readEngineQuota(this.shutdown.signal);
     } catch (error) {
       // Readers never throw by contract; an unexpected failure must not escape the monitor.
       this.logger.warn(

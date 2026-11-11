@@ -130,7 +130,7 @@ describe('EngineQuotaMonitor', () => {
     monitor.onModuleInit();
     expect(reader.calls).toBe(0);
     expect(vi.getTimerCount()).toBe(0);
-    monitor.onModuleDestroy();
+    void monitor.onModuleDestroy();
   });
 
   it('reads at boot and every 5 minutes in production, and stops on destroy', async () => {
@@ -146,8 +146,45 @@ describe('EngineQuotaMonitor', () => {
     expect(reader.calls).toBe(1);
     await vi.advanceTimersByTimeAsync(300_000);
     expect(reader.calls).toBe(2);
-    monitor.onModuleDestroy();
+    await monitor.onModuleDestroy();
     await vi.advanceTimersByTimeAsync(600_000);
     expect(reader.calls).toBe(2);
+  });
+
+  it('merges requests inside the spacing into one trailing read', async () => {
+    const reader = fakeReader('claude_code', [okReading(60)]);
+    const { monitor } = createMonitor([reader]);
+    monitor.requestEngineQuotaRefresh('claude_code');
+    await vi.advanceTimersByTimeAsync(1_000);
+    monitor.requestEngineQuotaRefresh('claude_code');
+    monitor.requestEngineQuotaRefresh('claude_code');
+    await vi.advanceTimersByTimeAsync(28_000);
+    expect(reader.calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(reader.calls).toBe(2);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(reader.calls).toBe(2);
+  });
+
+  it('aborts and awaits slow reads on destroy and starts none afterwards', async () => {
+    let started = 0;
+    const slowReader: EngineQuotaReader = {
+      engine: 'codex',
+      readEngineQuota: (signal) => {
+        started += 1;
+        return new Promise<EngineQuotaReading>((resolve) => {
+          signal?.addEventListener('abort', () => resolve({ state: 'unreadable', buckets: [] }));
+        });
+      },
+    };
+    const { monitor } = createMonitor([slowReader]);
+    const pending = monitor.readFreshEngineQuota('codex');
+    monitor.requestEngineQuotaRefresh('codex');
+    await monitor.onModuleDestroy();
+    expect((await pending).state).toBe('unreadable');
+    await monitor.readFreshEngineQuota('codex');
+    monitor.requestEngineQuotaRefresh('codex');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(started).toBe(1);
   });
 });

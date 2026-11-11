@@ -7,6 +7,6 @@ export type EngineQuotaReading = { state: EngineQuotaState; buckets: EngineQuota
 
 export interface EngineQuotaReader {
   readonly engine: LocalEngine;
-  /** Never throws: every failure is reported through `state`. */
-  readEngineQuota(): Promise<EngineQuotaReading>;
+  /** Never throws: every failure is reported through `state`. An aborted read is `unreadable`. */
+  readEngineQuota(signal?: AbortSignal): Promise<EngineQuotaReading>;
 }

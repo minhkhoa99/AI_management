@@ -36,7 +36,7 @@ export class CliAntigravityQuotaReader implements EngineQuotaReader {
 
   constructor(private readonly dataDirectory: string) {}
 
-  async readEngineQuota(): Promise<EngineQuotaReading> {
+  async readEngineQuota(signal?: AbortSignal): Promise<EngineQuotaReading> {
     try {
       const executable = resolveCliExecutable('agy');
       const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
@@ -45,6 +45,7 @@ export class CliAntigravityQuotaReader implements EngineQuotaReader {
         executable,
         args: ['-p', '/usage', '--output-format', 'json'],
         workingDirectory: probeDirectory,
+        signal,
       });
       if (output.timedOut) return { state: 'unreadable', buckets: [] };
       const reading = parseAntigravityUsage(output.stdout);

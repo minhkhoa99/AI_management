@@ -59,10 +59,11 @@ export class CliCodexQuotaReader implements EngineQuotaReader {
     private readonly timeoutMilliseconds: number = QUOTA_TIMEOUT_MS,
   ) {}
 
-  async readEngineQuota(): Promise<EngineQuotaReading> {
+  async readEngineQuota(signal?: AbortSignal): Promise<EngineQuotaReading> {
     try {
       const executable = resolveCliExecutable('codex');
       const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
+      const timeoutSignal = AbortSignal.timeout(this.timeoutMilliseconds);
       const output = streamCliOutput(
         {
           executable,
@@ -71,7 +72,7 @@ export class CliCodexQuotaReader implements EngineQuotaReader {
           stdinText: `${CODEX_QUOTA_REQUEST_LINES.join('\n')}\n`,
           keepStdinOpen: true,
         },
-        AbortSignal.timeout(this.timeoutMilliseconds),
+        signal === undefined ? timeoutSignal : AbortSignal.any([signal, timeoutSignal]),
       );
       for await (const item of output) {
         if (item.kind !== 'line') break;

@@ -9,6 +9,8 @@ export interface QuotaCommandInput {
   workingDirectory: string;
   /** Overridable so tests need not wait the full 20 s. */
   timeoutMs?: number;
+  /** Aborts the command (and kills its process tree) when the server shuts down. */
+  signal?: AbortSignal;
 }
 
 export interface QuotaCommandOutput {
@@ -25,7 +27,9 @@ export interface QuotaCommandOutput {
 export async function readQuotaCommandOutput(
   input: QuotaCommandInput,
 ): Promise<QuotaCommandOutput> {
-  const signal = AbortSignal.timeout(input.timeoutMs ?? QUOTA_COMMAND_TIMEOUT_MS);
+  const timeoutSignal = AbortSignal.timeout(input.timeoutMs ?? QUOTA_COMMAND_TIMEOUT_MS);
+  const signal =
+    input.signal === undefined ? timeoutSignal : AbortSignal.any([input.signal, timeoutSignal]);
   const lines: string[] = [];
   let collectedBytes = 0;
   let exitCode: number | null = null;
