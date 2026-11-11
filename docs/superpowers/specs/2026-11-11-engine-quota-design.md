@@ -52,17 +52,45 @@ Cả ba đều là lệnh cục bộ, không gọi model, 0 token.
 agy 1.5.5. Trả JSON có cấu trúc (không có `conversation_id`, `usage.total_tokens` = 0):
 
 ```json
-{"status":"SUCCESS","response":"…bảng tab…","command":{"name":"usage","data":{
-  "groups":[
-    {"name":"Gemini Models","description":"Models within this group: Gemini Flash, Gemini Pro",
-     "buckets":[
-       {"id":"gemini-weekly","name":"Weekly Limit Remaining","window":"weekly",
-        "remaining_fraction":0.9934,"reset_time":"2026-11-17T15:58:30Z"},
-       {"id":"gemini-5h","name":"Five Hour Limit Remaining","window":"5h",
-        "remaining_fraction":0.9986,"reset_time":"2026-11-11T18:09:04Z"}]},
-    {"name":"Claude and GPT models","description":"Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
-     "buckets":[{"id":"3p-weekly","window":"weekly","remaining_fraction":1,"reset_time":"…"},
-                {"id":"3p-5h","window":"5h","remaining_fraction":1,"reset_time":"…"}]}]}}}
+{
+  "status": "SUCCESS",
+  "response": "…bảng tab…",
+  "command": {
+    "name": "usage",
+    "data": {
+      "groups": [
+        {
+          "name": "Gemini Models",
+          "description": "Models within this group: Gemini Flash, Gemini Pro",
+          "buckets": [
+            {
+              "id": "gemini-weekly",
+              "name": "Weekly Limit Remaining",
+              "window": "weekly",
+              "remaining_fraction": 0.9934,
+              "reset_time": "2026-11-17T15:58:30Z"
+            },
+            {
+              "id": "gemini-5h",
+              "name": "Five Hour Limit Remaining",
+              "window": "5h",
+              "remaining_fraction": 0.9986,
+              "reset_time": "2026-11-11T18:09:04Z"
+            }
+          ]
+        },
+        {
+          "name": "Claude and GPT models",
+          "description": "Models within this group: Claude Opus, Claude Sonnet, GPT-OSS",
+          "buckets": [
+            { "id": "3p-weekly", "window": "weekly", "remaining_fraction": 1, "reset_time": "…" },
+            { "id": "3p-5h", "window": "5h", "remaining_fraction": 1, "reset_time": "…" }
+          ]
+        }
+      ]
+    }
+  }
+}
 ```
 
 Đọc `command.data.groups[].buckets[]`: `remaining_fraction` (0..1), `window`, `reset_time` (ISO
@@ -126,7 +154,7 @@ Mỗi engine trả một `EngineQuotaReport`:
 - `state`: `ok` | `not_installed` | `not_signed_in` | `unreadable` | `not_applicable`
   (không có hạn mức theo gói).
 - `buckets[]`: `{ group: string|null, window: 'five_hour'|'weekly'|'other', windowLabel: string,
-  remainingPercent: 0..100, resetsAt: ISO|null }`.
+remainingPercent: 0..100, resetsAt: ISO|null }`.
 - `checkedAt` (lần hỏi gần nhất), `lastSuccessAt` (lần đọc được gần nhất; khi `unreadable` vẫn giữ
   bucket của lần đó để hiện mờ kèm "số lúc HH:MM").
 
@@ -202,10 +230,10 @@ Mới, chỉ cho `RATE_LIMITED` của engine cục bộ:
      this group: Gemini Flash, Gemini Pro" → model `gemini-*`; "Claude Opus, Claude Sonnet, GPT-OSS"
      → `claude-*`, `gpt-*`). Không khớp được nhóm nào (model mới, mô tả đổi) → xét mọi nhóm.
    - Codex: mọi bucket (`primary`/`secondary` của mọi `limitId`) đều áp dụng.
-   Có bucket áp dụng với `remainingPercent` = 0 (hoặc CLI báo đã chạm giới hạn, vd. Codex
-   `rateLimitReachedType`) **và** biết `resetsAt` → **hết hạn mức**: task về hàng chờ với
-   `runAfter` = giờ reset **muộn nhất** trong các bucket áp dụng đã về 0, + ~1 phút (5 giờ và tuần
-   cùng về 0 thì phải chờ tuần).
+     Có bucket áp dụng với `remainingPercent` = 0 (hoặc CLI báo đã chạm giới hạn, vd. Codex
+     `rateLimitReachedType`) **và** biết `resetsAt` → **hết hạn mức**: task về hàng chờ với
+     `runAfter` = giờ reset **muộn nhất** trong các bucket áp dụng đã về 0, + ~1 phút (5 giờ và tuần
+     cùng về 0 thì phải chờ tuần).
 3. Không bucket áp dụng nào về 0, hoặc không đọc được, hoặc không có giờ reset → giữ cách cũ (thử lại
    tăng dần rồi `failed`). Một lỗi 429 ngắn trong khi bucket của model khác về 0 rơi vào nhánh này.
 4. Lần chờ hạn mức **không** tăng bộ đếm lỗi engine (`countEngineFailure`), không tính vào
@@ -252,7 +280,7 @@ phụ, nhưng nguồn chính là đọc hạn mức ở bước 1.
 ## 9. Kiểm thử
 
 - Parser từng engine: bản ghi thật (đã làm sạch: bỏ `accountId`, `session_id`), dòng lạ, thiếu giờ
-  reset, phần trăm ngoài 0..100, JSON hỏng, đăng nhập hỏng (Codex `refresh_token_reused` → 
+  reset, phần trăm ngoài 0..100, JSON hỏng, đăng nhập hỏng (Codex `refresh_token_reused` →
   `not_signed_in`).
 - Giờ reset Claude: qua nửa đêm, qua năm mới, múi giờ khác giờ máy.
 - Orchestration: `RATE_LIMITED` + bucket 0 → `queued` với `runAfter` đúng, không tăng bộ đếm lỗi,
