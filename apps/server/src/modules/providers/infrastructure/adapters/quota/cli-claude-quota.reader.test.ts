@@ -11,6 +11,13 @@ function readFixture(fixtureName: string): string {
 const NOW = new Date('2026-11-11T16:28:00.000Z'); // 23:28 Asia/Ho_Chi_Minh
 
 describe('parseClaudeUsage', () => {
+  it('keeps only the limit lines in the recording (no personal tips or skill names)', () => {
+    const recording = JSON.parse(readFixture('claude-usage.json')) as { result: string };
+    expect(recording.result).not.toMatch(/What's contributing|requests|skills/);
+    const limitLines = recording.result.split(/\r?\n/).filter((line) => line.includes('% used'));
+    expect(limitLines).toHaveLength(3);
+  });
+
   it('reads session and weekly lines from a real recording', () => {
     const reading = parseClaudeUsage(readFixture('claude-usage.json'), NOW);
     expect(reading.state).toBe('ok');
