@@ -1,5 +1,9 @@
 import { z } from 'zod';
-import { type EngineQuotaBucket, engineQuotaBucketSchema } from '@aiteam/contracts';
+import {
+  type EngineQuotaBucket,
+  engineQuotaBucketSchema,
+  truncateQuotaGroup,
+} from '@aiteam/contracts';
 import { AppError } from '../../../../../shared/errors/app-error';
 import type {
   EngineQuotaReader,
@@ -119,7 +123,7 @@ export function parseCodexRateLimitLine(line: string): EngineQuotaReading | null
     const reachedWindow = snapshot.rateLimitReachedType ? findReachedWindow(windows) : null;
     for (const window of windows) {
       const checked = engineQuotaBucketSchema.safeParse({
-        group: snapshot.limitName ?? snapshot.limitId ?? null,
+        group: truncateQuotaGroup(snapshot.limitName ?? snapshot.limitId ?? null),
         ...describeWindow(window.windowDurationMins),
         remainingPercent: window === reachedWindow ? 0 : remainingPercentOf(window),
         resetsAt: epochSecondsToIso(window.resetsAt),

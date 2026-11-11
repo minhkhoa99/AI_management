@@ -143,6 +143,22 @@ describe('parseCodexRateLimitLine', () => {
     ]);
   });
 
+  it('cuts a long limit name instead of rejecting the engine', () => {
+    const line = JSON.stringify({
+      id: 2,
+      result: {
+        rateLimits: {
+          limitId: 'codex',
+          limitName: 'L'.repeat(120),
+          primary: { usedPercent: 10, windowDurationMins: 300, resetsAt: 1794433541 },
+        },
+      },
+    });
+    const reading = parseCodexRateLimitLine(line);
+    expect(reading?.state).toBe('ok');
+    expect(reading?.buckets[0]?.group).toBe('L'.repeat(80));
+  });
+
   it('falls back to rateLimits when rateLimitsByLimitId is empty', () => {
     const line = JSON.stringify({
       id: 2,

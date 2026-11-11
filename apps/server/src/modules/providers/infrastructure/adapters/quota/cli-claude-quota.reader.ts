@@ -2,6 +2,7 @@ import {
   type EngineQuotaBucket,
   engineQuotaBucketSchema,
   QUOTA_RESET_HORIZON_MS,
+  truncateQuotaGroup,
 } from '@aiteam/contracts';
 import { z } from 'zod';
 import { AppError } from '../../../../../shared/errors/app-error';
@@ -126,7 +127,7 @@ function describeLabel(label: string): BucketDescription | null {
     };
   }
   return {
-    group: week,
+    group: truncateQuotaGroup(week),
     window: 'weekly',
     windowLabel: 'tuần',
     appliesToModels: [week.toLowerCase()],

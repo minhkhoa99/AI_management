@@ -9,11 +9,23 @@ export const QUOTA_CRITICAL_PERCENT = 10;
 /** The longest plan window is a week: a reset further away than this is stale or misread. */
 export const QUOTA_RESET_HORIZON_MS = 8 * 24 * 60 * 60 * 1000;
 
+export const QUOTA_GROUP_MAX_LENGTH = 80;
+export const QUOTA_WINDOW_LABEL_MAX_LENGTH = 40;
+
+/** Group names come from the CLI as plain text: cut, never a reason to reject the engine. */
+export function truncateQuotaGroup(group: string | null): string | null {
+  return group === null ? null : group.slice(0, QUOTA_GROUP_MAX_LENGTH);
+}
+
+export function truncateQuotaWindowLabel(windowLabel: string): string {
+  return windowLabel.slice(0, QUOTA_WINDOW_LABEL_MAX_LENGTH);
+}
+
 export const engineQuotaBucketSchema = z.object({
   /** Group shown by the engine (a model family); null when the limit is not grouped. */
-  group: z.string().max(80).nullable(),
+  group: z.string().max(QUOTA_GROUP_MAX_LENGTH).nullable(),
   window: quotaWindowSchema,
-  windowLabel: z.string().max(40),
+  windowLabel: z.string().max(QUOTA_WINDOW_LABEL_MAX_LENGTH),
   remainingPercent: z.number().int().min(0).max(100),
   /** ISO timestamp of the next reset; null when unknown. */
   resetsAt: z.string().nullable(),

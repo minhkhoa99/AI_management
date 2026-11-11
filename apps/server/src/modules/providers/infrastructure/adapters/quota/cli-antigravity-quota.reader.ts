@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { type EngineQuotaBucket, engineQuotaBucketSchema } from '@aiteam/contracts';
+import {
+  type EngineQuotaBucket,
+  engineQuotaBucketSchema,
+  truncateQuotaGroup,
+  truncateQuotaWindowLabel,
+} from '@aiteam/contracts';
 import { AppError } from '../../../../../shared/errors/app-error';
 import type {
   EngineQuotaReader,
@@ -10,7 +15,6 @@ import { resolveCliExecutable } from '../engines/cli-process';
 import { readQuotaCommandOutput } from './quota-command';
 import { prepareQuotaProbeDirectory } from './quota-probe-directory';
 
-const WINDOW_LABEL_MAX_LENGTH = 40;
 const MODELS_PREFIX = 'Models within this group:';
 const SIGNED_OUT_PATTERN = /authentication required|sign in|not logged in|unauthori[sz]ed|\b401\b/i;
 
@@ -81,7 +85,7 @@ export function parseAntigravityUsage(stdout: string): EngineQuotaReading {
     const appliesToModels = readGroupModels(group.description);
     for (const bucket of group.buckets) {
       const candidate = {
-        group: group.name,
+        group: truncateQuotaGroup(group.name),
         ...describeWindow(bucket.window),
         remainingPercent: Math.min(100, Math.max(0, Math.round(bucket.remaining_fraction * 100))),
         resetsAt: normaliseResetTime(bucket.reset_time),
@@ -110,7 +114,7 @@ function readLastJsonObject(stdout: string): unknown {
 function describeWindow(cliWindow: string): Pick<EngineQuotaBucket, 'window' | 'windowLabel'> {
   if (cliWindow === '5h') return { window: 'five_hour', windowLabel: '5 giờ' };
   if (cliWindow === 'weekly') return { window: 'weekly', windowLabel: 'tuần' };
-  return { window: 'other', windowLabel: cliWindow.slice(0, WINDOW_LABEL_MAX_LENGTH) };
+  return { window: 'other', windowLabel: truncateQuotaWindowLabel(cliWindow) };
 }
 
 function normaliseResetTime(resetTime: string | null | undefined): string | null {

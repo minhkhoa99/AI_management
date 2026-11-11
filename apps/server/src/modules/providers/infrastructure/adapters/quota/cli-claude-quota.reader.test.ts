@@ -49,6 +49,16 @@ describe('parseClaudeUsage', () => {
     expect(parseClaudeUsage('garbage', NOW).state).toBe('unreadable');
   });
 
+  it('cuts a long group name instead of rejecting the engine', () => {
+    const label = 'Opus '.repeat(30).trim();
+    const reading = parseClaudeUsage(
+      JSON.stringify({ result: `Current week (${label}): 10% used` }),
+      NOW,
+    );
+    expect(reading.state).toBe('ok');
+    expect(reading.buckets[0]?.group).toBe(label.slice(0, 80));
+  });
+
   it('classifies output without limit lines', () => {
     expect(parseClaudeUsage('{"result":"Using an API key via Console"}', NOW).state).toBe(
       'not_applicable',

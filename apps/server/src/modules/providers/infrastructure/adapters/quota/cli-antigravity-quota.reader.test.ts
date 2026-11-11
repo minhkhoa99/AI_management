@@ -32,6 +32,26 @@ describe('parseAntigravityUsage', () => {
     );
   });
 
+  it('cuts long group names and window labels instead of rejecting the engine', () => {
+    const output = JSON.stringify({
+      status: 'SUCCESS',
+      command: {
+        ['data']: {
+          groups: [
+            {
+              name: 'G'.repeat(120),
+              buckets: [{ window: 'w'.repeat(60), remaining_fraction: 0.5 }],
+            },
+          ],
+        },
+      },
+    });
+    const reading = parseAntigravityUsage(output);
+    expect(reading.state).toBe('ok');
+    expect(reading.buckets[0]?.group).toBe('G'.repeat(80));
+    expect(reading.buckets[0]?.windowLabel).toBe('w'.repeat(40));
+  });
+
   it('recognises a signed-out CLI', () => {
     expect(parseAntigravityUsage('error: authentication required').state).toBe('not_signed_in');
   });
