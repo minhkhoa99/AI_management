@@ -151,10 +151,18 @@ Quy tắc chốt; Giai đoạn 2 làm sự kiện và hàm `reducesPermissions`,
   lại được ghi một dòng trên timeline task (`listUncommittedEngineManagedPaths`).
 - git trên worktree luôn chạy với `core.fsmonitor=false`, hook trỏ về null device,
   `commit.gpgsign=false`, diff `--no-ext-diff`. Không mở thứ không phải file thường trong worktree.
-- Chọn model cho agent: Claude dùng tên ngắn (`opus`/`sonnet`/`haiku`/`fable`, ở
-  `providers/domain/claude-code-models.ts`); Codex đọc `codex debug models` (lệnh gỡ lỗi: parse bằng
-  zod, lọc tên model an toàn, lỗi thì trả `problem` để người dùng tự nhập, không bao giờ 500);
-  Antigravity đọc `agy models` (danh sách tab-separated, cache 10 phút, cùng cách xử lý lỗi).
+- Chọn model cho agent: danh sách lấy từ chính CLI đang cài, 0 token, không shell, chạy ở
+  `<data>/quota-probe/`. Claude: `claude -p --input-format stream-json --output-format stream-json
+--verbose` + các cờ cô lập như trên, gửi `control_request` `initialize`, đọc `models` của
+  `control_response` (tên ngắn kèm model thật xếp trước, bản cố định sau, bỏ `default`; không đọc
+  `account`); lỗi thì dùng tên ngắn ở `providers/domain/claude-code-models.ts`. Codex: `codex app-server`
+  `model/list` (`includeHidden:false`). Antigravity: `agy models` (tab-separated). Parse bằng zod, lọc tên
+  model an toàn, cache 60 s, `?refresh=1` (nút ↻) đọc lại, lỗi thì giữ danh sách cũ kèm `problem` (không
+  bao giờ 500). Server chỉ trả model mà phiên bản CLI chạy được: CLI cũ thì thiếu model mới, nên
+  `NpmCliUpdateChecker` so `<cli> --version` với `registry.npmjs.org/<gói>/latest` (chỉ gửi tên gói, nhớ
+  24 giờ, từ chối redirect) và gợi ý lệnh cập nhật; aiteam không tự cập nhật CLI.
+- Tìm CLI trên PATH như shell: thư mục theo thứ tự, thư mục đầu tiên có lệnh thắng (Windows: `.exe`
+  rồi shim npm `.cmd` trong cùng thư mục).
 - Spawn không qua shell; prompt đi qua stdin; huỷ = kill cả cây tiến trình. Model name không được bắt
   đầu bằng `-`.
   Ngoại lệ duy nhất: lệnh kiểm thử và lệnh chạy giao diện (xem trước) của task do người dùng viết
