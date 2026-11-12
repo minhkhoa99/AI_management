@@ -9,7 +9,7 @@ Tài liệu liên quan: [mapping giao diện](UI_MAPPING.md) (màn hình → API
 **Phải có (theo giao diện đã thiết kế):**
 
 - Phòng ban, sơ đồ phân cấp agent dạng cây, bật/tắt agent và cả phòng.
-- Agent chọn bộ não: Claude Code (tài khoản đăng nhập), Codex (tài khoản đăng nhập), Custom API (OpenAI-compatible hoặc Anthropic).
+- Agent chọn bộ não: Claude Code (tài khoản đăng nhập), Codex (tài khoản đăng nhập), Antigravity (`agy`, tài khoản đăng nhập), Custom API (OpenAI-compatible hoặc Anthropic).
 - Quy trình phòng ban: thêm, sửa, xoá, nhân bản, đặt mặc định; các bước có điều kiện chuyển bước và hành vi khi không đạt.
 - Task: tạo, sửa, xoá; giao xuống cấp dưới; thư mục làm việc; tài liệu QA; đích hoàn thành.
 - Xoá task thì agent nhận tín hiệu huỷ, dừng và xác nhận.
@@ -37,6 +37,7 @@ Tài liệu liên quan: [mapping giao diện](UI_MAPPING.md) (màn hình → API
 | Thời gian thực | Server-Sent Events | Một chiều là đủ, nhẹ hơn WebSocket |
 | Gọi Claude Code | `claude -p --output-format stream-json --verbose --setting-sources "" --settings {"disableAllHooks":true} --strict-mcp-config` | Dùng tài khoản đã đăng nhập; không nạp file settings nào (hook/plugin/MCP cá nhân, hay `.claude/` do agent ghi trong worktree); CLAUDE.md của dự án do nền tảng đưa vào prompt |
 | Gọi Codex | `codex exec --json --ignore-user-config` (gọi thẳng CLI, chốt ở Giai đoạn 2 thay cho `@openai/codex-sdk`) | Dùng chung đăng nhập với Codex app, không thêm dependency |
+| Gọi Antigravity | `agy --input-format stream-json --output-format stream-json --disable-slash-commands --settings <JSON> [--model <tên>] [--conversation <id>]`; prompt là một sự kiện NDJSON trên stdin | Dùng chung đăng nhập với Antigravity IDE (kho khoá của hệ điều hành, nền tảng không giữ token). Quyền đi qua `--settings` (allow/deny, luật lệnh là regex cả dòng); không dùng `--mode`/sandbox. Vẫn nạp hook/MCP/plugin cá nhân từ `~/.gemini/config` (chấp nhận). CLAUDE.md của dự án do nền tảng đưa vào prompt |
 | Custom API | `fetch` thuần tới OpenAI-compatible hoặc Anthropic Messages API | Không cần SDK riêng |
 | Không gian làm việc | Mỗi task một git worktree + nhánh `agent/<taskId>`; mỗi mốc là một commit | Diff, hoàn tác, huỷ đều dựa trên git |
 | Kiểm tra đầu vào | `zod` dùng chung cho backend và frontend | Một nguồn định nghĩa, nhẹ |
@@ -52,7 +53,7 @@ Bạn tạo task (UI) → TaskController → CreateTaskUseCase → TaskRepositor
   → StartAgentSessionUseCase:
       WorkspacePort.prepareTaskWorkspace()      // git worktree
       GoalBuilder.buildCompletionGoal()         // QA hoặc mô tả + tiêu chí
-      AgentEnginePort.startSession()            // Claude Code / Codex / Custom API
+      AgentEnginePort.startSession()            // Claude Code / Codex / Antigravity / Custom API
   → mỗi sự kiện của engine → TraceRecorder (lưu) → EventBus → SSE → UI
   → WorkflowEngine.evaluateStepGate() quyết định sang bước sau, quay lại hay dừng
 Xoá task → CancelTaskUseCase → AbortController.abort() → engine dừng → sự kiện "cancelled"
@@ -104,10 +105,10 @@ Quy tắc phụ thuộc: `presentation → application → domain`. `infrastruct
 | departments | Department, Position (ghế trong sơ đồ), ReportingLine | createDepartment, assignAgentToPosition, toggleDepartment, buildOrgTree | SqliteDepartmentRepository |
 | agents | Agent, ProviderChoice, PermissionPolicy | createAgent, changeAgentProvider, toggleAgent | SqliteAgentRepository |
 | orchestration | Task, Delegation, Workflow, WorkflowStep, StepGate, CompletionGoal, Approval | createTask, updateTask, deleteTask, delegateTaskToSubordinate, startAgentSession, cancelTaskExecution, evaluateStepGate, reviewCheckpoint | SqliteTaskRepository, GitWorktreeWorkspace, TaskScheduler |
-| providers | ProviderConnection, ApiFormat, ModelCatalog | saveConnection, testConnection, listModels, checkLocalEngines | ClaudeCodeCliEngine, CodexCliEngine, OpenAiCompatibleEngine, AnthropicApiEngine, SecretVault |
+| providers | ProviderConnection, ApiFormat, ModelCatalog | saveConnection, testConnection, listModels, checkLocalEngines | ClaudeCodeCliEngine, CodexCliEngine, AntigravityCliEngine, OpenAiCompatibleEngine, AnthropicApiEngine, SecretVault |
 | tracing | Trace, TraceEvent, Checkpoint, LineComment | recordEvent, streamTaskEvents, listCheckpoints, addLineComment | SqliteTraceRepository, InProcessEventBus, SseStreamer |
 
-**Port quan trọng nhất** nằm ở `orchestration/application/ports/agent-engine.port.ts`. Orchestration chỉ biết interface này, không biết Claude hay Codex.
+**Port quan trọng nhất** nằm ở `orchestration/application/ports/agent-engine.port.ts`. Orchestration chỉ biết interface này, không biết Claude, Codex hay Antigravity.
 
 ```ts
 export interface AgentEnginePort {
@@ -141,7 +142,7 @@ Trạng thái task: `queued → running → waiting_children → waiting_approva
 | Cột | Giá trị |
 |---|---|
 | departments.team_mode | `orchestrator` \| `claude_code_teams` \| `codex_subagents` |
-| agents.provider | `claude_code` \| `codex` \| `custom_api` (`custom_api` bắt buộc có `connection_id`) |
+| agents.provider | `claude_code` \| `codex` \| `antigravity` \| `custom_api` (`custom_api` bắt buộc có `connection_id`) |
 | agents.access_level | `read_only` \| `edit_workspace` (mặc định `read_only`) |
 | agents.network_access | `0` \| `1` (mặc định `0`) |
 | provider_connections.format | `openai` \| `anthropic` |
@@ -170,8 +171,8 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
    - Filter toàn cục chuyển lỗi thành HTTP kèm `traceId`. Không có `catch` rỗng.
    - **Cô lập lỗi theo phiên:** mọi phiên agent chạy trong `AgentSessionSupervisor`. Mọi promise, stream và listener của phiên phải được `await` hoặc dẫn lỗi về supervisor. Lỗi trong phiên chuyển thành `failed` của task (hoặc thử lại nếu `retryable`), không lan ra tiến trình. ESLint bật `@typescript-eslint/no-floating-promises` và `no-misused-promises` ở mức error.
    - **Lỗi cấp tiến trình** (`unhandledRejection`, `uncaughtException`): log `fatal` kèm stack và `traceId`, ghi `~/.aiteam/logs/crash-<timestamp>.json`, huỷ mọi phiên đang chạy và lưu mốc (tối đa 5 giây), flush log, `exit(1)`, in hướng dẫn chạy lại `aiteam`. Không ghi log rồi chạy tiếp. Không thêm tiến trình giám sát.
-   - **Phục hồi khi khởi động:** mỗi tiến trình CLI của phiên được ghi lại PID, tên và thời điểm bắt đầu. Khi khởi động: chỉ kill PID còn sống nếu đúng tên đã ghi (claude/codex) **và** thời điểm bắt đầu khớp (tránh giết nhầm tiến trình được hệ điều hành cấp lại PID); task `running` → `queued` (giữ `session_ref`), `cancelling` → `cancelled`.
-7. **Testability:** domain và use case có unit test với repository trong bộ nhớ và engine giả. Mỗi engine có contract test chạy trên file JSONL ghi sẵn từ Claude Code và Codex thật. Mỗi bug fix đi kèm một regression test.
+   - **Phục hồi khi khởi động:** mỗi tiến trình CLI của phiên được ghi lại PID, tên và thời điểm bắt đầu. Khi khởi động: chỉ kill PID còn sống nếu đúng tên đã ghi (claude/codex/agy) **và** thời điểm bắt đầu khớp (tránh giết nhầm tiến trình được hệ điều hành cấp lại PID); task `running` → `queued` (giữ `session_ref`), `cancelling` → `cancelled`.
+7. **Testability:** domain và use case có unit test với repository trong bộ nhớ và engine giả. Mỗi engine có contract test chạy trên file JSONL ghi sẵn từ Claude Code, Codex và Antigravity thật. Mỗi bug fix đi kèm một regression test.
 8. **Observability:** `AsyncLocalStorage` mang `traceId`, `taskId`, `agentId` xuyên suốt. Mọi log dạng JSON có các trường này. Mỗi task là một trace, mỗi bước là một span lưu trong `task_events`.
 9. **Security by design:**
    - Chỉ lắng nghe `127.0.0.1`.
@@ -209,7 +210,7 @@ Giai đoạn 3 thêm cột `tasks.engine_snapshot_json` (bằng migration của 
 ```
 npm i -g @minhkhoa/aimanagement   # một lần
 aimanagement                 # mở ứng dụng: tạo ~/.aiteam, chạy migration, bật server, mở trình duyệt
-aimanagement doctor          # kiểm tra Node, git, claude, codex và trạng thái đăng nhập
+aimanagement doctor          # kiểm tra Node, git, claude, codex, agy và trạng thái đăng nhập
 aimanagement --port 8000     # đổi cổng ưu tiên (hoặc biến môi trường AITEAM_PORT)
 ```
 
@@ -244,9 +245,9 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 ### Giai đoạn 2: Bộ não (providers)
 
-- `ClaudeCodeCliEngine`, `CodexCliEngine` chạy bằng tài khoản đăng nhập, chuyển luồng JSONL thành `AgentEngineEvent`.
+- `ClaudeCodeCliEngine`, `CodexCliEngine`, `AntigravityCliEngine` chạy bằng tài khoản đăng nhập, chuyển luồng JSONL thành `AgentEngineEvent`.
 - `OpenAiCompatibleEngine`, `AnthropicApiEngine` cho Custom API.
-- Màn hình Cài đặt: kết nối Custom API (thêm, sửa, xoá, tải model, kiểm tra), thẻ Claude Code và Codex với nút chạy thử.
+- Màn hình Cài đặt: kết nối Custom API (thêm, sửa, xoá, tải model, kiểm tra), thẻ Claude Code, Codex và Antigravity với nút chạy thử.
 - Contract test cho từng engine bằng JSONL ghi sẵn.
 - Sự kiện `AgentConfigurationChanged` và hàm xác định `reducesPermissions` trong module agents/providers, có test (mục 5.11). Chưa có phần phản ứng ở orchestration.
 - Script đo bundle web theo route và bước kiểm tra ngân sách trong CI, kèm file mốc đo chunk framework (mục 5.10).
@@ -339,7 +340,7 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
   - `.claude/settings.json` do agent ghi trong worktree (hook, `apiKeyHelper`) chạy lệnh với quyền người dùng ở phiên Claude sau, kể cả phiên duyệt chỉ đọc (thử thật với claude 2.1.319). Chốt: không nạp settings nào, nền tảng đưa CLAUDE.md vào prompt.
   - `--disallowedTools` rỗng làm Claude thoát lỗi; mã phiên từ output CLI được kiểm định dạng trước khi thành tham số.
   - git chạy trên worktree của agent: tắt fsmonitor, hook, ký commit, external diff; hoàn tác dùng `--literal-pathspecs`; không mở FIFO; không chép tài liệu QA qua symlink/junction; tên tài liệu QA so không phân biệt hoa thường.
-- **Giới hạn đã biết (chấp nhận, ghi trên thẻ Claude Code):** agent `edit_workspace` trên Claude Code chạy Bash/PowerShell với quyền người dùng, nên đọc được `~/.aiteam` và lách được luật chặn lệnh (lọc theo đầu lệnh). Chỉ cấp quyền sửa cho việc tin được. Codex dựa vào sandbox của Codex (trên Windows cần kiểm chứng thêm). Agent đổi file `.git` trong worktree sang gitdir giả vẫn là rủi ro còn lại (đã tắt các cấu hình chạy lệnh phổ biến).
+- **Giới hạn đã biết (chấp nhận, ghi trên thẻ Claude Code):** agent `edit_workspace` trên Claude Code chạy Bash/PowerShell với quyền người dùng, nên đọc được `~/.aiteam` và lách được luật chặn lệnh (lọc theo đầu lệnh). Chỉ cấp quyền sửa cho việc tin được. Codex dựa vào sandbox của Codex (trên Windows cần kiểm chứng thêm). Antigravity dựa vào luật allow/deny trong `--settings` (regex cả dòng lệnh, không phải sandbox) và vẫn nạp cấu hình cấp người dùng `~/.gemini/config`. Agent đổi file `.git` trong worktree sang gitdir giả vẫn là rủi ro còn lại (đã tắt các cấu hình chạy lệnh phổ biến).
 
 ### Sau Giai đoạn 5: task con (agent tự tách việc)
 
@@ -369,10 +370,10 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 
 | Rủi ro | Cách xử lý |
 |---|---|
-| Định dạng JSONL của Claude Code / Codex thay đổi | Phần đọc luồng tách riêng, có contract test; đổi định dạng chỉ sửa một file |
+| Định dạng JSONL của Claude Code / Codex / Antigravity thay đổi | Phần đọc luồng tách riêng, có contract test; đổi định dạng chỉ sửa một file |
 | Hết hạn mức gói Claude / ChatGPT khi chạy nhiều agent | Giới hạn song song mặc định 2; nhận diện lỗi hạn mức thành `RateLimitedError` và tự xếp lại hàng |
 | `node:sqlite` còn hạn chế | Repository qua interface; có thể đổi sang `better-sqlite3` mà không đụng domain |
-| Agent ghi ra ngoài thư mục | Worktree riêng, danh sách thư mục cho phép, sandbox của Codex, chặn lệnh nguy hiểm của Claude Code |
+| Agent ghi ra ngoài thư mục | Worktree riêng, danh sách thư mục cho phép, sandbox của Codex, luật allow/deny và thư mục làm việc của Antigravity, chặn lệnh nguy hiểm của Claude Code |
 | Gói cài quá nặng | Bundle bằng esbuild, chỉ giữ dependency chạy thật, kiểm tra kích thước trong CI |
 
 ## 9. Cách làm việc với repo

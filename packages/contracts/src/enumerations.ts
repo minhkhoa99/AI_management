@@ -10,7 +10,7 @@ export const teamModeSchema = z.enum(TEAM_MODES);
 export type TeamMode = z.infer<typeof teamModeSchema>;
 
 /** Which engine ("brain") an agent runs on. */
-export const AGENT_PROVIDERS = ['claude_code', 'codex', 'custom_api'] as const;
+export const AGENT_PROVIDERS = ['claude_code', 'codex', 'antigravity', 'custom_api'] as const;
 export const agentProviderSchema = z.enum(AGENT_PROVIDERS);
 export type AgentProvider = z.infer<typeof agentProviderSchema>;
 

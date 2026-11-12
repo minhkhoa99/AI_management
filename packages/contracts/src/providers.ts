@@ -6,7 +6,7 @@ import { entityIdSchema } from './organization';
 // the event stream every engine produces (phase 2).
 
 /** Engines running on this machine with the user's signed-in account. */
-export const LOCAL_ENGINES = ['claude_code', 'codex'] as const;
+export const LOCAL_ENGINES = ['claude_code', 'codex', 'antigravity'] as const;
 export const localEngineSchema = z.enum(LOCAL_ENGINES);
 export type LocalEngine = z.infer<typeof localEngineSchema>;
 
@@ -81,7 +81,7 @@ export const localEngineStatusListSchema = z.array(localEngineStatusSchema);
 
 /** One quick pick of the model picker for agents on a local engine. */
 export const localEngineModelChoiceSchema = z.object({
-  /** Passed to the CLI as-is (`claude --model <model>`, `codex exec -m <model>`). */
+  /** Passed to the CLI as-is (`claude --model <model>`, `codex exec -m <model>`, `agy -m <model>`). */
   model: z.string(),
   label: z.string(),
   /** What it is good for, so the owner can trade quality for tokens per agent. */
@@ -90,8 +90,8 @@ export const localEngineModelChoiceSchema = z.object({
 export type LocalEngineModelChoice = z.infer<typeof localEngineModelChoiceSchema>;
 
 /**
- * Claude Code: built-in aliases (always the newest model of each family). Codex: the CLI's own
- * catalog, so new models show up without an aiteam release. Empty with a `problem` when the
+ * Claude Code: built-in aliases (always the newest model of each family). Codex and Antigravity:
+ * the CLI's own catalog, so new models show up without an aiteam release. Empty with a `problem` when the
  * catalog cannot be read; the owner can still type any model name.
  */
 export const localEngineModelListSchema = z.object({

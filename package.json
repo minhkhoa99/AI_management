@@ -1,6 +1,6 @@
 {
   "name": "@minhkhoa/aimanagement",
-  "version": "0.3.1",
+  "version": "0.4.0-beta.0",
   "description": "AI Team: nền tảng điều phối nhiều agent AI (Claude Code, Codex, Custom API) theo phòng ban, chạy hoàn toàn trên máy.",
   "keywords": [
     "ai",

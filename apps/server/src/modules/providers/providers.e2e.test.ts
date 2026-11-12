@@ -12,6 +12,7 @@ import {
   providerConnectionSchema,
 } from '@aiteam/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { EngineUnavailableError } from '../../shared/errors/app-error';
 import { InProcessDomainEventBus } from '../../shared/events/in-process-domain-event-bus';
 import {
   startTestApplication,
@@ -80,7 +81,7 @@ async function createConnection(overrides: Record<string, unknown> = {}) {
   return providerConnectionSchema.parse(response.body);
 }
 
-async function createAgent(provider: 'codex' | 'claude_code' = 'codex') {
+async function createAgent(provider: 'codex' | 'claude_code' | 'antigravity' = 'codex') {
   const department = departmentSchema.parse(
     (await app.callApi('POST', '/api/departments', { name: 'Dev', color: '#60A5FA' })).body,
   );
@@ -269,6 +270,31 @@ describe('provider connections', () => {
   });
 });
 
+describe('Antigravity agents', () => {
+  it('creates an agent on the Antigravity engine', async () => {
+    const agent = await createAgent('antigravity');
+
+    expect(agent.provider).toBe('antigravity');
+  });
+
+  it('rejects a connection on an Antigravity agent, at creation', async () => {
+    const connection = await createConnection();
+    const department = departmentSchema.parse(
+      (await app.callApi('POST', '/api/departments', { name: 'Dev', color: '#60A5FA' })).body,
+    );
+
+    const response = await app.callApi('POST', `/api/departments/${department.id}/members`, {
+      name: 'Dev backend',
+      role: 'dev',
+      provider: 'antigravity',
+      connectionId: connection.id,
+      reportsToPositionId: null,
+    });
+
+    expect(readErrorCode(response)).toBe('CONNECTION_NOT_APPLICABLE');
+  });
+});
+
 describe('agent configuration changes', () => {
   function captureConfigurationEvents(): AgentConfigurationChanged[] {
     const captured: AgentConfigurationChanged[] = [];
@@ -354,17 +380,30 @@ describe('agent configuration changes', () => {
 });
 
 describe('local engines', () => {
-  it('lists both engines with their safe default settings', async () => {
+  it('lists every engine with their safe default settings', async () => {
     const engines = localEngineStatusListSchema.parse(
       (await app.callApi('GET', '/api/local-engines')).body,
     );
 
-    expect(engines.map((engine) => engine.engine)).toEqual(['claude_code', 'codex']);
+    expect(engines.map((engine) => engine.engine)).toEqual(['claude_code', 'codex', 'antigravity']);
     expect(
       engines.every(
         (engine) => engine.settings.blockDangerousCommands && !engine.settings.allowNetwork,
       ),
     ).toBe(true);
+  });
+
+  it('saves the settings of the Antigravity engine', async () => {
+    const updated = await app.callApi('PATCH', '/api/local-engines/antigravity/settings', {
+      defaultModel: 'agy-flash',
+      allowNetwork: true,
+    });
+
+    expect(updated.body).toEqual({
+      defaultModel: 'agy-flash',
+      blockDangerousCommands: true,
+      allowNetwork: true,
+    });
   });
 
   it('updates settings and validates the model name', async () => {
@@ -388,25 +427,73 @@ describe('local engines', () => {
     expect(unknownEngine.statusCode).toBe(400);
   });
 
-  it('offers model quick picks: Claude aliases, and Codex catalog or a problem', async () => {
-    const claude = localEngineModelListSchema.parse(
-      (await app.callApi('GET', '/api/local-engines/claude_code/models')).body,
-    );
-    expect(claude.models.map((choice) => choice.model)).toEqual([
-      'opus',
-      'sonnet',
-      'haiku',
-      'fable',
-    ]);
+  it('offers model quick picks: Claude aliases and the catalogs of Codex and Antigravity', async () => {
+    const catalogApp = await startTestApplication(undefined, {
+      localEngineAdaptersOverride: {
+        codexModelCatalog: {
+          listCodexModels: () =>
+            Promise.resolve([{ model: 'gpt-fake', label: 'GPT Fake', note: 'from the fake' }]),
+        },
+        antigravityModelCatalog: {
+          listAntigravityModels: () =>
+            Promise.resolve([{ model: 'agy-fake', label: 'Agy Fake', note: 'from the fake' }]),
+        },
+      },
+    });
+    try {
+      const claude = localEngineModelListSchema.parse(
+        (await catalogApp.callApi('GET', '/api/local-engines/claude_code/models')).body,
+      );
+      expect(claude.models.map((choice) => choice.model)).toEqual([
+        'opus',
+        'sonnet',
+        'haiku',
+        'fable',
+      ]);
 
-    // CI has no Codex CLI: the list is then empty with a reason, never an error response.
-    const codex = await app.callApi('GET', '/api/local-engines/codex/models');
-    expect(codex.statusCode).toBe(200);
-    const codexList = localEngineModelListSchema.parse(codex.body);
-    expect(codexList.models.length > 0 || codexList.problem !== null).toBe(true);
+      const codex = await catalogApp.callApi('GET', '/api/local-engines/codex/models');
+      expect(codex.statusCode).toBe(200);
+      expect(localEngineModelListSchema.parse(codex.body).models.map((m) => m.model)).toEqual([
+        'gpt-fake',
+      ]);
 
-    const unknownEngine = await app.callApi('GET', '/api/local-engines/gemini/models');
-    expect(unknownEngine.statusCode).toBe(400);
+      const antigravity = await catalogApp.callApi('GET', '/api/local-engines/antigravity/models');
+      expect(antigravity.statusCode).toBe(200);
+      expect(localEngineModelListSchema.parse(antigravity.body).models.map((m) => m.model)).toEqual(
+        ['agy-fake'],
+      );
+
+      const unknownEngine = await catalogApp.callApi('GET', '/api/local-engines/gemini/models');
+      expect(unknownEngine.statusCode).toBe(400);
+    } finally {
+      await catalogApp.closeApplication();
+    }
+  });
+
+  it('answers an empty model list with a problem, never an error, when a catalog fails', async () => {
+    const failingApp = await startTestApplication(undefined, {
+      localEngineAdaptersOverride: {
+        codexModelCatalog: {
+          listCodexModels: () => Promise.reject(new EngineUnavailableError('Codex CLI is missing')),
+        },
+        antigravityModelCatalog: {
+          listAntigravityModels: () =>
+            Promise.reject(new EngineUnavailableError('agy CLI is missing')),
+        },
+      },
+    });
+    try {
+      for (const [engine, problem] of [
+        ['codex', 'Codex CLI is missing'],
+        ['antigravity', 'agy CLI is missing'],
+      ] as const) {
+        const response = await failingApp.callApi('GET', `/api/local-engines/${engine}/models`);
+        expect(response.statusCode).toBe(200);
+        expect(localEngineModelListSchema.parse(response.body)).toEqual({ models: [], problem });
+      }
+    } finally {
+      await failingApp.closeApplication();
+    }
   });
 
   it('answers 404 for an unknown test run stream', async () => {

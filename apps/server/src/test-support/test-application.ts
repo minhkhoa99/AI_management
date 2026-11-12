@@ -1,5 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import type { AgentEnginePort } from '../modules/orchestration/application/ports/agent-engine.port';
+import type { LocalEngineAdaptersOverride } from '../shared/runtime/local-engine-adapters-override';
 import type { DirectoryPicker } from '../shared/runtime/directory-picker';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -19,6 +20,21 @@ import type { ProcessTerminator } from '../shared/runtime/process-termination';
 
 export const TEST_SESSION_TOKEN = 'test-session-token-0123456789abcdef0123456789';
 export const TEST_LISTEN_PORT = 7419;
+
+const DEFAULT_FAKE_LOCAL_ENGINES: LocalEngineAdaptersOverride = {
+  probe: {
+    probeLocalEngine: () =>
+      Promise.resolve({
+        installed: false,
+        version: null,
+        signedIn: null,
+        accountDetail: null,
+        problem: 'Not installed (test double).',
+      }),
+  },
+  codexModelCatalog: { listCodexModels: () => Promise.resolve([]) },
+  antigravityModelCatalog: { listAntigravityModels: () => Promise.resolve([]) },
+};
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -45,6 +61,7 @@ export interface TestApplicationOverrides {
   processTerminator?: ProcessTerminator;
   directoryPicker?: DirectoryPicker;
   agentEngineOverride?: AgentEnginePort;
+  localEngineAdaptersOverride?: LocalEngineAdaptersOverride;
 }
 
 export async function startTestApplication(
@@ -71,6 +88,9 @@ export async function startTestApplication(
     // Never opens a real dialog: tests behave as if the user cancelled unless they say so.
     directoryPicker: overrides.directoryPicker ?? { pickDirectory: () => Promise.resolve(null) },
     agentEngineOverride: overrides.agentEngineOverride ?? null,
+    // Default fakes: probing and model catalogs never spawn the developer's installed CLIs.
+    localEngineAdaptersOverride:
+      overrides.localEngineAdaptersOverride ?? DEFAULT_FAKE_LOCAL_ENGINES,
     // Tasks only run in tests that script the engine: never a real CLI.
     taskSchedulerEnabled: overrides.agentEngineOverride !== undefined,
   });

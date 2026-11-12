@@ -41,6 +41,7 @@ export class StartLocalEngineTestRunUseCase {
             {
               prompt: LOCAL_ENGINE_TEST_PROMPT,
               workingDirectory: workspace.directory,
+              workspaceRoot: null,
               model: settings.defaultModel,
               permissions: resolveSessionPermissions(
                 { accessLevel: 'read_only', networkAccess: false },

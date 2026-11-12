@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -14,7 +15,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { GitTaskWorkspace } from './git-task-workspace';
 
 /** The agent's worktree is untrusted: these cover what an agent could plant there. */
-describe('GitTaskWorkspace with agent-planted files', () => {
+// These tests spawn real git (slow on Windows), so they get more than the default 5 s under load.
+describe('GitTaskWorkspace with agent-planted files', { timeout: 30_000 }, () => {
   let rootDirectory: string;
   let repositoryDirectory: string;
   let workspace: GitTaskWorkspace;
@@ -100,5 +102,158 @@ describe('GitTaskWorkspace with agent-planted files', () => {
     expect(existsSync(path.join(outside, 'spec.md'))).toBe(false);
     expect(readFileSync(path.join(worktreePath, '.aiteam-qa', 'spec.md'), 'utf8')).toBe('# Spec\n');
     expect(prepared.qaDocumentPaths).toEqual(['.aiteam-qa/spec.md']);
+  });
+
+  it('keeps engine-managed folders out of checkpoints at any depth', async () => {
+    const { worktreePath } = await prepare();
+    mkdirSync(path.join(worktreePath, 'sub', '_agent', 'plugins', 'p'), { recursive: true });
+    mkdirSync(path.join(worktreePath, '.agents'));
+    writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'sub', '_agent', 'plugins', 'p', 'hooks.json'), '{}');
+    mkdirSync(path.join(worktreePath, '.Gemini'));
+    writeFileSync(path.join(worktreePath, '.Gemini', 'x'), '{}');
+    // A rule the agent wrote must not bring the folders back.
+    writeFileSync(path.join(worktreePath, '.gitignore'), '!.agents/\n!_agent/\n');
+    writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
+
+    expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+
+    const tracked = execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
+    expect(tracked).toContain('normal.txt');
+    expect(tracked).not.toContain('hooks.json');
+    expect(tracked.toLowerCase()).not.toContain('.gemini');
+    // Nothing leaks into the exclude file shared with the user's own checkout.
+    const exclude = path.join(repositoryDirectory, '.git', 'info', 'exclude');
+    const excludeText = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+    for (const name of ['.agents', '.agent', '_agents', '_agent', '.gemini']) {
+      expect(excludeText).not.toContain(name);
+    }
+  });
+
+  it('keeps bare files named like managed folders out of checkpoints, and normal names in', async () => {
+    const { worktreePath } = await prepare();
+    writeFileSync(path.join(worktreePath, '.gemini'), 'file');
+    mkdirSync(path.join(worktreePath, 'sub'));
+    writeFileSync(path.join(worktreePath, 'sub', '_agent'), 'file');
+    writeFileSync(path.join(worktreePath, 'my.agents.txt'), 'n');
+    mkdirSync(path.join(worktreePath, 'agents'));
+    writeFileSync(path.join(worktreePath, 'agents', 'a.md'), 'n');
+
+    expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+
+    const tracked = execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' })
+      .split(String.fromCharCode(10))
+      .filter((line) => line !== '');
+    expect(tracked).toEqual(expect.arrayContaining(['my.agents.txt', 'agents/a.md']));
+    expect(tracked).not.toContain('.gemini');
+    expect(tracked).not.toContain('sub/_agent');
+  });
+
+  it('lists the new engine-managed paths that checkpoints leave out (capped at 20)', async () => {
+    const { worktreePath } = await prepare();
+    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toEqual({
+      paths: [],
+      total: 0,
+    });
+    mkdirSync(path.join(worktreePath, '.agents', 'skills', 'foo'), { recursive: true });
+    writeFileSync(path.join(worktreePath, '.agents', 'skills', 'foo', 'SKILL.md'), 's');
+    mkdirSync(path.join(worktreePath, 'sub'));
+    writeFileSync(path.join(worktreePath, 'sub', '_agent'), 'file');
+    writeFileSync(path.join(worktreePath, '.gemini'), 'file');
+    writeFileSync(path.join(worktreePath, 'my.agents.txt'), 'n');
+
+    expect(await workspace.listUncommittedEngineManagedPaths(worktreePath)).toEqual({
+      paths: ['.agents/skills/foo/SKILL.md', '.gemini', 'sub/_agent'],
+      total: 3,
+    });
+
+    mkdirSync(path.join(worktreePath, '_agents'));
+    for (let index = 0; index < 30; index += 1) {
+      writeFileSync(path.join(worktreePath, '_agents', `f${index}.md`), 'x');
+    }
+    const capped = await workspace.listUncommittedEngineManagedPaths(worktreePath);
+    expect(capped.paths).toHaveLength(20);
+    expect(capped.total).toBe(33);
+  });
+
+  it('still excludes managed folders when the environment forces literal pathspecs', async () => {
+    const { worktreePath } = await prepare();
+    mkdirSync(path.join(worktreePath, '.agents'));
+    writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
+    const previous = process.env.GIT_LITERAL_PATHSPECS;
+    process.env.GIT_LITERAL_PATHSPECS = '1';
+    try {
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+    } finally {
+      if (previous === undefined) delete process.env.GIT_LITERAL_PATHSPECS;
+      else process.env.GIT_LITERAL_PATHSPECS = previous;
+    }
+
+    const tracked = execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
+    expect(tracked).toContain('normal.txt');
+    expect(tracked).not.toContain('hooks.json');
+  });
+
+  it('keeps checkpointing files the project already tracks under managed names', async () => {
+    mkdirSync(path.join(repositoryDirectory, '.gemini'));
+    writeFileSync(path.join(repositoryDirectory, '.gemini', 'settings.json'), 'old');
+    mkdirSync(path.join(repositoryDirectory, '.agents', 'skills'), { recursive: true });
+    writeFileSync(path.join(repositoryDirectory, '.agents', 'skills', 'x.md'), 'x');
+    const { worktreePath } = await prepare();
+    writeFileSync(path.join(worktreePath, '.gemini', 'settings.json'), 'new');
+    rmSync(path.join(worktreePath, '.agents', 'skills', 'x.md'));
+    writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+    writeFileSync(path.join(worktreePath, 'normal.txt'), 'n');
+
+    expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+
+    const changed = execFileSync(
+      'git',
+      ['-C', worktreePath, 'show', '--name-status', '--format=', 'HEAD'],
+      { encoding: 'utf8' },
+    );
+    expect(changed).toMatch(/M\s+\.gemini\/settings\.json/);
+    expect(changed).toMatch(/D\s+\.agents\/skills\/x\.md/);
+    expect(changed).toContain('normal.txt');
+    expect(changed).not.toContain('hooks.json');
+  });
+
+  describe('in a repository without tracked files (task without a chosen folder)', () => {
+    function prepareWithoutFolder() {
+      return workspace.prepareTaskWorkspace({
+        taskId: 'task-empty',
+        workingDirectory: null,
+        worktreePath: null,
+        qaDocuments: [],
+      });
+    }
+
+    function listTracked(worktreePath: string): string {
+      return execFileSync('git', ['-C', worktreePath, 'ls-files'], { encoding: 'utf8' });
+    }
+
+    it('checkpoints a file the agent created', async () => {
+      const { worktreePath } = await prepareWithoutFolder();
+      writeFileSync(path.join(worktreePath, 'hello.txt'), 'hi');
+
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).not.toBeNull();
+      expect(listTracked(worktreePath)).toContain('hello.txt');
+    });
+
+    it('commits nothing when only an engine-managed folder was created', async () => {
+      const { worktreePath } = await prepareWithoutFolder();
+      mkdirSync(path.join(worktreePath, '.agents'));
+      writeFileSync(path.join(worktreePath, '.agents', 'hooks.json'), '{}');
+
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).toBeNull();
+      expect(listTracked(worktreePath)).not.toContain('hooks.json');
+    });
+
+    it('returns null when nothing changed', async () => {
+      const { worktreePath } = await prepareWithoutFolder();
+
+      expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).toBeNull();
+    });
   });
 });

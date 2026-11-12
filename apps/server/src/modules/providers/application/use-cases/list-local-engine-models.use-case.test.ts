@@ -1,17 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { LocalEngineModelChoice } from '@aiteam/contracts';
 import { EngineUnavailableError } from '../../../../shared/errors/app-error';
+import type { AntigravityModelCatalog } from '../ports/antigravity-model-catalog.port';
 import type { CodexModelCatalog } from '../ports/codex-model-catalog.port';
 import {
-  CODEX_CATALOG_CACHE_MS,
+  ENGINE_CATALOG_CACHE_MS,
   ListLocalEngineModelsUseCase,
 } from './list-local-engine-models.use-case';
 
 const LUNA: LocalEngineModelChoice = { model: 'gpt-5.6-luna', label: 'Luna', note: 'Fast.' };
 
-function buildUseCase(listCodexModels: CodexModelCatalog['listCodexModels']) {
+const AGY_FLASH: LocalEngineModelChoice = { model: 'agy-flash', label: 'Flash', note: 'Fast.' };
+
+function buildUseCase(
+  listCodexModels: CodexModelCatalog['listCodexModels'],
+  listAntigravityModels: AntigravityModelCatalog['listAntigravityModels'] = () =>
+    Promise.resolve([]),
+) {
   const catalog = { listCodexModels: vi.fn(listCodexModels) };
-  return { catalog, useCase: new ListLocalEngineModelsUseCase(catalog) };
+  const antigravityCatalog = { listAntigravityModels: vi.fn(listAntigravityModels) };
+  return {
+    catalog,
+    antigravityCatalog,
+    useCase: new ListLocalEngineModelsUseCase(catalog, antigravityCatalog),
+  };
 }
 
 afterEach(() => {
@@ -34,7 +46,7 @@ describe('ListLocalEngineModelsUseCase', () => {
     await useCase.listLocalEngineModels('codex');
     expect(catalog.listCodexModels).toHaveBeenCalledTimes(1);
 
-    vi.advanceTimersByTime(CODEX_CATALOG_CACHE_MS + 1);
+    vi.advanceTimersByTime(ENGINE_CATALOG_CACHE_MS + 1);
     await useCase.listLocalEngineModels('codex');
     expect(catalog.listCodexModels).toHaveBeenCalledTimes(2);
   });
@@ -54,5 +66,37 @@ describe('ListLocalEngineModelsUseCase', () => {
   it('lets unexpected errors through', async () => {
     const { useCase } = buildUseCase(() => Promise.reject(new TypeError('bug')));
     await expect(useCase.listLocalEngineModels('codex')).rejects.toThrow(TypeError);
+  });
+
+  it('reads the Antigravity catalog once per cache window, apart from the Codex cache', async () => {
+    vi.useFakeTimers();
+    const { catalog, antigravityCatalog, useCase } = buildUseCase(
+      () => Promise.resolve([LUNA]),
+      () => Promise.resolve([AGY_FLASH]),
+    );
+    expect(await useCase.listLocalEngineModels('antigravity')).toEqual({
+      models: [AGY_FLASH],
+      problem: null,
+    });
+    await useCase.listLocalEngineModels('antigravity');
+    expect(antigravityCatalog.listAntigravityModels).toHaveBeenCalledTimes(1);
+    expect(catalog.listCodexModels).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(ENGINE_CATALOG_CACHE_MS + 1);
+    await useCase.listLocalEngineModels('antigravity');
+    expect(antigravityCatalog.listAntigravityModels).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports an Antigravity catalog failure as a problem and retries on the next call', async () => {
+    const { antigravityCatalog, useCase } = buildUseCase(
+      () => Promise.resolve([]),
+      () => Promise.reject(new EngineUnavailableError('Không đọc được danh sách model của agy')),
+    );
+    expect(await useCase.listLocalEngineModels('antigravity')).toEqual({
+      models: [],
+      problem: 'Không đọc được danh sách model của agy',
+    });
+    antigravityCatalog.listAntigravityModels.mockResolvedValueOnce([AGY_FLASH]);
+    expect((await useCase.listLocalEngineModels('antigravity')).models).toEqual([AGY_FLASH]);
   });
 });

@@ -15,6 +15,16 @@ const PROBE_TIMEOUT_MS = 20_000;
 const ENGINE_COMMANDS: Record<LocalEngine, { executableName: string; statusArgs: string[] }> = {
   claude_code: { executableName: 'claude', statusArgs: ['auth', 'status'] },
   codex: { executableName: 'codex', statusArgs: ['login', 'status'] },
+  antigravity: { executableName: 'agy', statusArgs: ['models'] },
+};
+
+type CommandOutcome = { succeeded: boolean; output: string };
+type SignInReading = Pick<LocalEngineProbeResult, 'signedIn' | 'accountDetail' | 'problem'>;
+
+const SIGN_IN_READERS: Record<LocalEngine, (status: CommandOutcome) => SignInReading> = {
+  claude_code: (status) => readClaudeSignIn(status.output),
+  codex: readCodexSignIn,
+  antigravity: readAntigravitySignIn,
 };
 
 /**
@@ -52,8 +62,7 @@ export class CliLocalEngineProbe implements LocalEngineProbe {
       };
     }
     const status = await runCommand(executable, statusArgs);
-    const signIn =
-      engine === 'claude_code' ? readClaudeSignIn(status.output) : readCodexSignIn(status);
+    const signIn = SIGN_IN_READERS[engine](status);
     return { installed: true, version: firstLine(version.output), ...signIn };
   }
 }
@@ -61,7 +70,7 @@ export class CliLocalEngineProbe implements LocalEngineProbe {
 async function runCommand(
   executable: { command: string; leadingArgs: string[] },
   args: string[],
-): Promise<{ succeeded: boolean; output: string }> {
+): Promise<CommandOutcome> {
   try {
     const { stdout, stderr } = await runExecutable(
       executable.command,
@@ -82,9 +91,7 @@ async function runCommand(
   }
 }
 
-function readClaudeSignIn(
-  output: string,
-): Pick<LocalEngineProbeResult, 'signedIn' | 'accountDetail' | 'problem'> {
+function readClaudeSignIn(output: string): SignInReading {
   try {
     const status = JSON.parse(output) as {
       loggedIn?: boolean;
@@ -106,10 +113,7 @@ function readClaudeSignIn(
   }
 }
 
-function readCodexSignIn(status: {
-  succeeded: boolean;
-  output: string;
-}): Pick<LocalEngineProbeResult, 'signedIn' | 'accountDetail' | 'problem'> {
+function readCodexSignIn(status: CommandOutcome): SignInReading {
   const signedIn =
     status.succeeded && /logged in/i.test(status.output) && !/not logged in/i.test(status.output);
   return {
@@ -117,6 +121,17 @@ function readCodexSignIn(status: {
     accountDetail: signedIn ? firstLine(status.output) : null,
     problem: signedIn ? null : 'Chưa đăng nhập. Chạy: codex login',
   };
+}
+
+/** `agy models` needs a signed-in account, so it doubles as the sign-in check. */
+export function readAntigravitySignIn(status: CommandOutcome): SignInReading {
+  if (status.succeeded) {
+    return { signedIn: true, accountDetail: null, problem: null };
+  }
+  if (/authentication required/i.test(status.output)) {
+    return { signedIn: false, accountDetail: null, problem: 'Chưa đăng nhập. Chạy: agy' };
+  }
+  return { signedIn: null, accountDetail: null, problem: firstLine(status.output) };
 }
 
 function firstLine(text: string): string {

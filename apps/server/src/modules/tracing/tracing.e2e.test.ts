@@ -155,6 +155,7 @@ describe('task log, live updates and overview figures', () => {
     expect(byProvider).toEqual([
       { provider: 'claude_code', tokens: 1500, turns: 1, costUsd: null },
       { provider: 'codex', tokens: 0, turns: 0, costUsd: null },
+      { provider: 'antigravity', tokens: 0, turns: 0, costUsd: null },
       { provider: 'custom_api', tokens: 300, turns: 1, costUsd: 0.02 },
     ]);
     expect(today).toEqual({ tokens: 1800, turns: 2 });

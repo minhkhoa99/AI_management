@@ -1,10 +1,15 @@
 import { Module } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../app-runtime-config';
+import {
+  LOCAL_ENGINE_ADAPTERS_OVERRIDE,
+  type LocalEngineAdaptersOverride,
+} from '../../shared/runtime/local-engine-adapters-override';
 import { AgentsModule } from '../agents/agents.module';
 import { AGENT_ENGINE_RESOLVER } from '../orchestration/application/ports/agent-engine.port';
 import { AGENT_RUN_PREPARER } from '../orchestration/application/ports/task-execution.ports';
 import { PrepareAgentRunUseCase } from './application/use-cases/prepare-agent-run.use-case';
 import { EngineTestRunRegistry } from './application/engine-test-run-registry';
+import { ANTIGRAVITY_MODEL_CATALOG } from './application/ports/antigravity-model-catalog.port';
 import { CODEX_MODEL_CATALOG } from './application/ports/codex-model-catalog.port';
 import { LOCAL_ENGINE_PROBE } from './application/ports/local-engine-probe.port';
 import { MODEL_CATALOG } from './application/ports/model-catalog.port';
@@ -26,10 +31,12 @@ import { WatchEngineTestRunUseCase } from './application/use-cases/watch-engine-
 import { LOCAL_ENGINE_SETTINGS_REPOSITORY } from './domain/repositories/local-engine-settings.repository';
 import { PROVIDER_CONNECTION_REPOSITORY } from './domain/repositories/provider-connection.repository';
 import { AesGcmSecretVault } from './infrastructure/adapters/aes-gcm-secret-vault';
+import { CliAntigravityModelCatalog } from './infrastructure/adapters/cli-antigravity-model-catalog';
 import { CliCodexModelCatalog } from './infrastructure/adapters/cli-codex-model-catalog';
 import { CliLocalEngineProbe } from './infrastructure/adapters/cli-local-engine.probe';
 import { EngineRegistry } from './infrastructure/adapters/engines/agent-engine-resolver';
 import { AnthropicApiEngine } from './infrastructure/adapters/engines/anthropic-api.engine';
+import { AntigravityCliEngine } from './infrastructure/adapters/engines/antigravity-cli.engine';
 import { ClaudeCodeCliEngine } from './infrastructure/adapters/engines/claude-code-cli.engine';
 import { CodexCliEngine } from './infrastructure/adapters/engines/codex-cli.engine';
 import { CustomApiEngine } from './infrastructure/adapters/engines/custom-api.engine';
@@ -44,7 +51,7 @@ import {
 } from './presentation/controllers/local-engines.controller';
 import { ProviderConnectionsController } from './presentation/controllers/provider-connections.controller';
 
-/** Agent engines (Claude Code, Codex, Custom API), their settings and provider connections. */
+/** Agent engines (Claude Code, Codex, Antigravity, Custom API), their settings and provider connections. */
 @Module({
   imports: [AgentsModule],
   controllers: [LocalEnginesController, EngineTestRunsController, ProviderConnectionsController],
@@ -58,11 +65,28 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
         new AesGcmSecretVault(runtimeConfig.secretKeyFilePath),
     },
     { provide: MODEL_CATALOG, useClass: HttpModelCatalog },
-    { provide: LOCAL_ENGINE_PROBE, useClass: CliLocalEngineProbe },
-    { provide: CODEX_MODEL_CATALOG, useClass: CliCodexModelCatalog },
+    {
+      provide: LOCAL_ENGINE_PROBE,
+      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (override: LocalEngineAdaptersOverride) =>
+        override?.probe ?? new CliLocalEngineProbe(),
+    },
+    {
+      provide: CODEX_MODEL_CATALOG,
+      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (override: LocalEngineAdaptersOverride) =>
+        override?.codexModelCatalog ?? new CliCodexModelCatalog(),
+    },
+    {
+      provide: ANTIGRAVITY_MODEL_CATALOG,
+      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (override: LocalEngineAdaptersOverride) =>
+        override?.antigravityModelCatalog ?? new CliAntigravityModelCatalog(),
+    },
     { provide: SAMPLE_WORKSPACE_FACTORY, useClass: TemporarySampleWorkspaceFactory },
     ClaudeCodeCliEngine,
     CodexCliEngine,
+    AntigravityCliEngine,
     AnthropicApiEngine,
     OpenAiCompatibleEngine,
     CustomApiEngine,

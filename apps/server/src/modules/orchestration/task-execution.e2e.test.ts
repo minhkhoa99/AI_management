@@ -174,6 +174,40 @@ describe('task execution', () => {
     expect(events.map((event) => event.kind)).toContain('gate_evaluated');
   }, 60_000);
 
+  it('leaves new engine-managed folders out of the checkpoint and says so on the task', async () => {
+    engine.respond = (request) => {
+      mkdirSync(path.join(request.workingDirectory, '.agents'), { recursive: true });
+      writeFileSync(path.join(request.workingDirectory, '.agents', 'x.md'), 'x');
+      writeFileSync(path.join(request.workingDirectory, 'normal.txt'), 'n');
+      return Promise.resolve(report('done', 'xong'));
+    };
+    const task = await createTask({ workflowId: null });
+
+    const readEvents = async () =>
+      taskEventListSchema.parse(
+        (await app.callApi('GET', `/api/tasks/${task.id}/events?limit=200`)).body,
+      );
+    const events = await waitFor(
+      readEvents,
+      (list) => list.some((event) => event.text.startsWith('Không lưu mốc')),
+      'the note about left-out files',
+    );
+
+    const notes = events.filter((event) => event.text.startsWith('Không lưu mốc'));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.agentName).toBeNull();
+    expect(notes[0]?.detail).toContain('Không lưu mốc 1 file trong thư mục cấu hình của engine');
+    expect(notes[0]?.detail).toContain('(.agents/x.md)');
+    expect(notes[0]?.detail).toContain('.agents, .agent, _agents, _agent, .gemini');
+    const committed = execFileSync(
+      'git',
+      ['-C', path.join(project, 'shop'), 'ls-tree', '-r', '--name-only', `agent/${task.id}`],
+      { encoding: 'utf8' },
+    );
+    expect(committed).toContain('normal.txt');
+    expect(committed).not.toContain('x.md');
+  }, 30_000);
+
   it('deleting a running task stops the agent within 5 seconds and keeps its branch', async () => {
     let sawAbort = false;
     engine.respond = (_request, signal) =>

@@ -154,7 +154,7 @@ function parseAgentName(rawName: string): string {
   return DisplayName.parse(rawName, AGENT_NAME_MAX_LENGTH, 'AGENT_NAME_INVALID').text;
 }
 
-/** Custom API agents need a provider connection; local engines (Claude Code, Codex) must not have one. */
+/** Custom API agents need a provider connection; local engines (Claude Code, Codex, Antigravity) must not have one. */
 function assertConnectionMatchesProvider(
   provider: AgentProvider,
   connectionId: string | null,

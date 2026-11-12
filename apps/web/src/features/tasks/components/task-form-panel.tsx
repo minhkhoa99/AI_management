@@ -344,9 +344,9 @@ function TaskForm({
               </span>
             ))}
           <p className={styles.hint}>
-            Agent chỉ đọc và ghi trong thư mục này. Claude Code và Codex chạy trên một git worktree
-            riêng (nhánh agent/&lt;task&gt;) để không đụng vào code bạn đang sửa. Chỉ dùng được thư
-            mục bạn đã chọn bằng nút Chọn thư mục, hoặc thư mục con của nó.
+            Agent chỉ đọc và ghi trong thư mục này. Claude Code, Codex và Antigravity chạy trên một
+            git worktree riêng (nhánh agent/&lt;task&gt;) để không đụng vào code bạn đang sửa. Chỉ
+            dùng được thư mục bạn đã chọn bằng nút Chọn thư mục, hoặc thư mục con của nó.
           </p>
         </div>
 

@@ -42,6 +42,19 @@ const ENGINE_PRESENTATION = {
     background: '#113329',
     foreground: '#86E8C4',
   },
+  antigravity: {
+    name: 'Antigravity',
+    mark: 'AG',
+    via: 'agy · tài khoản Antigravity đã đăng nhập',
+    modelPlaceholder: 'Mặc định của Antigravity',
+    commandSafety: {
+      kind: 'toggle',
+      label: 'Chặn rm -rf, git push, git reset --hard, npm publish khi chạy tự động',
+      hint: 'Lọc theo đầu lệnh, không chặn được mọi cách viết khác. Antigravity vẫn nạp hook và MCP cá nhân của bạn trong ~/.gemini/config. Agent được sửa chạy lệnh với quyền của bạn: chỉ cấp quyền sửa cho việc bạn tin.',
+    },
+    background: '#2A1F4D',
+    foreground: '#CDBBFF',
+  },
 } as const;
 
 export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {

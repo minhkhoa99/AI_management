@@ -52,6 +52,7 @@ function buildRequest(format: 'openai' | 'anthropic', apiBaseUrl: string): Agent
   return {
     prompt: 'Chào',
     workingDirectory: '.',
+    workspaceRoot: null,
     model: 'test-model',
     permissions: { accessLevel: 'read_only', networkAccess: false, blockDangerousCommands: true },
     resumeSessionRef: null,

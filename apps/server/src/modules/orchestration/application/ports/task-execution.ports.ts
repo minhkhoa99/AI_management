@@ -51,6 +51,12 @@ export interface WorkspaceFile {
   content: string | null;
 }
 
+/** Engine-managed paths left out of checkpoints: a capped sample plus the real count. */
+export interface LeftOutPaths {
+  paths: string[];
+  total: number;
+}
+
 export interface SavedCheckpoint {
   sha: string;
   files: string[];
@@ -82,6 +88,11 @@ export interface TaskWorkspace {
   ): Promise<'merged' | 'conflict'>;
   /** Commits everything the agent changed ("mốc"); null when nothing changed. */
   saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null>;
+  /**
+   * New (untracked) paths under engine-managed folder names that checkpoints leave out: the first
+   * 20 (relative, "/" separated) and the total count. `total` 0 when there are none.
+   */
+  listUncommittedEngineManagedPaths(worktreePath: string): Promise<LeftOutPaths>;
   /** Removes the worktree; the agent/<taskId> branch is always kept. */
   removeTaskWorkspace(worktreePath: string): Promise<void>;
   /** Folder of the task inside the repository ("" for the root), "/" separated. */

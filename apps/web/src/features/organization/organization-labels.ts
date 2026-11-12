@@ -33,6 +33,12 @@ export const PROVIDER_PRESENTATION: Record<AgentProvider, ProviderPresentation> 
     background: '#113329',
     foreground: '#86E8C4',
   },
+  antigravity: {
+    label: 'Antigravity',
+    note: 'Tài khoản Antigravity đã đăng nhập',
+    background: '#2A1F4D',
+    foreground: '#CDBBFF',
+  },
   custom_api: {
     label: 'Custom API',
     note: 'OpenAI-compatible hoặc Anthropic',

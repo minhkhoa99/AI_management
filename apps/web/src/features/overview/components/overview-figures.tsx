@@ -8,6 +8,7 @@ import styles from './overview-figures.module.css';
 const PROVIDER_COLORS = {
   claude_code: '#3B82F6',
   codex: '#34D399',
+  antigravity: '#A78BFA',
   custom_api: '#F59E0B',
 } as const;
 

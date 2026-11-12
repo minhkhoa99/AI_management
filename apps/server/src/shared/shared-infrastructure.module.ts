@@ -14,6 +14,10 @@ import {
   type AgentEngineOverride,
   TASK_SCHEDULER_ENABLED,
 } from './runtime/agent-engine-override';
+import {
+  LOCAL_ENGINE_ADAPTERS_OVERRIDE,
+  type LocalEngineAdaptersOverride,
+} from './runtime/local-engine-adapters-override';
 import { DIRECTORY_PICKER, type DirectoryPicker } from './runtime/directory-picker';
 import { NativeDirectoryPicker } from './runtime/native-directory-picker';
 import { OsProcessInspector } from './runtime/os-process-inspector';
@@ -36,6 +40,8 @@ export interface SharedInfrastructureDependencies {
   directoryPicker?: DirectoryPicker;
   /** Tests only: replaces every agent engine. */
   agentEngineOverride?: AgentEngineOverride;
+  /** Tests only: replaces the probe and model catalogs that spawn real CLIs. */
+  localEngineAdaptersOverride?: LocalEngineAdaptersOverride;
   /** false: queued tasks never start (tests that do not script an engine). Default true. */
   taskSchedulerEnabled?: boolean;
   /** Shared with the launcher so a fatal error can cancel running sessions. */
@@ -87,6 +93,10 @@ export class SharedInfrastructureModule {
         useValue: dependencies.directoryPicker ?? new NativeDirectoryPicker(dependencies.logger),
       },
       { provide: AGENT_ENGINE_OVERRIDE, useValue: dependencies.agentEngineOverride ?? null },
+      {
+        provide: LOCAL_ENGINE_ADAPTERS_OVERRIDE,
+        useValue: dependencies.localEngineAdaptersOverride ?? null,
+      },
       { provide: TASK_SCHEDULER_ENABLED, useValue: dependencies.taskSchedulerEnabled ?? true },
     ];
     return {

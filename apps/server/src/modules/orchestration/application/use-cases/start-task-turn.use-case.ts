@@ -192,6 +192,7 @@ export class StartTaskTurnUseCase {
       prepared,
       prompt,
       workspace.agentDirectory,
+      workspace.worktreePath,
       resumeSessionRef,
       step,
     );
@@ -203,6 +204,7 @@ export class StartTaskTurnUseCase {
     prepared: PreparedAgentRun,
     prompt: string,
     workDirectory: string,
+    worktreeRoot: string,
     resumeSessionRef: string | null,
     step: WorkflowStepState | undefined,
   ): void {
@@ -224,6 +226,7 @@ export class StartTaskTurnUseCase {
           {
             prompt,
             workingDirectory: workDirectory,
+            workspaceRoot: worktreeRoot,
             model: prepared.model,
             permissions: prepared.permissions,
             resumeSessionRef,

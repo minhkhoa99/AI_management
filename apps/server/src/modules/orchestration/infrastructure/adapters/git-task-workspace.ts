@@ -13,14 +13,19 @@ import {
   rmSync,
   statSync,
 } from 'node:fs';
-import { devNull } from 'node:os';
 import path from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../../../app-runtime-config';
 import { AppError } from '../../../../shared/errors/app-error';
 import { ValidationError } from '../../../../shared/errors/app-error';
+import { ENGINE_MANAGED_WORKSPACE_PATHS } from '../../../../shared/runtime/engine-managed-paths';
+import {
+  buildGitEnvironmentWithoutPathspecOverrides,
+  SAFE_GIT_OPTIONS,
+} from '../../../../shared/runtime/safe-git-options';
 import type {
   PreparedTaskWorkspace,
+  LeftOutPaths,
   SavedCheckpoint,
   TaskWorkspace,
   WorkspaceFile,
@@ -36,19 +41,18 @@ const QA_FOLDER = '.aiteam-qa';
 const SKILLS_FOLDER = '.aiteam-skills';
 const MAX_LISTED_FILES = 5_000;
 const MAX_FILE_BYTES = 512 * 1024;
-/**
- * Before every git command. The worktree is written by agents (Codex runs sandboxed, git here
- * does not): no fsmonitor command, no hooks, no signing program, whatever config it points at.
- */
-const SAFE_GIT_OPTIONS = [
-  '-c',
-  'core.fsmonitor=false',
-  '-c',
-  `core.hooksPath=${devNull}`,
-  '-c',
-  'commit.gpgsign=false',
-];
+const MAX_LISTED_LEFT_OUT_PATHS = 20;
 
+/**
+ * Pathspecs that select engine-managed names: content below such a folder (`**\/<name>/**`) and
+ * the bare name itself (a file or a link called `.gemini`, which the first form does not match).
+ */
+function engineManagedPathspecs(prefix: string): string[] {
+  return ENGINE_MANAGED_WORKSPACE_PATHS.flatMap((name) => [
+    `${prefix}**/${name}/**`,
+    `${prefix}**/${name}`,
+  ]);
+}
 function requireCommitSha(sha: string): string {
   if (!/^[0-9a-f]{7,64}$/.test(sha)) {
     throw new ValidationError('Mã commit không hợp lệ.', { code: 'COMMIT_SHA_INVALID' });
@@ -137,7 +141,19 @@ export class GitTaskWorkspace implements TaskWorkspace {
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
     if (!existsSync(worktreePath)) return null;
-    await this.runGit(worktreePath, ['add', '-A']);
+    // Changes to files the project already tracks are always saved, whatever their name. No
+    // pathspec: `-u -- .` fails when nothing is tracked yet, and git runs from the worktree root.
+    await this.runGit(worktreePath, ['add', '-u']);
+    // New files under engine-managed folder names are never committed, whatever the engine.
+    // Pathspecs, not info/exclude: that file is shared with the user's own checkout and loses
+    // against a `!` rule in a .gitignore the agent wrote.
+    await this.runGit(worktreePath, [
+      'add',
+      '-A',
+      '--',
+      '.',
+      ...engineManagedPathspecs(':(exclude,icase,glob)'),
+    ]);
     const hasChanges = !(await this.succeeds(worktreePath, [
       'diff',
       '--no-ext-diff',
@@ -160,6 +176,25 @@ export class GitTaskWorkspace implements TaskWorkspace {
       .split(/\r?\n/)
       .filter((line) => line.trim() !== '');
     return { sha, files };
+  }
+
+  async listUncommittedEngineManagedPaths(worktreePath: string): Promise<LeftOutPaths> {
+    if (!existsSync(worktreePath)) return { paths: [], total: 0 };
+    const output = await this.runGit(worktreePath, [
+      '-c',
+      'core.quotepath=false',
+      'ls-files',
+      '--others',
+      '--exclude-standard',
+      '-z',
+      '--',
+      ...engineManagedPathspecs(':(icase,glob)'),
+    ]);
+    const files = output
+      .split('\0')
+      .filter((file) => file !== '')
+      .sort();
+    return { paths: files.slice(0, MAX_LISTED_LEFT_OUT_PATHS), total: files.length };
   }
 
   async mergeSubtaskBranch(
@@ -411,6 +446,7 @@ export class GitTaskWorkspace implements TaskWorkspace {
         {
           timeout: GIT_TIMEOUT_MS,
           windowsHide: true,
+          env: buildGitEnvironmentWithoutPathspecOverrides(),
           encoding: 'utf8',
           maxBuffer: 16 * 1024 * 1024,
         },

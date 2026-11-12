@@ -72,13 +72,13 @@ export class ScriptedEngine implements AgentEnginePort {
   }
 }
 
-/** Polls until `accept` says yes (20 s at most). */
+/** Polls until `accept` says yes (50 s at most: every turn commits through real git, slow under a parallel full-suite run). */
 export async function waitFor<T>(
   read: () => T | Promise<T>,
   accept: (value: T) => boolean,
   label: string,
 ): Promise<T> {
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + 50_000;
   for (;;) {
     const value = await read();
     if (accept(value)) return value;

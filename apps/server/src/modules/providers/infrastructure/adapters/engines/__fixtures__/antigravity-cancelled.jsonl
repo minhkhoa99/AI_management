@@ -1,0 +1,5 @@
+{"event":"init","conversation_id":"00000000-0000-4000-8000-000000000001","init":{"model":"gemini-3.8-flash-low","cwd":"/workspace","permission_mode":"request-review"}}
+{"event":"step_update","step_update":{"conversation_id":"00000000-0000-4000-8000-000000000001","step_index":0,"state":"DONE","step_type":"user_input"}}
+{"event":"step_update","step_update":{"conversation_id":"00000000-0000-4000-8000-000000000001","step_index":1,"state":"DONE","step_type":"agent_response","duration_seconds":2.3066161,"usage":{"input_tokens":11918,"output_tokens":43,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":11961}}}
+{"event":"step_update","step_update":{"conversation_id":"00000000-0000-4000-8000-000000000001","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"read_file","tool_info":{"name":"read_file","parameters":{"Path":"/workspace\\README.md"}}}}
+{"event":"step_update","step_update":{"conversation_id":"00000000-0000-4000-8000-000000000001","step_index":2,"state":"DONE","step_type":"tool","tool_name":"read_file","duration_seconds":0.0283688,"tool_info":{"name":"read_file","parameters":{"Path":"/workspace\\README.md"},"output":"3 lines, 128 bytes"}}}

@@ -32,6 +32,20 @@ export function readClaudeProjectInstructions(workingDirectory: string): string 
   return sections.length === 0 ? null : sections.join('\n\n');
 }
 
+/** The prompt with the project's instructions block in front of it (the prompt alone when null). */
+export function prependProjectInstructions(
+  prompt: string,
+  projectInstructions: string | null,
+): string {
+  if (projectInstructions === null) return prompt;
+  return [
+    'Hướng dẫn của dự án (các file CLAUDE.md, nền tảng đọc giúp bạn):',
+    projectInstructions,
+    '---',
+    prompt,
+  ].join('\n\n');
+}
+
 /** Folders from the repository root down to `startFolder` (just `startFolder` outside a repo). */
 function listFoldersFromRepositoryRoot(startFolder: string): string[] {
   const folders: string[] = [];

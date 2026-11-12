@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { type AgentEngineEvent, agentEngineEventSchema } from '@aiteam/contracts';
 import { describe, expect, it } from 'vitest';
+import { AntigravityStreamTranslator } from './antigravity-stream-translator';
 import { ClaudeStreamTranslator } from './claude-stream-translator';
 import { CodexStreamTranslator } from './codex-stream-translator';
 
@@ -33,6 +34,16 @@ function translateCodexFixture(fixtureName: string, exit: ExitInput): AgentEngin
     translator.translateCodexLine(line),
   );
   events.push(...translator.translateCodexExit({ kind: 'exit', stderrTail: '', ...exit }));
+  return events.map((event) => agentEngineEventSchema.parse(event));
+}
+
+// The recordings replace the real workspace folder with /workspace.
+function translateAntigravityFixture(fixtureName: string, exit: ExitInput): AgentEngineEvent[] {
+  const translator = new AntigravityStreamTranslator('/workspace');
+  const events = readFixtureLines(fixtureName).flatMap((line) =>
+    translator.translateAntigravityLine(line),
+  );
+  events.push(...translator.translateAntigravityExit({ kind: 'exit', stderrTail: '', ...exit }));
   return events.map((event) => agentEngineEventSchema.parse(event));
 }
 
@@ -190,5 +201,95 @@ describe('Codex stream (codex exec --json)', () => {
     expect(
       translator.translateCodexLine(JSON.stringify({ type: 'turn.failed', error: { message } })),
     ).toEqual([{ kind: 'failed', code, message, retryable }]);
+  });
+});
+
+describe('Antigravity stream (agy --output-format stream-json)', () => {
+  it('read-only summary: session, read tool, streamed answer, usage, completed', () => {
+    const events = translateAntigravityFixture('antigravity-read-only', {
+      exitCode: 0,
+      cancelled: false,
+    });
+
+    expect(events[0]).toMatchObject({
+      kind: 'session_started',
+      sessionRef: expect.any(String),
+      model: 'gemini-3.8-flash-low',
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({ kind: 'tool_call', toolName: 'read_file' }),
+    );
+    expect(listKinds(events)).toContain('text_delta');
+    expect(listKinds(events)).toContain('message');
+    expect(listKinds(events)).not.toContain('file_change');
+    expect(events.at(-2)).toMatchObject({ kind: 'usage', costUsd: null });
+    expect(events.at(-1)).toMatchObject({
+      kind: 'completed',
+      summary: expect.stringMatching(/ghi chú/),
+    });
+    expect(terminalEvents(events)).toHaveLength(1);
+  });
+
+  it('edit: reports the created file and the command with its exit code', () => {
+    const events = translateAntigravityFixture('antigravity-edit', {
+      exitCode: 0,
+      cancelled: false,
+    });
+
+    expect(events).toContainEqual({
+      kind: 'file_change',
+      path: expect.stringMatching(/hello\.txt$/),
+      changeKind: 'update',
+    });
+    expect(events).toContainEqual({
+      kind: 'command',
+      command: 'node --version',
+      exitCode: 0,
+      output: expect.stringMatching(/^v\d+\./),
+    });
+    expect(events.at(-1)?.kind).toBe('completed');
+    expect(terminalEvents(events)).toHaveLength(1);
+  });
+
+  it('denied command: the tool error is reported and the agent answers, so the run completes', () => {
+    const events = translateAntigravityFixture('antigravity-denied-command', {
+      exitCode: 0,
+      cancelled: false,
+    });
+
+    expect(events).toContainEqual({
+      kind: 'command',
+      command: 'node --version',
+      exitCode: null,
+      output: expect.stringMatching(/deny rule/),
+    });
+    expect(events.at(-1)).toMatchObject({ kind: 'completed', summary: expect.any(String) });
+    expect(terminalEvents(events)).toHaveLength(1);
+  });
+
+  it('cancelled mid-run: the recording has no result line, the exit yields one cancelled event', () => {
+    const events = translateAntigravityFixture('antigravity-cancelled', {
+      exitCode: 1,
+      cancelled: true,
+    });
+
+    expect(events[0]?.kind).toBe('session_started');
+    expect(events.at(-1)).toEqual({ kind: 'cancelled' });
+    expect(terminalEvents(events)).toHaveLength(1);
+  });
+
+  it('unknown model: a non-retryable MODEL_NOT_FOUND failure without a session', () => {
+    const events = translateAntigravityFixture('antigravity-invalid-model', {
+      exitCode: 1,
+      cancelled: false,
+    });
+
+    expect(events.at(-1)).toMatchObject({
+      kind: 'failed',
+      code: 'MODEL_NOT_FOUND',
+      retryable: false,
+    });
+    expect(listKinds(events)).not.toContain('session_started');
+    expect(terminalEvents(events)).toHaveLength(1);
   });
 });

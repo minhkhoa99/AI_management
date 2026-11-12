@@ -47,7 +47,7 @@ function readPackageVersion() {
 function printUsage() {
   console.log(`Cách dùng:
   aimanagement [--port <số>] [--no-open]   Khởi động AI Team và mở trình duyệt
-  aimanagement doctor                      Kiểm tra Node, git, Claude Code, Codex
+  aimanagement doctor                      Kiểm tra Node, git, Claude Code, Codex, Antigravity
 
 Cổng: --port, nếu không có thì AITEAM_PORT, nếu không có thì 7419.
 Cổng đang bận thì tự thử cổng trống kế tiếp; URL in ra là cổng thật.
@@ -206,6 +206,7 @@ function runDoctorChecks() {
     { label: 'claude --version', outcome: probeCommand('claude --version') },
     { label: 'codex --version', outcome: probeCommand('codex --version') },
     { label: 'codex login status', outcome: probeCommand('codex login status') },
+    { label: 'agy --version', outcome: probeCommand('agy --version') },
   ];
 
   console.log('aimanagement doctor');

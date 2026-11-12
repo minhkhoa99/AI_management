@@ -62,6 +62,12 @@ export class StepReviewLauncher {
     workDirectory: string,
   ): void {
     const state = task.toState();
+    const worktreeRoot = state.worktreePath;
+    if (worktreeRoot === null) {
+      // A worker turn always remembers its worktree; without one there is nothing to review in.
+      this.askUserInstead(task, step, worker, workerSummary, 'không tìm thấy thư mục làm việc');
+      return;
+    }
     const staff = this.staffDirectory.listDepartmentStaff(state.departmentId);
     const superior = findSuperior(worker.agentId, staff);
     const superiorSnapshot =
@@ -114,6 +120,7 @@ export class StepReviewLauncher {
           {
             prompt,
             workingDirectory: workDirectory,
+            workspaceRoot: worktreeRoot,
             model: prepared.model,
             permissions: prepared.permissions,
             resumeSessionRef: null,
