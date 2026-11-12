@@ -39,6 +39,7 @@ const codexModelSchema = z.object({
 const modelListLineSchema = z.object({
   id: z.literal(MODEL_LIST_REQUEST_ID),
   error: z.object({ message: z.string().optional() }).optional(),
+  // eslint-disable-next-line id-denylist -- field name of the Codex app-server protocol
   result: z.object({ data: z.array(z.unknown()) }).optional(),
 });
 

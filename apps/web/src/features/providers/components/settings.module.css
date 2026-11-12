@@ -299,3 +299,38 @@
   border: 1px solid #7f1d1d;
   background: #1f0d10;
 }
+
+.modelListSource {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modelListRefresh {
+  border: 1px solid var(--color-border-input);
+  border-radius: 8px;
+  background: transparent;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.modelListRefresh:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
+.modelListRefresh:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.cliUpdateHint {
+  margin: 0;
+  font-size: 12.5px;
+  color: #fde68a;
+}
+
+.cliUpdateHint code {
+  font-family: var(--font-mono-stack);
+  overflow-wrap: anywhere;
+}

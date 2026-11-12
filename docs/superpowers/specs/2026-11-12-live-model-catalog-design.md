@@ -20,7 +20,7 @@ chính CLI đang cài, model mới hiện ra mà không cần phát hành aiteam
   `control_response` có `models: [{value, resolvedModel, displayName, description, …}]` (0 token, không có
   lượt nào). Đủ tên ngắn kèm bản thật (`fable` → Fable 5.2) và các bản cố định (Fable 5.1, Opus 4.8, …).
 - Codex `app-server` có `model/list` (`{data:[{id, model, displayName, description, isDefault, hidden}],
-  nextCursor}`): API chính thức, thay cho `codex debug models` (lệnh gỡ lỗi, ~450 KB).
+nextCursor}`): API chính thức, thay cho `codex debug models` (lệnh gỡ lỗi, ~450 KB).
 
 ## Quyết định của chủ dự án
 
@@ -34,7 +34,7 @@ chính CLI đang cài, model mới hiện ra mà không cần phát hành aiteam
 1. **Tìm CLI theo thứ tự PATH (Windows):** duyệt từng thư mục theo thứ tự; trong mỗi thư mục thử `.exe`
    rồi `.cmd` (shim npm chạy bằng Node hiện tại như cũ). Thư mục đầu tiên có lệnh thắng — giống shell.
 2. **Claude (`CliClaudeModelCatalog`):** chạy `claude -p --input-format stream-json --output-format
-   stream-json --verbose --setting-sources "" --settings {"disableAllHooks":true} --strict-mcp-config` ở
+stream-json --verbose --setting-sources "" --settings {"disableAllHooks":true} --strict-mcp-config` ở
    `<data>/quota-probe/`, không shell, giữ stdin mở, gửi một dòng `initialize`, chờ `control_response` có
    đúng `request_id`, rồi kill cả cây. Timeout 20 s. Chỉ đọc `models` (parse zod); bỏ `default` (form đã có
    lựa chọn "mặc định của engine"); không bao giờ log `account` hay stdout thô. Tên ngắn (value ≠
@@ -50,7 +50,7 @@ chính CLI đang cài, model mới hiện ra mà không cần phát hành aiteam
    (`@anthropic-ai/claude-code`, `@openai/codex`), từ chối redirect, timeout 10 s, đọc tối đa 1 MiB, zod
    `{version}`, nhớ 24 giờ (lỗi nhớ 1 giờ, không báo). Phiên bản đang cài lấy từ `<cli> --version` (số
    `x.y.z` đầu tiên). Bản cài nhỏ hơn bản mới nhất → `cliUpdate: {installedVersion, latestVersion,
-   updateCommand}`; lệnh gợi ý: Claude `claude update`, Codex `npm i -g @openai/codex@latest`. Không gửi
+updateCommand}`; lệnh gợi ý: Claude `claude update`, Codex `npm i -g @openai/codex@latest`. Không gửi
    gì ngoài tên gói.
 6. **API:** `GET /api/local-engines/:engine/models[?refresh=1]` trả thêm `cliUpdate` (null khi không biết
    hoặc đã mới nhất; Antigravity luôn null).

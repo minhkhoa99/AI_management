@@ -10,7 +10,9 @@ function readFixtureLines(fixtureName: string): string[] {
     .filter((line) => line !== '');
 }
 
-const answer = (data: unknown[]) => JSON.stringify({ id: 2, result: { data, nextCursor: null } });
+const answer = (models: unknown[]) =>
+  // eslint-disable-next-line id-denylist -- field name of the Codex app-server protocol
+  JSON.stringify({ id: 2, result: { data: models, nextCursor: null } });
 
 describe('parseCodexModelListLine', () => {
   it('asks for the visible models after the JSON-RPC handshake', () => {

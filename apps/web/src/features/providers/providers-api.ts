@@ -35,8 +35,12 @@ export const loadEngineQuotas = () =>
 export const refreshEngineQuotas = () =>
   sendApiJson('POST', '/api/local-engines/quota/refresh', undefined, engineQuotaReportListSchema);
 
-export const loadLocalEngineModels = (engine: LocalEngine) =>
-  fetchApiJson(`/api/local-engines/${engine}/models`, localEngineModelListSchema);
+/** `refresh` makes the server read the CLI again instead of its 60-second cache (the ↻ button). */
+export const loadLocalEngineModels = (engine: LocalEngine, options: { refresh?: boolean } = {}) =>
+  fetchApiJson(
+    `/api/local-engines/${engine}/models${options.refresh === true ? '?refresh=1' : ''}`,
+    localEngineModelListSchema,
+  );
 
 export const updateLocalEngineSettings = (
   engine: LocalEngine,
