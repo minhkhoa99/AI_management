@@ -556,9 +556,18 @@ describe('quota wait', () => {
       engine.failWith = (request) => (stepNameOf(request.prompt) === 'review' ? RATE_LIMIT : null);
       quotaBuckets = [bucket({})];
       const releaseQuotaRead = holdQuotaReads();
+      // The worker turn's after-turn refresh is already held by the gate: only a read asked for
+      // after the review started proves the planner is reading the reviewer's quota.
+      const quotaReadAfter: string[] = [];
+      const monitor = app.application.get(EngineQuotaMonitor);
+      const readFresh = monitor.readFreshEngineQuota.bind(monitor);
+      vi.spyOn(monitor, 'readFreshEngineQuota').mockImplementation((quotaEngine) => {
+        quotaReadAfter.push(workedSteps().at(-1) ?? '');
+        return readFresh(quotaEngine);
+      });
       const taskId = await startReviewedTask();
       await waitFor(
-        () => workedSteps().includes('review') && quotaReads >= 1,
+        () => quotaReadAfter.includes('review'),
         (started) => started,
         'review quota read started',
       );
@@ -570,27 +579,34 @@ describe('quota wait', () => {
       expect(edit.statusCode, JSON.stringify(edit.body)).toBe(200);
       releaseQuotaRead();
 
-      const settled = await waitFor(
-        () => readStoredTask(taskId),
-        (stored) => stored.status !== 'running',
-        'review settled',
-      );
-      expect(settled.assignee_agent_id).toBe(departmentHead.id);
-      expect(settled.run_after).toBeNull();
-      expect(countQuotaWaitEvents(taskId)).toBe(0);
-      expect(readReviewPending(taskId)).toBe(0);
-      await waitFor(
-        () => workedSteps().length,
-        (count) => count >= 4,
-        'turn of the new assignee',
-      );
-      expect(workedSteps()[3]).not.toBe('review');
-      // Let the step finish (checkpoint and review included) before the app and its folders close.
+      // The edit wins: no quota wait, and the step runs again at once. "Chia task" belongs to the
+      // PM role, so that turn hands the task from the edited assignee back to the PM (recorded as
+      // a workflow_step delegation), and the task moves on from there: the task row only briefly
+      // shows the edited assignee, so the delegation is the lasting proof.
       await waitFor(
         () => readTask(taskId),
         (detail) => detail.currentStep?.name === 'Phát triển',
         'step passed after the edit',
       );
+      expect(workedSteps()).toEqual([
+        'Tiếp nhận và lập kế hoạch',
+        'Chia task',
+        'review',
+        'Chia task',
+        'review',
+      ]);
+      expect(countQuotaWaitEvents(taskId)).toBe(0);
+      expect(readReviewPending(taskId)).toBe(0);
+      const delegations = app.database
+        .prepare(
+          'SELECT from_agent_id AS fromAgentId, to_agent_id AS toAgentId, reason FROM task_delegations WHERE task_id = ? ORDER BY created_at, rowid',
+        )
+        .all(taskId);
+      expect(delegations.at(-1)).toEqual({
+        fromAgentId: departmentHead.id,
+        toAgentId: pm.id,
+        reason: 'workflow_step',
+      });
     }, 60_000);
 
     /** The step that ran last each time a turn's end asked for a quota refresh. */
