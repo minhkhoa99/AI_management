@@ -17,6 +17,8 @@ import {
 import { createAppLogger } from '../shared/logging/app-logger';
 import type { ProcessInspector } from '../shared/runtime/process-identity';
 import type { ProcessTerminator } from '../shared/runtime/process-termination';
+import { AgentSessionSupervisor } from '../shared/runtime/agent-session-supervisor';
+import { SESSION_SHUTDOWN_TIMEOUT_MS } from '../shared/runtime/fatal-error-handler';
 
 export const TEST_SESSION_TOKEN = 'test-session-token-0123456789abcdef0123456789';
 export const TEST_LISTEN_PORT = 7419;
@@ -138,6 +140,9 @@ export async function startTestApplication(
     },
     dataDirectory: secretDirectory,
     async closeApplication() {
+      // Same order as the real server's stop: end agent sessions first, so no turn is still
+      // writing (git checkpoint) in the data folder when it is removed.
+      await application.get(AgentSessionSupervisor).cancelAllSessions(SESSION_SHUTDOWN_TIMEOUT_MS);
       await application.close();
       database.close();
       rmSync(secretDirectory, { recursive: true, force: true });
