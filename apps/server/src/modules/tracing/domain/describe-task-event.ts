@@ -1,3 +1,5 @@
+import { formatQuotaResumeTime } from '@aiteam/contracts';
+
 /** What a log line is made from: the event kind and its stored payload. */
 export interface DescribableTaskEvent {
   kind: string;
@@ -66,6 +68,8 @@ function describeEventText(event: DescribableTaskEvent): string {
       return text('reason') === 'manual' ? 'được giao task' : 'được tự động giao task';
     case 'engine_failed':
       return `bộ não báo lỗi ${text('code')}: ${text('message')}`;
+    case 'quota_wait':
+      return `dừng vì hết hạn mức ${text('windowLabel')} của ${text('engine')}, tự chạy tiếp lúc ${text('runAfter') === '' ? '?' : formatQuotaResumeTime(text('runAfter'))}`;
     case 'failed':
       return `phiên lỗi ${text('code')}: ${text('message')}`;
     case 'turn_cancelled':

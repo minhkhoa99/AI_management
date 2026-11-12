@@ -82,4 +82,56 @@ describe('streamCliOutput', () => {
     expect(childPid).toBeDefined();
     expect(() => process.kill(childPid as number, 0)).toThrow();
   });
+
+  describe('stdin handling', () => {
+    const script = `
+      process.stdin.on('data', () => console.log('received'));
+      process.stdin.on('end', () => { console.log('stdin-ended'); process.exit(0); });
+      process.stdin.resume();
+      setTimeout(() => process.exit(0), 30000);`;
+    const lineTexts = (outputs: CliOutput[]) =>
+      outputs.flatMap((output) => (output.kind === 'line' ? [output.text] : []));
+
+    it('closes stdin after the prompt by default', async () => {
+      const outputs = await collectOutputs(
+        streamCliOutput(
+          {
+            executable: fakeCli(script),
+            args: [],
+            workingDirectory: process.cwd(),
+            stdinText: 'x\n',
+          },
+          AbortSignal.timeout(15_000),
+        ),
+      );
+      expect(lineTexts(outputs)).toContain('stdin-ended');
+    }, 20_000);
+
+    it('keeps stdin open when keepStdinOpen is true', async () => {
+      const stop = new AbortController();
+      const safetyCeiling = setTimeout(() => stop.abort(), 15_000);
+      const seen: string[] = [];
+      try {
+        for await (const output of streamCliOutput(
+          {
+            executable: fakeCli(script),
+            args: [],
+            workingDirectory: process.cwd(),
+            stdinText: 'x\n',
+            keepStdinOpen: true,
+          },
+          stop.signal,
+        )) {
+          if (output.kind !== 'line') continue;
+          seen.push(output.text);
+          // Once the child has read the prompt, give an (unwanted) EOF a moment to show up.
+          if (output.text === 'received') setTimeout(() => stop.abort(), 200);
+        }
+      } finally {
+        clearTimeout(safetyCeiling);
+      }
+      expect(seen).toContain('received');
+      expect(seen).not.toContain('stdin-ended');
+    }, 20_000);
+  });
 });

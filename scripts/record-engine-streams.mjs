@@ -2,9 +2,13 @@
 // Records real JSONL streams from the local Claude Code, Codex and Antigravity (agy) CLIs,
 // sanitises them, and writes them as contract-test fixtures. Re-run when a CLI changes its output format.
 //
-//   node scripts/record-engine-streams.mjs [claude|codex|antigravity|all] [fixture-name]
+//   node scripts/record-engine-streams.mjs [claude|codex|antigravity|quota|all] [fixture-name]
 //
 // Spends a little of the signed-in accounts' quota (a few tiny prompts, cheapest models).
+// The `quota` group only runs the three quota-reading commands (0 tokens) and writes the fixtures
+// next to the quota readers; `all` does NOT include it (it is not an agent turn). Set
+// AITEAM_QUOTA_FIXTURE_DIR to write them elsewhere. A quota recording changes the numbers and
+// reset times: update the expected values (and the injected `now` of the Claude test) to match.
 // Sanitising removes: personal paths, session/thread ids, account and quota details, hooks.
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -17,6 +21,13 @@ const fixtureDirectory = path.join(
   repositoryRoot,
   'apps/server/src/modules/providers/infrastructure/adapters/engines/__fixtures__',
 );
+
+const quotaFixtureDirectory =
+  process.env.AITEAM_QUOTA_FIXTURE_DIR ??
+  path.join(
+    repositoryRoot,
+    'apps/server/src/modules/providers/infrastructure/adapters/quota/__fixtures__',
+  );
 
 const READ_PROMPT =
   'Đọc README.md trong thư mục hiện tại rồi tóm tắt nội dung trong một câu tiếng Việt.';
@@ -198,6 +209,12 @@ const RECORDINGS = {
 };
 
 const DROPPED_KEYS = new Set([
+  'accountId',
+  'session_id',
+  'installationId',
+  'environmentId',
+  'serverName',
+  'userAgent',
   'uuid',
   'memory_paths',
   'original_cwd',
@@ -354,10 +371,209 @@ function recordOne([
   });
 }
 
-const selection = process.argv[2] ?? 'all';
-const onlyFixture = process.argv[3];
-for (const engineName of selection === 'all' ? Object.keys(RECORDINGS) : [selection]) {
-  for (const recording of RECORDINGS[engineName]) {
-    if (onlyFixture === undefined || recording[0] === onlyFixture) await recordOne(recording);
+// Quota recordings: the same three commands as the quota readers (spec section 3).
+const QUOTA_CLAUDE_ARGS = [
+  '-p',
+  '/usage',
+  '--output-format',
+  'json',
+  '--setting-sources',
+  '',
+  '--settings',
+  '{"disableAllHooks":true}',
+  '--strict-mcp-config',
+];
+const QUOTA_CODEX_REQUESTS = [
+  { id: 1, method: 'initialize', params: { clientInfo: { name: 'aiteam', version: '1' } } },
+  { method: 'initialized' },
+  { id: 2, method: 'account/rateLimits/read' },
+];
+const QUOTA_DROPPED_KEYS = new Set([...DROPPED_KEYS, 'conversation_id']);
+const CODEX_HOME_PLACEHOLDER = 'C:\\Users\\example\\.codex';
+
+function sanitiseQuotaValue(value, parentKey) {
+  if (typeof value === 'string') {
+    if (parentKey === 'codexHome') return CODEX_HOME_PLACEHOLDER;
+    return value
+      .split(homedir())
+      .join('~')
+      .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '<id>');
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitiseQuotaValue(item, parentKey));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(
+          ([key]) => !QUOTA_DROPPED_KEYS.has(key) && !(parentKey === 'credits' && key === 'id'),
+        )
+        .map(([key, inner]) => [key, sanitiseQuotaValue(inner, key)]),
+    );
+  }
+  return value;
+}
+
+function parseJsonLine(line) {
+  try {
+    return JSON.parse(line);
+  } catch {
+    // Progress text or a broken line: not part of the recording (never echoed: it is raw CLI text).
+    return undefined;
+  }
+}
+
+/**
+ * The sanitised fixture text, or null when the output holds no usable recording (no JSON line,
+ * or no answer to request id 2 for Codex): the existing fixture must then be left as it is.
+ */
+export function buildQuotaFixtureText(fixtureName, text) {
+  const entries = text
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== '')
+    .map(parseJsonLine)
+    .filter((entry) => entry !== null && typeof entry === 'object');
+  if (entries.length === 0) return null;
+  if (fixtureName.startsWith('codex') && !entries.some((entry) => entry.id === 2)) return null;
+  const cleaned = entries.map((parsed) => {
+    const entry = sanitiseQuotaValue(parsed);
+    // The Claude /usage text lists personal tips and skill names after the limits: keep the limits only.
+    if (typeof entry.result === 'string' && entry.local_command === 'usage') {
+      entry.result = entry.result.split("\n\nWhat's contributing")[0];
+    }
+    return JSON.stringify(entry);
+  });
+  return `${cleaned.join('\n')}\n`;
+}
+
+/** Returns whether the fixture was written. */
+function writeQuotaFixture(fixtureName, text) {
+  const fixtureText = buildQuotaFixtureText(fixtureName, text);
+  if (fixtureText === null) return false;
+  writeFileSync(path.join(quotaFixtureDirectory, fixtureName), fixtureText);
+  return true;
+}
+
+function killProcessTree(child) {
+  if (child.pid === undefined) return;
+  if (process.platform === 'win32') spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+  else child.kill('SIGTERM');
+}
+
+/** A CLI that cannot start (not installed, not on PATH): a fixed message, never raw output. */
+function reportSpawnFailure(command, error) {
+  console.error(`${command}: could not start (${error.code ?? 'unknown error'}); is it installed?`);
+}
+
+function ignoreClosedStdin() {
+  // The CLI exited (or never started) before reading stdin: nothing left to send.
+}
+
+export function readOneShot(command, args, workspace) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { cwd: workspace, windowsHide: true, shell: false });
+    let stdout = '';
+    const timer = setTimeout(() => killProcessTree(child), 30000);
+    const finish = () => {
+      clearTimeout(timer);
+      resolve(stdout);
+    };
+    child.on('error', (error) => {
+      reportSpawnFailure(command, error);
+      finish();
+    });
+    child.stdout.on('data', (chunk) => (stdout += chunk));
+    child.stderr.resume();
+    child.stdin.on('error', ignoreClosedStdin);
+    child.stdin.end();
+    child.on('close', finish);
+  });
+}
+
+// codex app-server must keep stdin open until the answer to request id 2 arrives.
+function readCodexRateLimits(workspace) {
+  return new Promise((resolve) => {
+    const child = spawn('codex', ['app-server'], {
+      cwd: workspace,
+      windowsHide: true,
+      shell: false,
+    });
+    let buffer = '';
+    const lines = [];
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      killProcessTree(child);
+      resolve(lines.join('\n'));
+    };
+    const timer = setTimeout(finish, 30000);
+    child.on('error', (error) => {
+      reportSpawnFailure('codex', error);
+      finish();
+    });
+    child.stderr.resume();
+    child.stdout.on('data', (chunk) => {
+      buffer += chunk;
+      const parts = buffer.split('\n');
+      buffer = parts.pop() ?? '';
+      for (const line of parts) {
+        if (line.trim() === '') continue;
+        lines.push(line);
+        if (parseJsonLine(line)?.id === 2) finish();
+      }
+    });
+    child.on('close', finish);
+    child.stdin.on('error', ignoreClosedStdin);
+    child.stdin.write(
+      QUOTA_CODEX_REQUESTS.map((request) => JSON.stringify(request)).join('\n') + '\n',
+    );
+  });
+}
+
+async function recordQuota(onlyName) {
+  const workspace = mkdtempSync(path.join(tmpdir(), 'aiteam-quota-record-'));
+  try {
+    const jobs = [
+      ['claude-usage.json', () => readOneShot('claude', QUOTA_CLAUDE_ARGS, workspace)],
+      ['codex-rate-limits.jsonl', () => readCodexRateLimits(workspace)],
+      [
+        'antigravity-usage.json',
+        () => readOneShot('agy', ['-p', '/usage', '--output-format', 'json'], workspace),
+      ],
+    ];
+    for (const [fixtureName, readOutput] of jobs) {
+      if (onlyName !== undefined && fixtureName !== onlyName) continue;
+      if (writeQuotaFixture(fixtureName, await readOutput())) {
+        console.log(`${fixtureName}: recorded`);
+      } else {
+        // Fixed text only: the CLI output may hold account details.
+        console.error(`${fixtureName}: no usable answer in the CLI output; fixture left unchanged`);
+        process.exitCode = 1;
+      }
+    }
+  } finally {
+    try {
+      rmSync(workspace, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+    } catch (error) {
+      console.warn(`could not remove ${workspace}: ${error.message}`);
+    }
+  }
+}
+
+// Only records when run as a script: tests import the pure helpers without touching any CLI.
+const startedFromCommandLine =
+  process.argv[1] !== undefined && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (startedFromCommandLine) {
+  const selection = process.argv[2] ?? 'all';
+  const onlyFixture = process.argv[3];
+  if (selection === 'quota') {
+    await recordQuota(onlyFixture);
+    process.exit(process.exitCode ?? 0);
+  }
+  for (const engineName of selection === 'all' ? Object.keys(RECORDINGS) : [selection]) {
+    for (const recording of RECORDINGS[engineName]) {
+      if (onlyFixture === undefined || recording[0] === onlyFixture) await recordOne(recording);
+    }
   }
 }

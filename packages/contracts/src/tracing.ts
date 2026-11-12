@@ -12,6 +12,8 @@ export const LIVE_UPDATE_TYPES = [
   'task.event',
   /** An approval request was created or decided. */
   'approval.changed',
+  /** The usage limits of a local engine were just re-read. */
+  'engine_quota.changed',
 ] as const;
 export type LiveUpdateType = (typeof LIVE_UPDATE_TYPES)[number];
 

@@ -1,0 +1,119 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { selectApplicableQuotaBuckets } from '@aiteam/contracts';
+import { describe, expect, it } from 'vitest';
+import { parseClaudeResetTime, parseClaudeUsage } from './cli-claude-quota.reader';
+
+function readFixture(fixtureName: string): string {
+  return readFileSync(path.join(import.meta.dirname, '__fixtures__', fixtureName), 'utf8');
+}
+
+const NOW = new Date('2026-11-11T16:28:00.000Z'); // 23:28 Asia/Ho_Chi_Minh
+
+describe('parseClaudeUsage', () => {
+  it('keeps only the limit lines in the recording (no personal tips or skill names)', () => {
+    const recording = JSON.parse(readFixture('claude-usage.json')) as { result: string };
+    expect(recording.result).not.toMatch(/What's contributing|requests|skills/);
+    const limitLines = recording.result.split(/\r?\n/).filter((line) => line.includes('% used'));
+    expect(limitLines).toHaveLength(3);
+  });
+
+  it('reads session and weekly lines from a real recording', () => {
+    const reading = parseClaudeUsage(readFixture('claude-usage.json'), NOW);
+    expect(reading.state).toBe('ok');
+    expect(reading.buckets).toEqual([
+      {
+        group: null,
+        window: 'five_hour',
+        windowLabel: '5 giờ',
+        remainingPercent: 73,
+        resetsAt: '2026-11-11T16:59:00.000Z',
+        appliesToModels: null,
+      },
+      {
+        group: 'Tất cả model',
+        window: 'weekly',
+        windowLabel: 'tuần',
+        remainingPercent: 95,
+        resetsAt: '2026-11-18T11:59:00.000Z',
+        appliesToModels: null,
+      },
+      {
+        group: 'Fable',
+        window: 'weekly',
+        windowLabel: 'tuần',
+        remainingPercent: 100,
+        resetsAt: '2026-11-18T12:00:00.000Z',
+        appliesToModels: ['fable'],
+      },
+    ]);
+  });
+
+  it('never invents numbers', () => {
+    expect(parseClaudeUsage('{"result":"Something new"}', NOW).state).toBe('unreadable');
+    expect(
+      parseClaudeUsage('{"result":"Current session: 140% used"}', NOW).buckets[0]?.remainingPercent,
+    ).toBe(0);
+    expect(parseClaudeUsage('garbage', NOW).state).toBe('unreadable');
+  });
+
+  it('matches a model-specific week by the first word of its label', () => {
+    const reading = parseClaudeUsage(
+      JSON.stringify({
+        result: 'Current week (Sonnet only): 100% used · resets Nov 18, 7pm (UTC)',
+      }),
+      NOW,
+    );
+    expect(reading.buckets[0]).toMatchObject({ group: 'Sonnet only', appliesToModels: ['sonnet'] });
+    const report = {
+      engine: 'claude_code' as const,
+      state: 'ok' as const,
+      buckets: reading.buckets,
+      checkedAt: null,
+      lastSuccessAt: null,
+    };
+    expect(selectApplicableQuotaBuckets(report, 'sonnet')).toHaveLength(1);
+    expect(selectApplicableQuotaBuckets(report, 'claude-sonnet-4-5')).toHaveLength(1);
+  });
+
+  it('cuts a long group name instead of rejecting the engine', () => {
+    const label = 'Opus '.repeat(30).trim();
+    const reading = parseClaudeUsage(
+      JSON.stringify({ result: `Current week (${label}): 10% used` }),
+      NOW,
+    );
+    expect(reading.state).toBe('ok');
+    expect(reading.buckets[0]?.group).toBe(label.slice(0, 80));
+  });
+
+  it('classifies output without limit lines', () => {
+    expect(parseClaudeUsage('{"result":"Using an API key via Console"}', NOW).state).toBe(
+      'not_applicable',
+    );
+    expect(parseClaudeUsage('{"result":"Please log in"}', NOW).state).toBe('not_signed_in');
+  });
+});
+
+describe('parseClaudeResetTime', () => {
+  it('rolls reset dates over midnight and the new year', () => {
+    expect(parseClaudeResetTime('Nov 12, 12:30am (Asia/Ho_Chi_Minh)', NOW)).toBe(
+      '2026-11-11T17:30:00.000Z',
+    );
+    expect(parseClaudeResetTime('Jan 2, 9am (UTC)', new Date('2026-12-30T00:00:00Z'))).toBe(
+      '2027-01-02T09:00:00.000Z',
+    );
+    expect(parseClaudeResetTime('Nov 18, 7pm (America/New_York)', NOW)).toBe(
+      '2026-11-19T00:00:00.000Z',
+    );
+    expect(parseClaudeResetTime('Nov 18, 7pm (Mars/Base)', NOW)).toBeNull();
+  });
+
+  it('never rolls a reset that just passed into next year', () => {
+    // 23:26 in Ho Chi Minh: read two minutes after the reset.
+    expect(parseClaudeResetTime('Nov 11, 11:26pm (Asia/Ho_Chi_Minh)', NOW)).toBeNull();
+    expect(parseClaudeResetTime('Jan 2, 9am (UTC)', new Date('2026-12-30T00:00:00Z'))).toBe(
+      '2027-01-02T09:00:00.000Z',
+    );
+    expect(parseClaudeResetTime('Jan 20, 9am (UTC)', new Date('2026-12-30T00:00:00Z'))).toBeNull();
+  });
+});

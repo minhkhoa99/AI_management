@@ -366,6 +366,15 @@ Mỗi giai đoạn kết thúc bằng một bản chạy được, có test, đ�
 - **Chưa làm:** skill cho phiên duyệt của cấp trên; tự cập nhật skill GitHub (xoá rồi nhập lại); dọn thư mục skill khi xoá cả phòng ban.
 - Thử thật với Claude haiku: nhập `anthropics/skills` (cả repo và `skills/pdf`, 12 file), tạo skill "Chữ ký file" với quy tắc dòng cuối, gán cho Dev; agent đọc `SKILL.md` và tạo file có đúng dòng chữ ký.
 
+### Sau Giai đoạn 5: hạn mức engine
+
+**Quyết định đã chốt (11/2026):** spec ở `docs/superpowers/specs/2026-11-11-engine-quota-design.md`.
+
+- **Đọc hạn mức (0 token):** `claude -p "/usage" --output-format json` (kèm cờ cách ly như engine), `codex app-server` (`account/rateLimits/read` qua JSON-RPC stdio, giữ stdin mở tới câu trả lời `id:2`) và `agy -p "/usage" --output-format json`, chạy ở `<data>/quota-probe/`, không shell, timeout 20 s. `EngineQuotaMonitor` (module providers) đọc khi khởi động, mỗi 5 phút, sau lượt agent (cách nhau ≥ 30 s) và khi bấm ↻.
+- **Giao diện:** thẻ "Hạn mức còn lại" ở thanh bên (vàng dưới 20%, đỏ dưới 10%), cập nhật qua SSE `engine_quota.changed`.
+- **Chờ hạn mức (orchestration):** lượt worker hoặc lượt cấp trên duyệt gặp lỗi hạn mức mà bucket của model đó về 0% thì task quay lại `queued` kèm ghi chú và sự kiện timeline, tự chạy lúc reset + 60 s; không tính vào bộ đếm lỗi engine. Review chờ giữ cờ `review_pending` (migration 014). Đổi engine hoặc người nhận thì đánh thức ngay.
+- **Test:** contract test trên bản ghi thật (`scripts/record-engine-streams.mjs quota`, không nằm trong `all`), e2e giả lập hết hạn mức bằng engine giả.
+
 ## 8. Rủi ro và cách xử lý
 
 | Rủi ro | Cách xử lý |

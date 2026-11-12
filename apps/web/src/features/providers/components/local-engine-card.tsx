@@ -10,6 +10,7 @@ import {
   startLocalEngineTestRun,
   updateLocalEngineSettings,
 } from '../providers-api';
+import { LOCAL_ENGINE_MARKS } from '../../organization/organization-labels';
 import { useEngineTestRun } from '../use-engine-test-run';
 import { EngineTestRunLog } from './engine-test-run-log';
 import styles from './settings.module.css';
@@ -17,7 +18,7 @@ import styles from './settings.module.css';
 const ENGINE_PRESENTATION = {
   claude_code: {
     name: 'Claude Code',
-    mark: 'CC',
+    mark: LOCAL_ENGINE_MARKS.claude_code,
     via: 'claude -p · tài khoản Claude đã đăng nhập',
     modelPlaceholder: 'Mặc định của Claude Code',
     commandSafety: {
@@ -31,7 +32,7 @@ const ENGINE_PRESENTATION = {
   },
   codex: {
     name: 'Codex',
-    mark: 'CX',
+    mark: LOCAL_ENGINE_MARKS.codex,
     via: 'codex exec · tài khoản ChatGPT đã đăng nhập',
     modelPlaceholder: 'Mặc định của Codex',
     commandSafety: {
@@ -44,7 +45,7 @@ const ENGINE_PRESENTATION = {
   },
   antigravity: {
     name: 'Antigravity',
-    mark: 'AG',
+    mark: LOCAL_ENGINE_MARKS.antigravity,
     via: 'agy · tài khoản Antigravity đã đăng nhập',
     modelPlaceholder: 'Mặc định của Antigravity',
     commandSafety: {

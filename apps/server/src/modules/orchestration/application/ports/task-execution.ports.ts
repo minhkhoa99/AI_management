@@ -172,6 +172,8 @@ export interface StaffDirectory {
 export const TASK_EVENT_LOG = Symbol('TASK_EVENT_LOG');
 
 export interface StepReportRecord {
+  /** Who reported (null once that agent was deleted). */
+  agentId: string | null;
   stepName: string;
   agentName: string;
   summary: string;

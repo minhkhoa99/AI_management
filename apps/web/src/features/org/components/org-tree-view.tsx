@@ -68,7 +68,7 @@ function OrgTreeBranch({ node, ...props }: OrgTreeViewProps & { node: OrgTreeNod
           </span>
         </button>
         <div className={styles.memberActions}>
-          <ProviderBadge provider={agent.provider} />
+          <ProviderBadge provider={agent.provider} model={agent.model} />
           <span className={styles.memberButtons}>
             <button
               type="button"

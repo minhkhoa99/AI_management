@@ -50,6 +50,8 @@ export interface TaskState {
   baseSha: string | null;
   /** Set on a subtask: the task whose agent split its step into this one (one level deep). */
   parentTaskId: string | null;
+  /** The superior's review of the current step waits for the plan quota: reopen it next turn. */
+  reviewPending: boolean;
 }
 
 export interface TaskContent {
@@ -62,6 +64,9 @@ export interface TaskContent {
 }
 
 export const FEEDBACK_MAX_LENGTH = 8_000;
+
+/** Every status note of a task waiting for a plan quota reset starts with this. */
+export const QUOTA_WAIT_NOTE_PREFIX = '⏸ Chờ hạn mức';
 
 /** A unit of work for a department: what to do, who does it, where, and how far it got. */
 export class Task {
@@ -102,6 +107,7 @@ export class Task {
       statusNote: null,
       baseSha: null,
       parentTaskId: null,
+      reviewPending: false,
     });
   }
 
@@ -186,8 +192,25 @@ export class Task {
     }
   }
 
+  /**
+   * A queued task that waited for a quota reset (or a retry back-off) runs at once under a new
+   * assignee (the same assignee changes nothing), and a reopened review of the old worker's report is dropped: the new one does the step.
+   */
   assignTo(agentId: string): void {
+    const assigneeChanges = agentId !== this.state.assigneeAgentId;
     this.state.assigneeAgentId = agentId;
+    if (assigneeChanges && this.state.status === 'queued') {
+      this.clearRunAfter();
+      this.state.reviewPending = false;
+    }
+  }
+
+  /** The back-off or quota wait is over (the engine changed): the scheduler may pick the task now. */
+  clearRunAfter(): void {
+    this.state.runAfter = null;
+    if (this.state.statusNote?.startsWith(QUOTA_WAIT_NOTE_PREFIX) === true) {
+      this.state.statusNote = null;
+    }
   }
 
   /** The workflow and the folder are fixed once work has started. */
@@ -225,6 +248,7 @@ export class Task {
   /** An agent session starts on `stepId` (null: no workflow) with the agent's current engine. */
   startTurn(stepId: string | null, snapshot: EngineSnapshot): void {
     this.state.status = 'running';
+    this.state.reviewPending = false;
     this.state.currentStepId = stepId;
     this.state.assigneeAgentId = snapshot.agentId;
     this.state.engineSnapshot = snapshot;
@@ -259,10 +283,44 @@ export class Task {
     note?: string;
   }): void {
     this.state.status = 'queued';
+    this.state.reviewPending = false;
     this.state.currentStepId = input.stepId;
     this.state.stepAttempt = input.retriesUsed;
     this.state.runAfter = input.runAfter ?? null;
     this.state.statusNote = input.note ?? null;
+  }
+
+  /**
+   * The engine's plan quota is used up: back in the queue until it resets. Same step, same session,
+   * and not an engine failure (the failure counter and the step attempt stay as they were).
+   */
+  waitForQuota(input: { runAfter: string; note: string }): void {
+    this.state.status = 'queued';
+    this.state.runAfter = input.runAfter;
+    this.state.statusNote = input.note;
+  }
+
+  /**
+   * The superior's review hit the reviewer's plan quota: back in the queue until it resets, and
+   * the next turn opens the review again (the step's work is done and stays as it is).
+   */
+  waitForReviewQuota(input: { runAfter: string; note: string }): void {
+    this.waitForQuota(input);
+    this.state.reviewPending = true;
+  }
+
+  /** Whether the next turn is the superior's review; the answer is given once. */
+  takePendingReview(): boolean {
+    const pending = this.state.reviewPending;
+    this.state.reviewPending = false;
+    return pending;
+  }
+
+  /** The reopened review runs: the task is busy again, on the same step and worker. */
+  startPendingReview(): void {
+    this.state.status = 'running';
+    this.state.runAfter = null;
+    this.state.statusNote = null;
   }
 
   /** Returns how many retryable engine failures happened in a row. */
@@ -295,22 +353,26 @@ export class Task {
 
   waitForApproval(note: string): void {
     this.state.status = 'waiting_approval';
+    this.state.reviewPending = false;
     this.state.statusNote = note;
   }
 
   succeed(): void {
     this.state.status = 'succeeded';
+    this.state.reviewPending = false;
     this.state.statusNote = null;
     this.state.pendingFeedback = null;
   }
 
   fail(note: string): void {
     this.state.status = 'failed';
+    this.state.reviewPending = false;
     this.state.statusNote = note;
   }
 
   beginCancelling(): void {
     this.state.status = 'cancelling';
+    this.state.reviewPending = false;
     this.state.statusNote = 'Đã gửi tín hiệu huỷ, chờ agent dừng…';
   }
 

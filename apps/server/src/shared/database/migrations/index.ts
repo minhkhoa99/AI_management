@@ -12,6 +12,7 @@ import taskPreviewSql from './010_task_preview.sql';
 import taskSubtasksSql from './011_task_subtasks.sql';
 import departmentSkillsSql from './012_department_skills.sql';
 import antigravityEngineSql from './013_antigravity_engine.sql';
+import taskReviewPendingSql from './014_task_review_pending.sql';
 
 /** Every schema migration, in ascending version order. Append only; never edit a released one. */
 export const ALL_MIGRATIONS: readonly SqlMigration[] = [
@@ -48,4 +49,5 @@ export const ALL_MIGRATIONS: readonly SqlMigration[] = [
     sql: antigravityEngineSql,
     rebuildsTables: true,
   },
+  { version: 14, name: 'task-review-pending', sql: taskReviewPendingSql },
 ];

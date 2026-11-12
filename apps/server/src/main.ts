@@ -17,6 +17,7 @@ import { openSqliteDatabase } from './shared/database/sqlite-connection';
 import { randomUuidGenerator } from './shared/identifiers/id-generator';
 import { createAppLogger } from './shared/logging/app-logger';
 import { AgentSessionSupervisor } from './shared/runtime/agent-session-supervisor';
+import type { LocalEngineAdaptersOverride } from './shared/runtime/local-engine-adapters-override';
 import {
   installFatalErrorHandlers,
   SESSION_SHUTDOWN_TIMEOUT_MS,
@@ -48,6 +49,8 @@ export interface StartAiteamServerOptions {
    * sessions, exit 1). Only the launcher sets this; tests must not take over the process.
    */
   installFatalErrorHandlers?: boolean;
+  /** Tests only: replaces the adapters that spawn the real engine CLIs (never set when running). */
+  localEngineAdaptersOverride?: LocalEngineAdaptersOverride;
 }
 
 export interface RunningAiteamServer {
@@ -110,6 +113,7 @@ export async function startAiteamServer(
         logger,
         sessionSupervisor,
         webRootDirectory: options.webRootDirectory,
+        localEngineAdaptersOverride: options.localEngineAdaptersOverride ?? null,
       }),
     );
 

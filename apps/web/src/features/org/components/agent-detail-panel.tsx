@@ -147,7 +147,7 @@ function AgentDetailContent({
         </div>
         <div className={styles.statTile}>
           <span className={styles.statLabel}>Bộ não</span>
-          <ProviderBadge provider={agent.provider} />
+          <ProviderBadge provider={agent.provider} model={agent.model} />
         </div>
         <div className={styles.statTile}>
           <span className={styles.statLabel}>Quyền</span>

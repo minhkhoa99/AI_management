@@ -60,7 +60,7 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
       'SELECT id, created_at FROM task_events WHERE rowid = last_insert_rowid()',
     );
     this.reportsStatement = database.prepare(
-      `SELECT payload_json FROM task_events WHERE task_id = ? AND kind = '${STEP_REPORT_KIND}' ORDER BY id`,
+      `SELECT agent_id, payload_json FROM task_events WHERE task_id = ? AND kind = '${STEP_REPORT_KIND}' ORDER BY id`,
     );
     this.listStatement = database.prepare(
       `SELECT e.id, e.kind, a.name AS agent_name, e.payload_json, e.created_at
@@ -95,6 +95,7 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
     this.flushPendingEvents();
     const latestByStep = new Map<string, StepReportRecord>();
     for (const row of this.reportsStatement.all(taskId) as unknown as Array<{
+      agent_id: string | null;
       payload_json: string;
     }>) {
       const payload = JSON.parse(row.payload_json) as Partial<StepReportRecord> & {
@@ -103,6 +104,7 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
       const key = payload.stepKey ?? payload.stepName ?? '';
       latestByStep.delete(key);
       latestByStep.set(key, {
+        agentId: row.agent_id,
         stepName: payload.stepName ?? '',
         agentName: payload.agentName ?? '',
         summary: payload.summary ?? '',

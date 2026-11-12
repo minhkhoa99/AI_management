@@ -74,8 +74,8 @@ try {
     'GET /api/departments with session cookie returns the department list',
   );
   assertSmokeExpectation(
-    runningServer.appliedMigrationVersions.join(',') === '1,2,3,4,5,6,7,8,9,10,11,12,13',
-    'migrations 001-013 applied on a fresh database',
+    runningServer.appliedMigrationVersions.join(',') === '1,2,3,4,5,6,7,8,9,10,11,12,13,14',
+    'migrations 001-014 applied on a fresh database',
   );
 } finally {
   await runningServer.stopServer();

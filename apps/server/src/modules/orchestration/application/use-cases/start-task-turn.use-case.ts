@@ -34,6 +34,7 @@ import {
 import { ApprovalRequests } from './approval-requests';
 import { FinishTaskTurnUseCase } from './finish-task-turn.use-case';
 import { SessionEventRecorder } from './session-event-recorder';
+import { StepReviewLauncher } from './step-review-launcher';
 import { TaskProgression } from './task-progression';
 import { TaskSplitter } from './task-splitter';
 import { TaskRunRegistry } from './task-run-registry';
@@ -68,6 +69,7 @@ export class StartTaskTurnUseCase {
     private readonly sessionEventRecorder: SessionEventRecorder,
     private readonly finishTaskTurnUseCase: FinishTaskTurnUseCase,
     private readonly taskSplitter: TaskSplitter,
+    private readonly reviewLauncher: StepReviewLauncher,
   ) {}
 
   /** Never rejects: whatever goes wrong fails this task only. */
@@ -90,6 +92,8 @@ export class StartTaskTurnUseCase {
     if (task === undefined || task.status !== 'queued' || this.runRegistry.isRunning(taskId)) {
       return;
     }
+    // A superior's review that waited for its quota: open the review again, not the step.
+    if (task.takePendingReview() && (await this.reopenStepReview(task))) return;
     const state = task.toState();
     const route = this.progression.resolveTaskRoute(state.workflowId);
     const stepIndex =
@@ -196,6 +200,60 @@ export class StartTaskTurnUseCase {
       resumeSessionRef,
       step,
     );
+  }
+
+  /**
+   * Opens the superior's review of the current step again (a new read-only session), on the
+   * report the worker gave last time. Returns false when that cannot be done: the worker's turn
+   * then runs again as for any requeued task.
+   */
+  private async reopenStepReview(task: Task): Promise<boolean> {
+    const state = task.toState();
+    const step = this.progression
+      .resolveTaskRoute(state.workflowId)
+      ?.steps.find((candidate) => candidate.id === state.currentStepId);
+    const report = this.eventLog.listStepReports(task.id).at(-1);
+    const workerId = report?.stepName === step?.name ? (report?.agentId ?? null) : null;
+    if (
+      step === undefined ||
+      report === undefined ||
+      workerId === null ||
+      state.worktreePath === null
+    ) {
+      this.logger.warn({ taskId: task.id }, 'pending review cannot be reopened; step runs again');
+      return false;
+    }
+    task.startPendingReview();
+    this.taskRepository.updateTask(task);
+    this.runRegistry.reserveRun(task.id, null, 'review');
+    const workspace = await this.taskWorkspace.prepareTaskWorkspace({
+      taskId: task.id,
+      workingDirectory: state.workingDirectory,
+      worktreePath: state.worktreePath,
+      qaDocuments: this.attachmentRepository.listAttachments(task.id),
+      forkFromTaskId: state.parentTaskId,
+      skills: this.skillSource.listAgentSkillFolders(workerId),
+    });
+    const current = this.taskRepository.findTaskById(task.id);
+    if (current === undefined) {
+      this.runRegistry.releaseRun(task.id);
+      return true;
+    }
+    if (this.runRegistry.stopReasonOf(task.id) !== null) {
+      // Deleted, paused or reconfigured while the worktree was being prepared.
+      await this.finishTaskTurnUseCase.finishTaskTurn(task.id, { kind: 'cancelled' });
+      return true;
+    }
+    // The launcher reserves its own run (or asks the user, which must not leave one behind).
+    this.runRegistry.releaseRun(task.id);
+    this.reviewLauncher.startStepReview(
+      current,
+      step,
+      { agentId: workerId, name: report.agentName },
+      report.summary,
+      workspace.agentDirectory,
+    );
+    return true;
   }
 
   private launchSession(

@@ -7,6 +7,16 @@ import {
 import { AgentsModule } from '../agents/agents.module';
 import { AGENT_ENGINE_RESOLVER } from '../orchestration/application/ports/agent-engine.port';
 import { AGENT_RUN_PREPARER } from '../orchestration/application/ports/task-execution.ports';
+import { ENGINE_QUOTA_GATEWAY } from '../orchestration/application/ports/engine-quota.port';
+import {
+  ENGINE_QUOTA_READERS,
+  type EngineQuotaReader,
+} from './application/ports/engine-quota-reader.port';
+import { EngineQuotaMonitor } from './application/use-cases/engine-quota-monitor';
+import { CliAntigravityQuotaReader } from './infrastructure/adapters/quota/cli-antigravity-quota.reader';
+import { CliClaudeQuotaReader } from './infrastructure/adapters/quota/cli-claude-quota.reader';
+import { CliCodexQuotaReader } from './infrastructure/adapters/quota/cli-codex-quota.reader';
+import { EngineQuotaController } from './presentation/controllers/engine-quota.controller';
 import { PrepareAgentRunUseCase } from './application/use-cases/prepare-agent-run.use-case';
 import { EngineTestRunRegistry } from './application/engine-test-run-registry';
 import { ANTIGRAVITY_MODEL_CATALOG } from './application/ports/antigravity-model-catalog.port';
@@ -54,7 +64,12 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
 /** Agent engines (Claude Code, Codex, Antigravity, Custom API), their settings and provider connections. */
 @Module({
   imports: [AgentsModule],
-  controllers: [LocalEnginesController, EngineTestRunsController, ProviderConnectionsController],
+  controllers: [
+    EngineQuotaController,
+    LocalEnginesController,
+    EngineTestRunsController,
+    ProviderConnectionsController,
+  ],
   providers: [
     { provide: PROVIDER_CONNECTION_REPOSITORY, useClass: SqliteProviderConnectionRepository },
     { provide: LOCAL_ENGINE_SETTINGS_REPOSITORY, useClass: SqliteLocalEngineSettingsRepository },
@@ -83,6 +98,24 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
       useFactory: (override: LocalEngineAdaptersOverride) =>
         override?.antigravityModelCatalog ?? new CliAntigravityModelCatalog(),
     },
+    {
+      provide: ENGINE_QUOTA_READERS,
+      inject: [APP_RUNTIME_CONFIG, LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (
+        runtimeConfig: AppRuntimeConfig,
+        override: LocalEngineAdaptersOverride,
+      ): EngineQuotaReader[] =>
+        // Tests that override adapters without quota readers never spawn the real CLIs.
+        override === null
+          ? [
+              new CliClaudeQuotaReader(runtimeConfig.dataDirectory),
+              new CliCodexQuotaReader(runtimeConfig.dataDirectory),
+              new CliAntigravityQuotaReader(runtimeConfig.dataDirectory),
+            ]
+          : (override.quotaReaders ?? []),
+    },
+    EngineQuotaMonitor,
+    { provide: ENGINE_QUOTA_GATEWAY, useExisting: EngineQuotaMonitor },
     { provide: SAMPLE_WORKSPACE_FACTORY, useClass: TemporarySampleWorkspaceFactory },
     ClaudeCodeCliEngine,
     CodexCliEngine,
@@ -108,6 +141,6 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
     { provide: AGENT_RUN_PREPARER, useClass: PrepareAgentRunUseCase },
   ],
   // Orchestration starts task sessions through these.
-  exports: [AGENT_ENGINE_RESOLVER, AGENT_RUN_PREPARER],
+  exports: [AGENT_ENGINE_RESOLVER, AGENT_RUN_PREPARER, ENGINE_QUOTA_GATEWAY],
 })
 export class ProvidersModule {}

@@ -15,4 +15,8 @@ export interface TaskRepository {
   listSubtaskIds(parentTaskId: string): string[];
   /** Tasks waiting for subtasks of which none is left unfinished. */
   listParentIdsReadyToResume(): string[];
+  /** Queued tasks assigned to the agent, whatever their back-off. */
+  listQueuedTaskIdsAssignedTo(agentId: string): string[];
+  /** Queued tasks whose next turn is a superior's review (the reviewer is not stored). */
+  listQueuedTaskIdsWaitingForReview(): string[];
 }

@@ -5,6 +5,7 @@ import {
   apiErrorResponseSchema,
   connectionCheckResultSchema,
   departmentSchema,
+  engineQuotaReportListSchema,
   engineTestRunMessageSchema,
   localEngineModelListSchema,
   localEngineStatusListSchema,
@@ -425,6 +426,24 @@ describe('local engines', () => {
       allowNetwork: true,
     });
     expect(unknownEngine.statusCode).toBe(400);
+  });
+
+  it('serves engine quota reports in a fixed order without capturing :engine routes', async () => {
+    const listed = await app.callApi('GET', '/api/local-engines/quota');
+    expect(listed.statusCode).toBe(200);
+    const reports = engineQuotaReportListSchema.parse(listed.body);
+    expect(reports.map((report) => report.engine)).toEqual(['claude_code', 'codex', 'antigravity']);
+
+    const refreshed = await app.callApi('POST', '/api/local-engines/quota/refresh');
+    expect(refreshed.statusCode).toBe(200);
+    const refreshedReports = engineQuotaReportListSchema.parse(refreshed.body);
+    expect(refreshedReports).toHaveLength(3);
+    expect(refreshedReports.every((report) => report.state === 'not_installed')).toBe(true);
+    expect(refreshedReports.every((report) => report.checkedAt !== null)).toBe(true);
+
+    const models = await app.callApi('GET', '/api/local-engines/claude_code/models');
+    expect(models.statusCode).toBe(200);
+    expect(localEngineModelListSchema.parse(models.body).models.length).toBeGreaterThan(0);
   });
 
   it('offers model quick picks: Claude aliases and the catalogs of Codex and Antigravity', async () => {
