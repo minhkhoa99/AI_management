@@ -34,42 +34,53 @@ export type CliOutput =
 
 const STDERR_TAIL_BYTES = 8 * 1024;
 
-/**
- * Finds a CLI on PATH without using a shell. On Windows a native .exe is preferred; an npm
- * ".cmd" shim cannot be spawned without a shell (CVE-2024-27980), so the Node script it wraps is
- * run with the current Node binary instead.
- */
-export function resolveCliExecutable(executableName: string): ResolvedExecutable {
-  if (process.platform !== 'win32') {
-    const found = findOnPath(executableName, ['']);
-    if (found === undefined) {
-      throw createCliMissingError(executableName);
-    }
-    return { command: found, leadingArgs: [] };
-  }
-  const native = findOnPath(executableName, ['.exe']);
-  if (native !== undefined) {
-    return { command: native, leadingArgs: [] };
-  }
-  const shim = findOnPath(executableName, ['.cmd']);
-  const shimScript = shim === undefined ? undefined : readNpmShimScript(shim);
-  if (shimScript !== undefined) {
-    return { command: process.execPath, leadingArgs: [shimScript] };
-  }
-  throw createCliMissingError(executableName);
+/** Where to look for a CLI; overridable so tests can lay out a PATH of their own. */
+export interface CliSearchEnvironment {
+  platform: NodeJS.Platform;
+  pathValue: string;
+  nodeExecutablePath: string;
 }
 
-function findOnPath(executableName: string, extensions: readonly string[]): string | undefined {
-  const directories = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+const PROCESS_SEARCH_ENVIRONMENT = (): CliSearchEnvironment => ({
+  platform: process.platform,
+  pathValue: process.env.PATH ?? '',
+  nodeExecutablePath: process.execPath,
+});
+
+/**
+ * Finds a CLI on PATH without using a shell, the way the owner's terminal does: PATH directories in
+ * order, the first one holding the command wins (several installs of one CLI are common). On
+ * Windows a directory's native .exe beats its npm ".cmd" shim; a shim cannot be spawned without a
+ * shell (CVE-2024-27980), so the Node script it wraps is run with the current Node binary instead.
+ */
+export function resolveCliExecutable(
+  executableName: string,
+  environment: CliSearchEnvironment = PROCESS_SEARCH_ENVIRONMENT(),
+): ResolvedExecutable {
+  const isWindows = environment.platform === 'win32';
+  const pathFlavour = isWindows ? path.win32 : path.posix;
+  // Quoted entries are valid on Windows. Relative entries are skipped: spawn would resolve them
+  // against the task worktree, where an agent can write a fake CLI.
+  const directories = environment.pathValue
+    .split(isWindows ? ';' : ':')
+    .map((entry) => (isWindows ? entry.trim().replace(/^"(.*)"$/, '$1') : entry))
+    .filter((entry) => entry !== '' && pathFlavour.isAbsolute(entry));
   for (const directory of directories) {
-    for (const extension of extensions) {
-      const candidate = path.join(directory, executableName + extension);
-      if (existsSync(candidate)) {
-        return candidate;
-      }
+    if (!isWindows) {
+      const candidate = path.join(directory, executableName);
+      if (existsSync(candidate)) return { command: candidate, leadingArgs: [] };
+      continue;
+    }
+    const native = path.join(directory, `${executableName}.exe`);
+    if (existsSync(native)) return { command: native, leadingArgs: [] };
+    const shim = path.join(directory, `${executableName}.cmd`);
+    // A .cmd that is not an npm shim cannot run without a shell: keep looking.
+    const shimScript = existsSync(shim) ? readNpmShimScript(shim) : undefined;
+    if (shimScript !== undefined) {
+      return { command: environment.nodeExecutablePath, leadingArgs: [shimScript] };
     }
   }
-  return undefined;
+  throw createCliMissingError(executableName);
 }
 
 /** npm cmd shims end with: "%_prog%" "%dp0%\node_modules\<pkg>\bin\<cli>.js" %* */

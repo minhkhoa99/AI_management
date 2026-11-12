@@ -89,14 +89,25 @@ export const localEngineModelChoiceSchema = z.object({
 });
 export type LocalEngineModelChoice = z.infer<typeof localEngineModelChoiceSchema>;
 
+/** The installed CLI is older than the newest release on npm (new models may need it). */
+export const cliUpdateNoticeSchema = z.object({
+  installedVersion: z.string(),
+  latestVersion: z.string(),
+  /** What the owner runs in a terminal; aiteam never updates a CLI itself. */
+  updateCommand: z.string(),
+});
+export type CliUpdateNotice = z.infer<typeof cliUpdateNoticeSchema>;
+
 /**
- * Claude Code: built-in aliases (always the newest model of each family). Codex and Antigravity:
- * the CLI's own catalog, so new models show up without an aiteam release. Empty with a `problem` when the
- * catalog cannot be read; the owner can still type any model name.
+ * The installed CLI's own list (Claude Code: its model options; Codex: `model/list`; Antigravity:
+ * `agy models`), so new models show up without an aiteam release. When the list cannot be read:
+ * the last list read, Claude Code's built-in aliases, or nothing, with a `problem`; the owner can
+ * still type any model name. `cliUpdate` is null when the CLI is current or that is unknown.
  */
 export const localEngineModelListSchema = z.object({
   models: z.array(localEngineModelChoiceSchema),
   problem: z.string().nullable(),
+  cliUpdate: cliUpdateNoticeSchema.nullable(),
 });
 export type LocalEngineModelList = z.infer<typeof localEngineModelListSchema>;
 

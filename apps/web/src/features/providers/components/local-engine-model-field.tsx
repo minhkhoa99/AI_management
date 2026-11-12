@@ -2,9 +2,9 @@
 
 import { useState } from 'react';
 import type { LocalEngine } from '@aiteam/contracts';
-import { useApiQuery } from '../../../shared/api/use-api-query';
 import { controlStyles } from '../../../shared/ui/controls';
-import { loadLocalEngineModels } from '../providers-api';
+import { useLocalEngineModels } from '../use-local-engine-models';
+import { ModelListNotes } from './model-list-notes';
 import styles from './settings.module.css';
 
 const ENGINE_DEFAULT_OPTION = '';
@@ -25,15 +25,11 @@ interface LocalEngineModelFieldProps {
 
 /**
  * Model of one agent on Claude Code / Codex / Antigravity: a quick pick, the engine default or any
- * name. Claude's picks are aliases (newest model of each family); Codex's and Antigravity's come
- * from their own catalogs.
+ * name. The picks are the installed CLI's own list (read again each time the form opens, or on ↻).
  */
 export function LocalEngineModelField({ engine, value, onChange }: LocalEngineModelFieldProps) {
-  const modelList = useApiQuery(`local-engine-models:${engine}`, () =>
-    loadLocalEngineModels(engine),
-  );
-  const choices = modelList.status === 'success' ? modelList.result.models : [];
-  const problem = modelList.status === 'success' ? modelList.result.problem : null;
+  const models = useLocalEngineModels(engine);
+  const { choices } = models;
   // null until the owner picks an option: then derived from the saved value.
   const [customPicked, setCustomPicked] = useState<boolean | null>(null);
   const isKnownChoice = choices.some((choice) => choice.model === value);
@@ -71,7 +67,7 @@ export function LocalEngineModelField({ engine, value, onChange }: LocalEngineMo
           <option value={CUSTOM_MODEL_OPTION}>Model khác (tự nhập tên)…</option>
         </select>
       </label>
-      {problem !== null && <span className={styles.fieldHint}>{problem}</span>}
+      <ModelListNotes engine={engine} models={models} />
       {typingCustomModel && (
         <label className={controlStyles.field}>
           Tên model

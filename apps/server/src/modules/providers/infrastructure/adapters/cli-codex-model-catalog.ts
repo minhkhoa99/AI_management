@@ -1,88 +1,130 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { Injectable } from '@nestjs/common';
 import { type LocalEngineModelChoice, modelNameSchema } from '@aiteam/contracts';
 import { z } from 'zod';
-import { EngineUnavailableError } from '../../../../shared/errors/app-error';
+import { AppError, EngineUnavailableError } from '../../../../shared/errors/app-error';
 import type { CodexModelCatalog } from '../../application/ports/codex-model-catalog.port';
-import { resolveCliExecutable } from './engines/cli-process';
+import {
+  type ResolvedExecutable,
+  resolveCliExecutable,
+  streamCliOutput,
+} from './engines/cli-process';
+import { prepareQuotaProbeDirectory } from './quota/quota-probe-directory';
+import { clipCatalogText, MAX_MODEL_CHOICES } from './model-choice-text';
 
-const runExecutable = promisify(execFile);
 const CATALOG_TIMEOUT_MS = 20_000;
-/** The raw catalog carries every model's base instructions: ~450 KB today. */
-const CATALOG_MAX_BYTES = 8 * 1024 * 1024;
-const MAX_CHOICES = 30;
-const LABEL_MAX_LENGTH = 60;
-const NOTE_MAX_LENGTH = 160;
+const MODEL_LIST_REQUEST_ID = 2;
+/** One page holds every model Codex offers (8 today); later pages are not requested. */
+const MODEL_LIST_PAGE_SIZE = 100;
 
-/**
- * Only the fields we use; everything else in the catalog is ignored. `codex debug models` is a
- * debugging command, so a format change must degrade to "type the model name", never crash.
- */
-const codexCatalogSchema = z.object({
-  models: z.array(
-    z.object({
-      slug: z.string(),
-      display_name: z.string().nullish(),
-      description: z.string().nullish(),
-      visibility: z.string().nullish(),
-      priority: z.number().nullish(),
-    }),
-  ),
+export const CODEX_MODEL_LIST_REQUEST_LINES: readonly string[] = [
+  JSON.stringify({
+    id: 1,
+    method: 'initialize',
+    params: { clientInfo: { name: 'aiteam', version: '1' } },
+  }),
+  JSON.stringify({ method: 'initialized' }),
+  JSON.stringify({
+    id: MODEL_LIST_REQUEST_ID,
+    method: 'model/list',
+    params: { includeHidden: false, limit: MODEL_LIST_PAGE_SIZE },
+  }),
+];
+
+const codexModelSchema = z.object({
+  id: z.string(),
+  model: z.string().nullish(),
+  displayName: z.string().nullish(),
+  description: z.string().nullish(),
+  hidden: z.boolean().nullish(),
+  isDefault: z.boolean().nullish(),
 });
 
-/** Reads `codex debug models` (the catalog Codex refreshes from OpenAI), without a shell. */
+/** Only the fields we use; everything else in the answer is ignored. */
+const modelListLineSchema = z.object({
+  id: z.literal(MODEL_LIST_REQUEST_ID),
+  error: z.object({ message: z.string().optional() }).optional(),
+  // eslint-disable-next-line id-denylist -- field name of the Codex app-server protocol
+  result: z.object({ data: z.array(z.unknown()) }).optional(),
+});
+
+/**
+ * Asks `codex app-server` (JSON-RPC over stdio) for the models the installed Codex offers — the
+ * list OpenAI serves for that CLI version — without a shell, in the quota probe folder.
+ */
 @Injectable()
 export class CliCodexModelCatalog implements CodexModelCatalog {
+  constructor(
+    private readonly dataDirectory: string,
+    private readonly timeoutMilliseconds: number = CATALOG_TIMEOUT_MS,
+    /** Tests run a fake CLI instead. */
+    private readonly resolveExecutable: () => ResolvedExecutable = () =>
+      resolveCliExecutable('codex'),
+  ) {}
+
   async listCodexModels(): Promise<LocalEngineModelChoice[]> {
-    const executable = resolveCliExecutable('codex');
-    let stdout: string;
     try {
-      ({ stdout } = await runExecutable(
-        executable.command,
-        [...executable.leadingArgs, 'debug', 'models'],
+      const executable = this.resolveExecutable();
+      const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
+      const output = streamCliOutput(
         {
-          timeout: CATALOG_TIMEOUT_MS,
-          maxBuffer: CATALOG_MAX_BYTES,
-          windowsHide: true,
-          encoding: 'utf8',
+          executable,
+          args: ['app-server'],
+          workingDirectory: probeDirectory,
+          stdinText: `${CODEX_MODEL_LIST_REQUEST_LINES.join('\n')}\n`,
+          // The server quits on EOF before answering; leaving the loop kills it.
+          keepStdinOpen: true,
         },
-      ));
-    } catch (error) {
-      throw new EngineUnavailableError(
-        'Không đọc được danh sách model của Codex (codex debug models). Vẫn tự nhập tên được.',
-        { code: 'CODEX_MODEL_CATALOG_FAILED', cause: error },
+        AbortSignal.timeout(this.timeoutMilliseconds),
       );
+      for await (const item of output) {
+        if (item.kind !== 'line') break;
+        const models = parseCodexModelListLine(item.text);
+        if (models !== null) return models;
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw catalogUnreadable(error);
     }
-    return parseCodexModelCatalog(stdout);
+    throw catalogUnreadable(undefined);
   }
 }
 
-/** Models Codex itself lists in its picker (visibility "list"), in Codex's own order. */
-export function parseCodexModelCatalog(rawCatalog: string): LocalEngineModelChoice[] {
-  let catalog;
+/** The model choices from the answer to `model/list`; null for any other line. */
+export function parseCodexModelListLine(line: string): LocalEngineModelChoice[] | null {
+  let json: unknown;
   try {
-    catalog = codexCatalogSchema.parse(JSON.parse(rawCatalog));
-  } catch (error) {
-    throw new EngineUnavailableError(
-      'Danh sách model của Codex có định dạng lạ (bản Codex mới?). Vẫn tự nhập tên được.',
-      { code: 'CODEX_MODEL_CATALOG_UNREADABLE', cause: error },
-    );
+    json = JSON.parse(line);
+  } catch {
+    // Not JSON: not the answer being waited for.
+    return null;
   }
-  return catalog.models
-    .filter((entry) => entry.visibility === 'list' && modelNameSchema.safeParse(entry.slug).success)
-    .sort(
-      (first, second) =>
-        (first.priority ?? Number.MAX_SAFE_INTEGER) - (second.priority ?? Number.MAX_SAFE_INTEGER),
-    )
-    .slice(0, MAX_CHOICES)
-    .map((entry) => ({
-      model: entry.slug,
-      label: clip(entry.display_name?.trim() || entry.slug, LABEL_MAX_LENGTH),
-      note: clip(entry.description?.trim() ?? '', NOTE_MAX_LENGTH),
-    }));
+  if (typeof json !== 'object' || json === null) return null;
+  if ((json as { id?: unknown }).id !== MODEL_LIST_REQUEST_ID) return null;
+  const parsed = modelListLineSchema.safeParse(json);
+  if (!parsed.success || parsed.data.result === undefined) {
+    throw catalogUnreadable(parsed.success ? parsed.data.error?.message : parsed.error);
+  }
+  const choices: LocalEngineModelChoice[] = [];
+  for (const rawModel of parsed.data.result.data) {
+    const entry = codexModelSchema.safeParse(rawModel);
+    if (!entry.success || entry.data.hidden === true) continue;
+    const model = entry.data.model ?? entry.data.id;
+    if (!modelNameSchema.safeParse(model).success) continue;
+    const description = entry.data.description?.trim() ?? '';
+    const note =
+      entry.data.isDefault === true ? `mặc định của Codex · ${description}` : description;
+    choices.push({
+      model,
+      label: clipCatalogText(entry.data.displayName?.trim() || model, 'label'),
+      note: clipCatalogText(note.replace(/ · $/, ''), 'note'),
+    });
+  }
+  return choices.slice(0, MAX_MODEL_CHOICES);
 }
 
-function clip(text: string, maxLength: number): string {
-  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
+function catalogUnreadable(cause: unknown): EngineUnavailableError {
+  return new EngineUnavailableError(
+    'Không đọc được danh sách model của Codex (codex app-server). Vẫn tự nhập tên được.',
+    { code: 'CODEX_MODEL_CATALOG_FAILED', cause },
+  );
 }

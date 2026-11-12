@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../app-runtime-config';
+import { APP_LOGGER, type AppLogger } from '../../shared/logging/app-logger';
 import {
   LOCAL_ENGINE_ADAPTERS_OVERRIDE,
   type LocalEngineAdaptersOverride,
@@ -20,6 +21,8 @@ import { EngineQuotaController } from './presentation/controllers/engine-quota.c
 import { PrepareAgentRunUseCase } from './application/use-cases/prepare-agent-run.use-case';
 import { EngineTestRunRegistry } from './application/engine-test-run-registry';
 import { ANTIGRAVITY_MODEL_CATALOG } from './application/ports/antigravity-model-catalog.port';
+import { CLAUDE_MODEL_CATALOG } from './application/ports/claude-model-catalog.port';
+import { CLI_UPDATE_CHECKER } from './application/ports/cli-update-checker.port';
 import { CODEX_MODEL_CATALOG } from './application/ports/codex-model-catalog.port';
 import { LOCAL_ENGINE_PROBE } from './application/ports/local-engine-probe.port';
 import { MODEL_CATALOG } from './application/ports/model-catalog.port';
@@ -42,7 +45,10 @@ import { LOCAL_ENGINE_SETTINGS_REPOSITORY } from './domain/repositories/local-en
 import { PROVIDER_CONNECTION_REPOSITORY } from './domain/repositories/provider-connection.repository';
 import { AesGcmSecretVault } from './infrastructure/adapters/aes-gcm-secret-vault';
 import { CliAntigravityModelCatalog } from './infrastructure/adapters/cli-antigravity-model-catalog';
+import { CliClaudeModelCatalog } from './infrastructure/adapters/cli-claude-model-catalog';
 import { CliCodexModelCatalog } from './infrastructure/adapters/cli-codex-model-catalog';
+import { NpmCliUpdateChecker } from './infrastructure/adapters/npm-cli-update-checker';
+import { CLAUDE_CODE_MODEL_CHOICES } from './domain/claude-code-models';
 import { CliLocalEngineProbe } from './infrastructure/adapters/cli-local-engine.probe';
 import { EngineRegistry } from './infrastructure/adapters/engines/agent-engine-resolver';
 import { AnthropicApiEngine } from './infrastructure/adapters/engines/anthropic-api.engine';
@@ -87,10 +93,33 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
         override?.probe ?? new CliLocalEngineProbe(),
     },
     {
+      provide: CLAUDE_MODEL_CATALOG,
+      inject: [APP_RUNTIME_CONFIG, LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (runtimeConfig: AppRuntimeConfig, override: LocalEngineAdaptersOverride) =>
+        override === null
+          ? new CliClaudeModelCatalog(runtimeConfig.dataDirectory)
+          : (override.claudeModelCatalog ?? {
+              listClaudeModels: () => Promise.resolve([...CLAUDE_CODE_MODEL_CHOICES]),
+            }),
+    },
+    {
       provide: CODEX_MODEL_CATALOG,
-      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
-      useFactory: (override: LocalEngineAdaptersOverride) =>
-        override?.codexModelCatalog ?? new CliCodexModelCatalog(),
+      inject: [APP_RUNTIME_CONFIG, LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      useFactory: (runtimeConfig: AppRuntimeConfig, override: LocalEngineAdaptersOverride) =>
+        override?.codexModelCatalog ?? new CliCodexModelCatalog(runtimeConfig.dataDirectory),
+    },
+    {
+      provide: CLI_UPDATE_CHECKER,
+      inject: [APP_RUNTIME_CONFIG, APP_LOGGER, LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      // Tests that override adapters never reach registry.npmjs.org.
+      useFactory: (
+        runtimeConfig: AppRuntimeConfig,
+        logger: AppLogger,
+        override: LocalEngineAdaptersOverride,
+      ) =>
+        override === null
+          ? new NpmCliUpdateChecker(runtimeConfig.dataDirectory, logger)
+          : (override.cliUpdateChecker ?? { findCliUpdate: () => Promise.resolve(null) }),
     },
     {
       provide: ANTIGRAVITY_MODEL_CATALOG,

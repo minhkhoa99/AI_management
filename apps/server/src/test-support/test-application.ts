@@ -8,6 +8,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { LOCAL_ENGINES, SESSION_COOKIE_NAME } from '@aiteam/contracts';
 import { createAiteamApplication } from '../app-factory';
+import { CLAUDE_CODE_MODEL_CHOICES } from '../modules/providers/domain/claude-code-models';
 import { applyPendingMigrations } from '../shared/database/migration-runner';
 import { ALL_MIGRATIONS } from '../shared/database/migrations';
 import {
@@ -34,12 +35,14 @@ export const DEFAULT_FAKE_LOCAL_ENGINES: LocalEngineAdaptersOverride = {
         problem: 'Not installed (test double).',
       }),
   },
+  claudeModelCatalog: { listClaudeModels: () => Promise.resolve([...CLAUDE_CODE_MODEL_CHOICES]) },
   codexModelCatalog: { listCodexModels: () => Promise.resolve([]) },
   antigravityModelCatalog: { listAntigravityModels: () => Promise.resolve([]) },
   quotaReaders: LOCAL_ENGINES.map((engine) => ({
     engine,
     readEngineQuota: () => Promise.resolve({ state: 'not_installed' as const, buckets: [] }),
   })),
+  cliUpdateChecker: { findCliUpdate: () => Promise.resolve(null) },
 };
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

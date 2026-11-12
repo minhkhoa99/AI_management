@@ -4,15 +4,12 @@ import { useState } from 'react';
 import { type LocalEngineStatus, modelNameSchema } from '@aiteam/contracts';
 import { controlStyles, StatusNotice, ToggleSwitch } from '../../../shared/ui/controls';
 import { useActionOutcome } from '../../../shared/ui/use-action-outcome';
-import { useApiQuery } from '../../../shared/api/use-api-query';
-import {
-  loadLocalEngineModels,
-  startLocalEngineTestRun,
-  updateLocalEngineSettings,
-} from '../providers-api';
+import { startLocalEngineTestRun, updateLocalEngineSettings } from '../providers-api';
 import { LOCAL_ENGINE_MARKS } from '../../organization/organization-labels';
 import { useEngineTestRun } from '../use-engine-test-run';
+import { useLocalEngineModels } from '../use-local-engine-models';
 import { EngineTestRunLog } from './engine-test-run-log';
+import { ModelListNotes } from './model-list-notes';
 import styles from './settings.module.css';
 
 const ENGINE_PRESENTATION = {
@@ -64,10 +61,8 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
   const [modelError, setModelError] = useState<string | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
   const testRun = useEngineTestRun();
-  const modelList = useApiQuery(`local-engine-models:${engine.engine}`, () =>
-    loadLocalEngineModels(engine.engine),
-  );
-  const modelChoices = modelList.status === 'success' ? modelList.result.models : [];
+  const models = useLocalEngineModels(engine.engine);
+  const modelChoices = models.choices;
   const ready = engine.installed && engine.signedIn !== false;
 
   const saveDefaultModel = () => {
@@ -145,8 +140,8 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
           </button>
         </span>
         <datalist id={`${engine.engine}-models`}>
-          {modelChoices.map(({ model }) => (
-            <option key={model} value={model} />
+          {modelChoices.map(({ model, label }) => (
+            <option key={model} value={model} label={label} />
           ))}
         </datalist>
       </label>
@@ -155,6 +150,7 @@ export function LocalEngineCard({ engine }: { engine: LocalEngineStatus }) {
           {modelError}
         </span>
       )}
+      <ModelListNotes engine={engine.engine} models={models} />
 
       {presentation.commandSafety.kind === 'toggle' ? (
         <>
