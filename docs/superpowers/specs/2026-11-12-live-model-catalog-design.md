@@ -42,7 +42,8 @@ stream-json --verbose --setting-sources "" --settings {"disableAllHooks":true} -
    định sau: nhãn displayName, ghi chú mô tả. Lọc bằng `modelNameSchema`, tối đa 30. Đọc lỗi → 4 tên ngắn
    viết cứng như cũ kèm `problem`.
 3. **Codex (`CliCodexModelCatalog`):** `codex app-server`, `initialize` → `initialized` →
-   `model/list {includeHidden:false}`, theo `nextCursor` tối đa 5 trang, kill cây khi xong. Model
+   `model/list {includeHidden:false, limit:100}`, một trang (8 model hôm nay, `nextCursor` null; trang
+   sau cần ghi thêm vào stdin giữa chừng, chưa đáng), kill cây khi xong. Model
    `isDefault` ghi chú thêm "mặc định của Codex". Giữ lọc tên an toàn, cắt nhãn/ghi chú.
 4. **Bộ nhớ đệm:** 60 s mỗi engine (thay 10 phút), gộp lần đọc đang chạy; `?refresh=1` bỏ qua bộ nhớ đệm
    (vẫn gộp lần đọc đang chạy). Đọc lỗi mà đã có danh sách cũ → trả danh sách cũ kèm `problem`.

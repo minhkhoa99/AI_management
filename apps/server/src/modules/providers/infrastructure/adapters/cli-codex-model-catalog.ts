@@ -3,7 +3,11 @@ import { type LocalEngineModelChoice, modelNameSchema } from '@aiteam/contracts'
 import { z } from 'zod';
 import { AppError, EngineUnavailableError } from '../../../../shared/errors/app-error';
 import type { CodexModelCatalog } from '../../application/ports/codex-model-catalog.port';
-import { resolveCliExecutable, streamCliOutput } from './engines/cli-process';
+import {
+  type ResolvedExecutable,
+  resolveCliExecutable,
+  streamCliOutput,
+} from './engines/cli-process';
 import { prepareQuotaProbeDirectory } from './quota/quota-probe-directory';
 import { clipCatalogText, MAX_MODEL_CHOICES } from './model-choice-text';
 
@@ -52,11 +56,14 @@ export class CliCodexModelCatalog implements CodexModelCatalog {
   constructor(
     private readonly dataDirectory: string,
     private readonly timeoutMilliseconds: number = CATALOG_TIMEOUT_MS,
+    /** Tests run a fake CLI instead. */
+    private readonly resolveExecutable: () => ResolvedExecutable = () =>
+      resolveCliExecutable('codex'),
   ) {}
 
   async listCodexModels(): Promise<LocalEngineModelChoice[]> {
     try {
-      const executable = resolveCliExecutable('codex');
+      const executable = this.resolveExecutable();
       const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
       const output = streamCliOutput(
         {

@@ -58,7 +58,13 @@ export function resolveCliExecutable(
   environment: CliSearchEnvironment = PROCESS_SEARCH_ENVIRONMENT(),
 ): ResolvedExecutable {
   const isWindows = environment.platform === 'win32';
-  const directories = environment.pathValue.split(isWindows ? ';' : ':').filter(Boolean);
+  const pathFlavour = isWindows ? path.win32 : path.posix;
+  // Quoted entries are valid on Windows. Relative entries are skipped: spawn would resolve them
+  // against the task worktree, where an agent can write a fake CLI.
+  const directories = environment.pathValue
+    .split(isWindows ? ';' : ':')
+    .map((entry) => (isWindows ? entry.trim().replace(/^"(.*)"$/, '$1') : entry))
+    .filter((entry) => entry !== '' && pathFlavour.isAbsolute(entry));
   for (const directory of directories) {
     if (!isWindows) {
       const candidate = path.join(directory, executableName);

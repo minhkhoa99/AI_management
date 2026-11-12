@@ -3,6 +3,7 @@ import type { CliUpdateNotice, LocalEngineModelChoice } from '@aiteam/contracts'
 import { EngineUnavailableError } from '../../../../shared/errors/app-error';
 import { CLAUDE_CODE_MODEL_CHOICES } from '../../domain/claude-code-models';
 import {
+  CLI_UPDATE_TIME_BUDGET_MS,
   ENGINE_CATALOG_CACHE_MS,
   ListLocalEngineModelsUseCase,
 } from './list-local-engine-models.use-case';
@@ -140,6 +141,14 @@ describe('ListLocalEngineModelsUseCase', () => {
       problem: 'Codex hỏng',
       cliUpdate: null,
     });
+  });
+
+  it('never waits longer than the time budget for the update notice', async () => {
+    vi.useFakeTimers();
+    const { useCase } = buildUseCase({ cliUpdate: () => new Promise(() => undefined) });
+    const pending = useCase.listLocalEngineModels('codex');
+    await vi.advanceTimersByTimeAsync(CLI_UPDATE_TIME_BUDGET_MS);
+    expect(await pending).toEqual({ models: [LUNA], problem: null, cliUpdate: null });
   });
 
   it('lets unexpected errors through', async () => {

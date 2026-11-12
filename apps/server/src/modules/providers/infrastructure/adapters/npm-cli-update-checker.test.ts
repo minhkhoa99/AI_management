@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { AppLogger } from '../../../../shared/logging/app-logger';
 import { compareVersions, NpmCliUpdateChecker, parseVersion } from './npm-cli-update-checker';
 
 const jsonResponse = (body: unknown, status = 200) =>
@@ -9,8 +10,13 @@ function buildChecker(
   installedOutput: string | null = 'codex-cli 0.155.1',
 ) {
   const fetchSpy = vi.fn(fetchRegistry);
-  const checker = new NpmCliUpdateChecker(fetchSpy, () => Promise.resolve(installedOutput));
-  return { checker, fetchSpy };
+  const versionSpy = vi.fn(() => Promise.resolve(installedOutput));
+  const logger = { warn: vi.fn() };
+  const checker = new NpmCliUpdateChecker('/unused', logger as unknown as AppLogger, {
+    fetchRegistry: fetchSpy,
+    readInstalledVersion: versionSpy,
+  });
+  return { checker, fetchSpy, versionSpy, logger };
 }
 
 afterEach(() => {
@@ -82,6 +88,44 @@ describe('NpmCliUpdateChecker', () => {
     vi.advanceTimersByTime(30 * 60 * 1000 + 1);
     await failing.checker.findCliUpdate('codex');
     expect(failing.fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('NpmCliUpdateChecker limits', () => {
+  it('runs --version at most once a minute', async () => {
+    vi.useFakeTimers();
+    const { checker, versionSpy } = buildChecker(() =>
+      Promise.resolve(jsonResponse({ version: '0.167.2' })),
+    );
+    await checker.findCliUpdate('codex');
+    await checker.findCliUpdate('codex');
+    expect(versionSpy).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60 * 1000 + 1);
+    await checker.findCliUpdate('codex');
+    expect(versionSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops reading a registry answer past 1 MiB, whatever its headers say', async () => {
+    const huge = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(256 * 1024).fill(32));
+      },
+    });
+    const { checker, logger } = buildChecker(() => Promise.resolve(new Response(huge)));
+    expect(await checker.findCliUpdate('codex')).toBeNull();
+    expect(logger.warn).toHaveBeenCalledWith(
+      { packageName: '@openai/codex' },
+      'npm registry check: unexpected answer',
+    );
+  });
+
+  it('logs a failed check without the answer body', async () => {
+    const { checker, logger } = buildChecker(() => Promise.reject(new TypeError('fetch failed')));
+    await checker.findCliUpdate('codex');
+    expect(logger.warn).toHaveBeenCalledWith(
+      { packageName: '@openai/codex', errorName: 'TypeError' },
+      'npm registry check failed',
+    );
   });
 });
 

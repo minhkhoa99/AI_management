@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_RUNTIME_CONFIG, type AppRuntimeConfig } from '../../app-runtime-config';
+import { APP_LOGGER, type AppLogger } from '../../shared/logging/app-logger';
 import {
   LOCAL_ENGINE_ADAPTERS_OVERRIDE,
   type LocalEngineAdaptersOverride,
@@ -109,11 +110,15 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
     },
     {
       provide: CLI_UPDATE_CHECKER,
-      inject: [LOCAL_ENGINE_ADAPTERS_OVERRIDE],
+      inject: [APP_RUNTIME_CONFIG, APP_LOGGER, LOCAL_ENGINE_ADAPTERS_OVERRIDE],
       // Tests that override adapters never reach registry.npmjs.org.
-      useFactory: (override: LocalEngineAdaptersOverride) =>
+      useFactory: (
+        runtimeConfig: AppRuntimeConfig,
+        logger: AppLogger,
+        override: LocalEngineAdaptersOverride,
+      ) =>
         override === null
-          ? new NpmCliUpdateChecker()
+          ? new NpmCliUpdateChecker(runtimeConfig.dataDirectory, logger)
           : (override.cliUpdateChecker ?? { findCliUpdate: () => Promise.resolve(null) }),
     },
     {

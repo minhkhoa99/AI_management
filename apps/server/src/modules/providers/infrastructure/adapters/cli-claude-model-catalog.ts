@@ -3,7 +3,11 @@ import { z } from 'zod';
 import { AppError, EngineUnavailableError } from '../../../../shared/errors/app-error';
 import type { ClaudeModelCatalog } from '../../application/ports/claude-model-catalog.port';
 import { FLAG_SETTINGS } from './engines/claude-code-cli.engine';
-import { resolveCliExecutable, streamCliOutput } from './engines/cli-process';
+import {
+  type ResolvedExecutable,
+  resolveCliExecutable,
+  streamCliOutput,
+} from './engines/cli-process';
 import { prepareQuotaProbeDirectory } from './quota/quota-probe-directory';
 import { clipCatalogText, MAX_MODEL_CHOICES } from './model-choice-text';
 
@@ -48,11 +52,14 @@ export class CliClaudeModelCatalog implements ClaudeModelCatalog {
   constructor(
     private readonly dataDirectory: string,
     private readonly timeoutMilliseconds: number = CATALOG_TIMEOUT_MS,
+    /** Tests run a fake CLI instead. */
+    private readonly resolveExecutable: () => ResolvedExecutable = () =>
+      resolveCliExecutable('claude'),
   ) {}
 
   async listClaudeModels(): Promise<LocalEngineModelChoice[]> {
     try {
-      const executable = resolveCliExecutable('claude');
+      const executable = this.resolveExecutable();
       const probeDirectory = await prepareQuotaProbeDirectory(this.dataDirectory);
       const output = streamCliOutput(
         {

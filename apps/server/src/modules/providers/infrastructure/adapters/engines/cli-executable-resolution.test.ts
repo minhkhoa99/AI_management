@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished } from 'vitest';
 import { AppError } from '../../../../../shared/errors/app-error';
 import { resolveCliExecutable } from './cli-process';
 
@@ -90,6 +90,27 @@ describe('resolveCliExecutable', () => {
       expect(resolveCliExecutable('codex', environment).command).toBe(path.join(first, 'codex'));
     },
   );
+
+  it('never takes a relative PATH entry (spawn would resolve it inside the task worktree)', () => {
+    // Inside the current folder, so the relative entry really resolves (tmpdir may be another drive).
+    const relativeRoot = mkdtempSync(path.join(process.cwd(), '.tmp-relative-bin-'));
+    onTestFinished(() => rmSync(relativeRoot, { recursive: true, force: true }));
+    const relative = path.relative(process.cwd(), relativeRoot);
+    writeFileSync(path.join(relative, 'codex.exe'), '');
+    const later = makeDirectory('absolute-bin');
+    writeFileSync(path.join(later, 'codex.exe'), '');
+    expect(resolveCliExecutable('codex', windows(relative, '.', later)).command).toBe(
+      path.join(later, 'codex.exe'),
+    );
+  });
+
+  it.runIf(process.platform === 'win32')('accepts a quoted Windows PATH entry', () => {
+    const quoted = makeDirectory('with space');
+    writeFileSync(path.join(quoted, 'codex.exe'), '');
+    expect(resolveCliExecutable('codex', windows(`"${quoted}"`)).command).toBe(
+      path.join(quoted, 'codex.exe'),
+    );
+  });
 
   it('reports a missing CLI as ENGINE_NOT_INSTALLED', () => {
     const empty = makeDirectory('empty');

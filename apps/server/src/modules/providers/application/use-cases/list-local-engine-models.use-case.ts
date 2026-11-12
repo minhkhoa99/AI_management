@@ -12,6 +12,12 @@ import { CODEX_MODEL_CATALOG, type CodexModelCatalog } from '../ports/codex-mode
 
 /** Reading a list spawns the CLI (~1 s): forms opening in a row share one read. */
 export const ENGINE_CATALOG_CACHE_MS = 60 * 1000;
+/**
+ * The update notice is a nice-to-have: the list never waits longer than this for it (a firewall
+ * that drops packets would hold the picker for the registry timeout). The check keeps running and
+ * caches its answer for the next read.
+ */
+export const CLI_UPDATE_TIME_BUDGET_MS = 1500;
 
 interface CachedModelList {
   expiresAt: number;
@@ -61,7 +67,7 @@ export class ListLocalEngineModelsUseCase {
       ),
       engine === 'antigravity'
         ? Promise.resolve(null)
-        : this.cliUpdateChecker.findCliUpdate(engine),
+        : withinTimeBudget(this.cliUpdateChecker.findCliUpdate(engine), CLI_UPDATE_TIME_BUDGET_MS),
     ]);
     if (modelsOrProblem.models === null) {
       // Not cached: the next form opening tries again (e.g. after `codex login`).
@@ -81,4 +87,16 @@ export class ListLocalEngineModelsUseCase {
     if (engine === 'codex') return this.codexModelCatalog.listCodexModels();
     return this.antigravityModelCatalog.listAntigravityModels();
   }
+}
+
+/** The promise's value, or null when it takes longer than `budgetMs` (it is not cancelled). */
+function withinTimeBudget<Value>(
+  pending: Promise<Value | null>,
+  budgetMs: number,
+): Promise<Value | null> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), budgetMs);
+  });
+  return Promise.race([pending, timeout]).finally(() => clearTimeout(timer));
 }
