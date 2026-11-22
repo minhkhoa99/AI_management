@@ -265,13 +265,27 @@ describe('buildStepPrompt', () => {
       step: null,
       sensitiveActionsNeedApproval: true,
       canEditWorkspace: true,
-      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập' },
+      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập', handedOff: false },
     });
 
     expect(lead).toContain('"subtasks"');
     expect(lead).toContain('Cấp dưới của bạn: Dev backend (Dev).');
     expect(worker).not.toContain('"subtasks"');
     expect(worker).toContain('task con do cấp trên tách ra từ task T-3 "Trang đăng nhập"');
+  });
+
+  it('tells a handed-off task its report goes back to the other department', () => {
+    const prompt = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: true,
+      canEditWorkspace: true,
+      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập', handedOff: true },
+    });
+
+    expect(prompt).toContain('task do phòng khác bàn giao từ task T-3 "Trang đăng nhập"');
+    expect(prompt).toContain('báo cáo của bạn được gửi lại');
+    expect(prompt).not.toContain('task con do cấp trên tách ra');
   });
 
   it('lists skills to read, or gives their text to agents that cannot open files', () => {

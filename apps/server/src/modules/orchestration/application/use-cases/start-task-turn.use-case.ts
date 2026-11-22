@@ -32,6 +32,7 @@ import {
   type TaskWorkspace,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
+import { DepartmentHandoff } from './department-handoff';
 import { FinishTaskTurnUseCase } from './finish-task-turn.use-case';
 import { SessionEventRecorder } from './session-event-recorder';
 import { StepReviewLauncher } from './step-review-launcher';
@@ -70,6 +71,7 @@ export class StartTaskTurnUseCase {
     private readonly finishTaskTurnUseCase: FinishTaskTurnUseCase,
     private readonly taskSplitter: TaskSplitter,
     private readonly reviewLauncher: StepReviewLauncher,
+    private readonly departmentHandoff: DepartmentHandoff,
   ) {}
 
   /** Never rejects: whatever goes wrong fails this task only. */
@@ -110,9 +112,7 @@ export class StartTaskTurnUseCase {
       return;
     }
     if (step?.ownerRole === 'department') {
-      // ponytail: placeholder until handoffs run (plan Task 7 replaces this with handOffStep).
-      task.fail('Bước giao phòng khác chưa chạy được trong phiên bản này.');
-      this.taskRepository.updateTask(task);
+      this.departmentHandoff.handOffStep(task, step);
       return;
     }
 
@@ -366,7 +366,11 @@ export class StartTaskTurnUseCase {
       subtaskOf:
         parent === undefined
           ? null
-          : { taskCode: formatTaskCode(parent.sequenceNumber), title: parent.title },
+          : {
+              taskCode: formatTaskCode(parent.sequenceNumber),
+              title: parent.title,
+              handedOff: parent.departmentId !== state.departmentId,
+            },
       canEditWorkspace: snapshot.accessLevel === 'edit_workspace',
     });
   }

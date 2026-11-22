@@ -43,9 +43,10 @@ const workflow = Workflow.restore({
   ],
 });
 
-function setUp() {
+function setUp(parent?: Task) {
   const eventLog = { recordTaskEvent: vi.fn() };
   const progression = new TaskProgression(
+    { findTaskById: () => parent } as never,
     { findWorkflowById: () => workflow } as never,
     eventLog as never,
   );
@@ -120,5 +121,35 @@ describe('TaskProgression.applyGateResult', () => {
       { detail: 'Sai', stepId: 'build' },
       { detail: null, stepId: null },
     ]);
+  });
+
+  it('ends a task handed off by another department at its first failed gate', () => {
+    const parent = Task.restore({
+      ...taskOn('build').toState(),
+      id: 'parent',
+      departmentId: 'dev',
+    });
+    const { eventLog, progression } = setUp(parent);
+    const task = Task.restore({ ...taskOn('build').toState(), parentTaskId: 'parent' });
+
+    progression.applyGateResult(task, false, 'Thiếu test');
+
+    expect(task.toState()).toMatchObject({ status: 'failed', statusNote: 'Thiếu test' });
+    expect(eventLog.recordTaskEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'task_failed',
+        payload: { detail: 'Thiếu test', stepId: 'build', reason: 'gate_rejected' },
+      }),
+    );
+  });
+
+  it('keeps the workflow on_fail for a subtask of the same department', () => {
+    const parent = Task.restore({ ...taskOn('build').toState(), id: 'parent' });
+    const { progression } = setUp(parent);
+    const task = Task.restore({ ...taskOn('build').toState(), parentTaskId: 'parent' });
+
+    progression.applyGateResult(task, false, 'Sai');
+
+    expect(task.toState()).toMatchObject({ status: 'queued', currentStepId: 'build' });
   });
 });

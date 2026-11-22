@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Task } from '../../domain/entities/task';
 import type { WorkflowStepState } from '../../domain/entities/workflow';
+import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
 import {
   WORKFLOW_REPOSITORY,
   type WorkflowRepository,
@@ -20,6 +21,7 @@ export interface TaskRoute {
 @Injectable()
 export class TaskProgression {
   constructor(
+    @Inject(TASK_REPOSITORY) private readonly taskRepository: TaskRepository,
     @Inject(WORKFLOW_REPOSITORY) private readonly workflowRepository: WorkflowRepository,
     @Inject(TASK_EVENT_LOG) private readonly eventLog: TaskEventLog,
   ) {}
@@ -48,10 +50,18 @@ export class TaskProgression {
 
   /**
    * Applies the gate result to the task (the caller saves it). A free run simply succeeds or
-   * fails. `feedback` is handed to whoever works on the task next.
+   * fails. `feedback` is handed to whoever works on the task next. A task handed off by another
+   * department ends at its first failed gate: the verdict goes back to that department.
    */
   applyGateResult(task: Task, passed: boolean, feedback: string | null): void {
     const state = task.toState();
+    if (!passed && this.isHandedOff(task)) {
+      task.fail(feedback ?? 'Không đạt.');
+      this.recordOutcome(task, 'task_failed', feedback, state.currentStepId, {
+        reason: 'gate_rejected',
+      });
+      return;
+    }
     const route = this.resolveTaskRoute(state.workflowId);
     if (route === null || state.currentStepId === null) {
       if (passed) {
@@ -115,18 +125,25 @@ export class TaskProgression {
     }
   }
 
+  private isHandedOff(task: Task): boolean {
+    if (task.parentTaskId === null) return false;
+    const parent = this.taskRepository.findTaskById(task.parentTaskId);
+    return parent !== undefined && parent.departmentId !== task.departmentId;
+  }
+
   /** `stepId` is the step whose gate was evaluated (not the next one); null on a free run. */
   private recordOutcome(
     task: Task,
     kind: string,
     detail: string | null,
     stepId: string | null,
+    extra: Record<string, unknown> = {},
   ): void {
     this.eventLog.recordTaskEvent({
       taskId: task.id,
       agentId: task.assigneeAgentId,
       kind,
-      payload: { detail, stepId },
+      payload: { detail, stepId, ...extra },
     });
   }
 }

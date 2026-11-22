@@ -33,6 +33,7 @@ import { TracingModule } from '../tracing/tracing.module';
 import { ApprovalPresenter } from './application/use-cases/approval-presenter';
 import { ApprovalRequests } from './application/use-cases/approval-requests';
 import { AutoDelegateByWorkloadUseCase } from './application/use-cases/auto-delegate-task.use-case';
+import { DepartmentHandoff } from './application/use-cases/department-handoff';
 import { DecideApprovalUseCase } from './application/use-cases/decide-approval.use-case';
 import { DelegateTaskToSubordinateUseCase } from './application/use-cases/delegate-task.use-case';
 import { FinishTaskTurnUseCase } from './application/use-cases/finish-task-turn.use-case';
@@ -208,6 +209,7 @@ import { SkillsModule } from '../skills/skills.module';
     SessionEventRecorder,
     StepReviewLauncher,
     TaskSplitter,
+    DepartmentHandoff,
     ResumeSplitTasksUseCase,
     FinishTaskTurnUseCase,
     StartTaskTurnUseCase,

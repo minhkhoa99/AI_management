@@ -48,6 +48,8 @@ export class ResumeSplitTasksUseCase {
   private async resumeParentTask(parentId: string): Promise<void> {
     const parent = this.taskRepository.findTaskById(parentId)?.toState();
     if (parent === undefined || parent.status !== 'waiting_children') return;
+    // ponytail: a handoff parent waits until plan Task 8 concludes it (concludeHandoff).
+    if (parent.handoffTaskId !== null) return;
     const parentCode = formatTaskCode(parent.sequenceNumber);
     const results: string[] = [];
     for (const subtaskId of this.taskRepository.listSubtaskIds(parentId)) {
@@ -111,7 +113,7 @@ export class ResumeSplitTasksUseCase {
   }
 }
 
-function clip(text: string): string {
+export function clip(text: string): string {
   const trimmed = text.trim();
   return trimmed.length <= SUBTASK_SUMMARY_MAX_LENGTH
     ? trimmed

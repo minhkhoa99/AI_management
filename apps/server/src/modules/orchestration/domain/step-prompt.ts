@@ -22,8 +22,8 @@ export interface StepPromptInput {
   sensitiveActionsNeedApproval: boolean;
   /** Subordinates the agent may hand subtasks to; empty: splitting is not offered. */
   splitCandidates: ReadonlyArray<{ name: string; roleLabel: string }>;
-  /** Set on a subtask: the task it was split from. */
-  subtaskOf: { taskCode: string; title: string } | null;
+  /** Set on a subtask: the task it was split from (`handedOff`: by another department). */
+  subtaskOf: { taskCode: string; title: string; handedOff: boolean } | null;
   /**
    * The only skills the agent may use: where to read each one (`manifestPath`), or its text
    * (`content`) for agents that cannot open files.
@@ -53,8 +53,11 @@ export function buildStepPrompt(input: StepPromptInput): string {
     `Bạn là ${input.agentRoleLabel} trong một nhóm AI. Task ${input.taskCode}: ${input.title}`,
   );
   if (input.subtaskOf !== null) {
+    const { taskCode, title, handedOff } = input.subtaskOf;
     sections.push(
-      `Đây là task con do cấp trên tách ra từ task ${input.subtaskOf.taskCode} "${input.subtaskOf.title}". Chỉ làm đúng phần việc này; kết quả của bạn được gộp lại cho cấp trên.`,
+      handedOff
+        ? `Đây là task do phòng khác bàn giao từ task ${taskCode} "${title}". Làm theo quy trình của phòng bạn; code của họ có sẵn trong thư mục làm việc. Báo đạt hoặc không đạt kèm lý do cụ thể: báo cáo của bạn được gửi lại cho phòng đó.`
+        : `Đây là task con do cấp trên tách ra từ task ${taskCode} "${title}". Chỉ làm đúng phần việc này; kết quả của bạn được gộp lại cho cấp trên.`,
     );
   }
   if (input.description.trim() !== '') {
