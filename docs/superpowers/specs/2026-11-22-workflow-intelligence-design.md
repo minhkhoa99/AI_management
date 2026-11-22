@@ -171,8 +171,7 @@ chưa chọn phòng, chọn phòng mà không phải "Phòng khác", phòng đí
     quy trình đích vẫn chờ người dùng như thường.
   - `concludeHandoff(parentId)` gọi từ `ResumeSplitTasksUseCase.resumeParentTask` khi `handoffTaskId !== null`:
     con `succeeded` → `mergeSubtaskBranch` (xung đột: ghi vào feedback) → `applyGateResult(true)` (`passed`);
-    con `failed` với `reason:'gate_rejected'` → `applyGateResult(false, "Phòng Y (T-13) không đạt: …",
-'review_feedback')` rồi theo `on_fail` của bước bàn giao (thường quay về bước Dev) (`rejected`); mọi trường hợp
+    con `failed` với `reason:'gate_rejected'` → `applyGateResult(false, "Phòng Y (T-13) không đạt: …")` rồi theo `on_fail` của bước bàn giao (thường quay về bước Dev) (`rejected`); mọi trường hợp
     khác (`failed` do engine, `cancelled`, bị xoá) → cha `failed` "Phòng Y lỗi kỹ thuật" (`technical`, không bắt Dev
     làm lại). Rồi `finishHandoff`, event `handoff_returned`.
 - `TaskRepository.listSplitSubtaskIds(parentId)` (cùng phòng cha) dùng ở `TaskSplitter` (hạn mức 10) và phần gộp
@@ -244,8 +243,8 @@ created_at, updated_at, UNIQUE(project_key, body_hash))`.
 - Thu bài học: `applyGateResult(task, passed, feedback, lessonSource = null)` ghi khi không đạt và có phản hồi.
   Nguồn: `finish-task-turn` (`agent_failure` cho chạy tự do, `qc_feedback` cho `qc_pass`, `null` cho `tests_pass`),
   `step-review-launcher` (`review_feedback`), `decide-approval` (`user_review` chỉ khi `note !== null` và kind
-  `step_gate`), `SubmitCodeReviewUseCase` (`user_review`, góp ý theo dòng mang `path:line`), `concludeHandoff`
-  (`review_feedback`), `step_report.learnings` (`agent_learning`). Không thu: log test thô, lỗi engine/hạn mức.
+  `step_gate`), `SubmitCodeReviewUseCase` (`user_review`, góp ý theo dòng mang `path:line`), `step_report.learnings` (`agent_learning`). `concludeHandoff` không thu (task con cùng repo đã thu từ gate của nó, đúng nguồn).
+  Không thu: log test thô, lỗi engine/hạn mức.
 
 **Web:** `features/skills/components/lessons-section.tsx` gắn vào `skills-screen.tsx` dưới `DepartmentTabs`: tìm kiếm,
 sửa, xoá; hiện nguồn, số lần gặp, mã task. Không thêm route.

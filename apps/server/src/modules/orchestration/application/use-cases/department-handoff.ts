@@ -152,11 +152,12 @@ export class DepartmentHandoff {
       }
       this.progression.applyGateResult(current, true, null);
     } else if (verdict === 'rejected') {
+      // No lesson here: the child shares the repository and already learned from its own gate, with
+      // that gate's source and filtering (a failing test log or a bare rejection is never a lesson).
       this.progression.applyGateResult(
         current,
         false,
         `Phòng ${departmentName} (${childCode}) không đạt: ${child?.statusNote ?? ''}`,
-        'review_feedback',
       );
     } else {
       current.fail(

@@ -121,8 +121,9 @@ describe('department handoff', () => {
     handoffDepartmentId: departmentId,
   });
 
-  async function createTask(workflowId: string) {
+  async function createTask(workflowId: string, testCommand?: string) {
     const response = await app.callApi('POST', '/api/tasks', {
+      ...(testCommand === undefined ? {} : { testCommand }),
       departmentId: dev.id,
       title: 'Trang đăng nhập',
       description: 'Form đăng nhập',
@@ -392,7 +393,37 @@ describe('department handoff', () => {
     const tasks = app.application.get<symbol, TaskRepository>(TASK_REPOSITORY);
     expect(tasks.listSplitSubtaskIds(task.id)).toEqual([]);
     expect(tasks.listSubtaskIds(task.id)).toHaveLength(2);
+    // Regression: the parent used to learn the child's rejection a second time.
+    expect(
+      app.database.prepare('SELECT source, body, occurrences FROM knowledge_lessons').all(),
+    ).toEqual([{ source: 'qc_feedback', body: 'Thiếu test', occurrences: 1 }]);
   }, 30_000);
+
+  it('learns nothing when the other department fails the tests', async () => {
+    const reviewFlowId = (
+      app.database
+        .prepare('SELECT id FROM workflows WHERE department_id = ? AND is_default = 1')
+        .get(review.id) as { id: string }
+    ).id;
+    const saved = await app.callApi('PUT', `/api/workflows/${reviewFlowId}/steps`, {
+      steps: [{ ...codeStep, name: 'Chạy test', ownerRole: 'qc', gate: 'tests_pass' }],
+    });
+    expect(saved.statusCode, JSON.stringify(saved.body)).toBe(200);
+    const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
+    engine.respond = () => Promise.resolve(agentReport('done', 'Đã làm'));
+    const task = await createTask(devFlow.id, 'node -e "process.exit(1)"');
+
+    const returned = await waitFor(
+      () => payloadsOf(task.id, 'handoff_returned'),
+      (payloads) => payloads.length >= 1,
+      'handoff_returned written',
+    );
+
+    expect(returned[0]).toMatchObject({ verdict: 'rejected' });
+    expect(app.database.prepare('SELECT COUNT(*) AS count FROM knowledge_lessons').get()).toEqual({
+      count: 0,
+    });
+  }, 60_000);
 
   it('stops after 3 rejected rounds and counts again after a retry', async () => {
     const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
