@@ -59,11 +59,11 @@ Làm theo thứ tự 1 → 2 → 3 (chủ dự án chốt), trên một nhánh, 
 
 ## 4. Phương án đã xét (phần tri thức)
 
-| | Cách | Được | Mất |
-|---|---|---|---|
-| **A (chọn)** | Đồ thị trong SQLite từ dữ liệu sẵn có + `.aiteam-knowledge/` | 0 thư viện, 0 token để dựng, chạy mọi engine | Tìm theo từ khoá/cạnh, không theo nghĩa |
-| B | GraphRAG đầy đủ (LLM trích thực thể + embedding) | Tìm theo nghĩa | Cần API embedding (CLI không có), tốn token, có thể thêm thư viện |
-| C | Agent gọi công cụ tra đồ thị (MCP) | Agent tự tra | Claude chạy `--strict-mcp-config`, agent chỉ đọc không có Bash; A đã cho grep thư mục |
+|              | Cách                                                         | Được                                         | Mất                                                                                   |
+| ------------ | ------------------------------------------------------------ | -------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **A (chọn)** | Đồ thị trong SQLite từ dữ liệu sẵn có + `.aiteam-knowledge/` | 0 thư viện, 0 token để dựng, chạy mọi engine | Tìm theo từ khoá/cạnh, không theo nghĩa                                               |
+| B            | GraphRAG đầy đủ (LLM trích thực thể + embedding)             | Tìm theo nghĩa                               | Cần API embedding (CLI không có), tốn token, có thể thêm thư viện                     |
+| C            | Agent gọi công cụ tra đồ thị (MCP)                           | Agent tự tra                                 | Claude chạy `--strict-mcp-config`, agent chỉ đọc không có Bash; A đã cho grep thư mục |
 
 Chủ dự án chọn A.
 
@@ -172,7 +172,7 @@ chưa chọn phòng, chọn phòng mà không phải "Phòng khác", phòng đí
   - `concludeHandoff(parentId)` gọi từ `ResumeSplitTasksUseCase.resumeParentTask` khi `handoffTaskId !== null`:
     con `succeeded` → `mergeSubtaskBranch` (xung đột: ghi vào feedback) → `applyGateResult(true)` (`passed`);
     con `failed` với `reason:'gate_rejected'` → `applyGateResult(false, "Phòng Y (T-13) không đạt: …",
-    'review_feedback')` rồi theo `on_fail` của bước bàn giao (thường quay về bước Dev) (`rejected`); mọi trường hợp
+'review_feedback')` rồi theo `on_fail` của bước bàn giao (thường quay về bước Dev) (`rejected`); mọi trường hợp
     khác (`failed` do engine, `cancelled`, bị xoá) → cha `failed` "Phòng Y lỗi kỹ thuật" (`technical`, không bắt Dev
     làm lại). Rồi `finishHandoff`, event `handoff_returned`.
 - `TaskRepository.listSplitSubtaskIds(parentId)` (cùng phòng cha) dùng ở `TaskSplitter` (hạn mức 10) và phần gộp
@@ -200,8 +200,8 @@ cùng repo** (quyết định của người viết: bài học của phòng Rev
 - `code_imports(project_key, from_path, to_path, PRIMARY KEY(project_key, from_path, to_path)) WITHOUT ROWID` +
   index `(project_key, to_path)`.
 - `knowledge_lessons(id, project_key, department_id → departments ON DELETE SET NULL (chỉ là phòng gốc; xoá phòng không xoá bài học dùng chung), source CHECK(...),
-  source_task_id → tasks ON DELETE SET NULL, body CHECK(length 1..1500), body_hash, paths_json, occurrences DEFAULT 1,
-  created_at, updated_at, UNIQUE(project_key, body_hash))`.
+source_task_id → tasks ON DELETE SET NULL, body CHECK(length 1..1500), body_hash, paths_json, occurrences DEFAULT 1,
+created_at, updated_at, UNIQUE(project_key, body_hash))`.
 - `KNOWLEDGE_LESSON_SOURCES = review_feedback, qc_feedback, user_review, agent_failure, agent_learning` trong
   `enumerations.ts` + CHECK + `enumerations.test.ts`.
 
