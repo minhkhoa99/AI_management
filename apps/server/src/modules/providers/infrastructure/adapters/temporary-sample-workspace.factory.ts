@@ -16,9 +16,11 @@ const SAMPLE_README = [
 
 @Injectable()
 export class TemporarySampleWorkspaceFactory implements SampleWorkspaceFactory {
-  createSampleWorkspace(): SampleWorkspace {
+  createSampleWorkspace({ withReadme } = { withReadme: true }): SampleWorkspace {
     const directory = mkdtempSync(path.join(tmpdir(), 'aiteam-test-run-'));
-    writeFileSync(path.join(directory, 'README.md'), SAMPLE_README);
+    if (withReadme) {
+      writeFileSync(path.join(directory, 'README.md'), SAMPLE_README);
+    }
     return {
       directory,
       // Retries cover Windows, where a just-exited CLI can hold the directory for a moment (EBUSY).

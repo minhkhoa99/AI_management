@@ -5,7 +5,10 @@ export interface SampleWorkspace {
   disposeSampleWorkspace(): void;
 }
 
-/** Throw-away directory with a small README, used by engine test runs (never a real project). */
+/**
+ * Throw-away directory used by engine test runs and one-shot AI questions (never a real project).
+ * It holds a small sample README unless `withReadme` is false (default true).
+ */
 export interface SampleWorkspaceFactory {
-  createSampleWorkspace(): SampleWorkspace;
+  createSampleWorkspace(options?: { withReadme: boolean }): SampleWorkspace;
 }

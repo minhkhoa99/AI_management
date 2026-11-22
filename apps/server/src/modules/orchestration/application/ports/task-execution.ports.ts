@@ -149,6 +149,20 @@ export interface AgentRunPreparer {
   prepareAgentRun(snapshot: EngineSnapshot): PreparedAgentRun;
 }
 
+export const ONE_SHOT_AGENT_RUNNER = Symbol('ONE_SHOT_AGENT_RUNNER');
+
+/**
+ * One question to an agent's engine, answered once: read-only, offline, in an empty throw-away
+ * folder, at most one run per `runKey` at a time. Resolves with the final answer text.
+ */
+export interface OneShotAgentRunner {
+  askAgentOnce(request: {
+    snapshot: EngineSnapshot;
+    prompt: string;
+    runKey: string;
+  }): Promise<string>;
+}
+
 // ---- Staff ----------------------------------------------------------------------------------
 
 export const STAFF_DIRECTORY = Symbol('STAFF_DIRECTORY');
