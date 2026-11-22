@@ -1,6 +1,6 @@
 'use client';
 
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
 import {
   type AgentSummary,
   draftWorkflowStepsRequestSchema,
@@ -39,6 +39,14 @@ export function WorkflowAiPanel({
   const [goalError, setGoalError] = useState<string | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
   const agentId = agentChoice === DEFAULT_AGENT ? undefined : agentChoice;
+  // Closing the panel or switching mode unmounts it; a late answer must not replace the steps then.
+  const isMounted = useRef(true);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const askForProposal = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -55,7 +63,7 @@ export function WorkflowAiPanel({
     }
     setGoalError(null);
     const proposal = await performAction(requestProposal, () => null);
-    if (proposal !== undefined) onProposal(proposal);
+    if (proposal !== undefined && isMounted.current) onProposal(proposal);
   };
 
   return (
