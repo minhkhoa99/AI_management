@@ -32,12 +32,14 @@ interface TaskRow {
   base_sha: string | null;
   parent_task_id: string | null;
   review_pending: number;
+  handoff_task_id: string | null;
+  repository_root: string | null;
 }
 
 const TASK_COLUMNS = `id, sequence_number, department_id, workflow_id, title, description, criteria,
   priority, assignee_agent_id, current_step_id, status, working_dir, session_ref, test_command,
   engine_snapshot_json, step_attempt, engine_failures, run_after, worktree_path, pending_feedback,
-  status_note, base_sha, preview_command, review_pending, parent_task_id`;
+  status_note, base_sha, preview_command, review_pending, handoff_task_id, repository_root, parent_task_id`;
 
 @Injectable()
 export class SqliteTaskRepository implements TaskRepository {
@@ -48,9 +50,11 @@ export class SqliteTaskRepository implements TaskRepository {
   private readonly deleteStatement: StatementSync;
   private readonly runnableStatement: StatementSync;
   private readonly subtasksStatement: StatementSync;
+  private readonly splitSubtasksStatement: StatementSync;
   private readonly readyParentsStatement: StatementSync;
   private readonly queuedAssignedStatement: StatementSync;
   private readonly queuedReviewStatement: StatementSync;
+  private readonly latestRepositoryRootStatement: StatementSync;
 
   constructor(
     @Inject(SQLITE_DATABASE) database: DatabaseSync,
@@ -61,13 +65,13 @@ export class SqliteTaskRepository implements TaskRepository {
       'SELECT COALESCE(MAX(sequence_number), 0) + 1 AS next_number FROM tasks',
     );
     this.insertStatement = database.prepare(
-      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 25 }, () => '?').join(', ')})`,
+      `INSERT INTO tasks (${TASK_COLUMNS}) VALUES (${Array.from({ length: 27 }, () => '?').join(', ')})`,
     );
     this.updateStatement = database.prepare(
       `UPDATE tasks SET workflow_id = ?, title = ?, description = ?, criteria = ?, priority = ?,
          assignee_agent_id = ?, current_step_id = ?, status = ?, working_dir = ?, session_ref = ?,
          test_command = ?, engine_snapshot_json = ?, step_attempt = ?, engine_failures = ?,
-         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, preview_command = ?, review_pending = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         run_after = ?, worktree_path = ?, pending_feedback = ?, status_note = ?, base_sha = ?, preview_command = ?, review_pending = ?, handoff_task_id = ?, repository_root = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
        WHERE id = ?`,
     );
     this.deleteStatement = database.prepare('DELETE FROM tasks WHERE id = ?');
@@ -78,6 +82,11 @@ export class SqliteTaskRepository implements TaskRepository {
     );
     this.subtasksStatement = database.prepare(
       'SELECT id FROM tasks WHERE parent_task_id = ? ORDER BY sequence_number',
+    );
+    this.splitSubtasksStatement = database.prepare(
+      `SELECT c.id FROM tasks c JOIN tasks p ON p.id = c.parent_task_id
+        WHERE c.parent_task_id = ? AND p.department_id = c.department_id
+        ORDER BY c.sequence_number`,
     );
     this.readyParentsStatement = database.prepare(
       `SELECT p.id FROM tasks p
@@ -93,6 +102,9 @@ export class SqliteTaskRepository implements TaskRepository {
     );
     this.queuedReviewStatement = database.prepare(
       "SELECT id FROM tasks WHERE status = 'queued' AND review_pending = 1 ORDER BY sequence_number",
+    );
+    this.latestRepositoryRootStatement = database.prepare(
+      'SELECT repository_root FROM tasks WHERE department_id = ? AND repository_root IS NOT NULL ORDER BY sequence_number DESC LIMIT 1',
     );
   }
 
@@ -181,6 +193,12 @@ export class SqliteTaskRepository implements TaskRepository {
     );
   }
 
+  listSplitSubtaskIds(parentTaskId: string): string[] {
+    return (this.splitSubtasksStatement.all(parentTaskId) as unknown as Array<{ id: string }>).map(
+      (row) => row.id,
+    );
+  }
+
   listQueuedTaskIdsAssignedTo(agentId: string): string[] {
     return (this.queuedAssignedStatement.all(agentId) as unknown as Array<{ id: string }>).map(
       (row) => row.id,
@@ -191,6 +209,12 @@ export class SqliteTaskRepository implements TaskRepository {
     return (this.queuedReviewStatement.all() as unknown as Array<{ id: string }>).map(
       (row) => row.id,
     );
+  }
+
+  findLatestRepositoryRoot(departmentId: string): string | null {
+    const row = this.latestRepositoryRootStatement.get(departmentId) as
+      { repository_root: string } | undefined;
+    return row?.repository_root ?? null;
   }
 
   listParentIdsReadyToResume(): string[] {
@@ -230,6 +254,8 @@ function restoreTask(row: TaskRow): Task {
     previewCommand: row.preview_command,
     parentTaskId: row.parent_task_id,
     reviewPending: Number(row.review_pending) === 1,
+    handoffTaskId: row.handoff_task_id,
+    repositoryRoot: row.repository_root,
   });
 }
 
@@ -245,5 +271,7 @@ function executionColumns(state: ReturnType<Task['toState']>) {
     state.baseSha,
     state.previewCommand,
     state.reviewPending ? 1 : 0,
+    state.handoffTaskId,
+    state.repositoryRoot,
   ] as const;
 }

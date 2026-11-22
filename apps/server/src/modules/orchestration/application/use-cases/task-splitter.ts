@@ -62,7 +62,8 @@ export class TaskSplitter {
   splitTaskIfRequested(task: Task, report: AgentReport, agentId: string): boolean {
     if (report.subtasks.length === 0) return false;
     const candidates = report.outcome === 'done' ? this.listSplitCandidates(task, agentId) : [];
-    const remaining = MAX_SUBTASKS_PER_TASK - this.taskRepository.listSubtaskIds(task.id).length;
+    const remaining =
+      MAX_SUBTASKS_PER_TASK - this.taskRepository.listSplitSubtaskIds(task.id).length;
     const refusal = task.isSubtask
       ? 'Task con không được tách tiếp.'
       : remaining <= 0

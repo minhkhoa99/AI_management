@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { TaskStatus } from '@aiteam/contracts';
 import { APP_LOGGER, type AppLogger } from '../../../../shared/logging/app-logger';
+import { quoteSummary } from '../../domain/agent-report';
 import { formatTaskCode, type TaskState } from '../../domain/entities/task';
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
 import {
@@ -11,8 +12,8 @@ import {
   type TaskEventLog,
   type TaskWorkspace,
 } from '../ports/task-execution.ports';
+import { DepartmentHandoff } from './department-handoff';
 
-const SUBTASK_SUMMARY_MAX_LENGTH = 1_200;
 const OUTCOME_LABELS: Partial<Record<TaskStatus, string>> = {
   succeeded: 'đạt',
   failed: 'thất bại',
@@ -22,7 +23,8 @@ const OUTCOME_LABELS: Partial<Record<TaskStatus, string>> = {
 /**
  * When every subtask of a waiting task has finished: merges the code of the successful ones into
  * the parent's worktree, then puts the parent back in the queue on the same step. The same agent
- * continues its session with each subtask's result and finishes the step.
+ * continues its session with each subtask's result and finishes the step. A parent waiting for
+ * another department is concluded by `DepartmentHandoff` instead.
  */
 @Injectable()
 export class ResumeSplitTasksUseCase {
@@ -32,6 +34,7 @@ export class ResumeSplitTasksUseCase {
     @Inject(STAFF_DIRECTORY) private readonly staffDirectory: StaffDirectory,
     @Inject(TASK_EVENT_LOG) private readonly eventLog: TaskEventLog,
     @Inject(APP_LOGGER) private readonly logger: AppLogger,
+    private readonly departmentHandoff: DepartmentHandoff,
   ) {}
 
   /** Never rejects: a parent that cannot be resumed is logged and tried again next pass. */
@@ -48,9 +51,13 @@ export class ResumeSplitTasksUseCase {
   private async resumeParentTask(parentId: string): Promise<void> {
     const parent = this.taskRepository.findTaskById(parentId)?.toState();
     if (parent === undefined || parent.status !== 'waiting_children') return;
+    if (parent.handoffTaskId !== null) {
+      await this.departmentHandoff.concludeHandoff(parentId);
+      return;
+    }
     const parentCode = formatTaskCode(parent.sequenceNumber);
     const results: string[] = [];
-    for (const subtaskId of this.taskRepository.listSubtaskIds(parentId)) {
+    for (const subtaskId of this.taskRepository.listSplitSubtaskIds(parentId)) {
       const subtask = this.taskRepository.findTaskById(subtaskId)?.toState();
       if (subtask !== undefined) {
         results.push(await this.reportSubtask(parent, parentCode, subtask));
@@ -107,13 +114,6 @@ export class ResumeSplitTasksUseCase {
     const summary =
       this.eventLog.listStepReports(subtask.id).at(-1)?.summary ?? subtask.statusNote ?? '';
     const outcome = OUTCOME_LABELS[subtask.status] ?? subtask.status;
-    return `- ${code} "${subtask.title}" (${assigneeName}): ${outcome}. ${clip(summary)}${mergeNote}`;
+    return `- ${code} "${subtask.title}" (${assigneeName}): ${outcome}. ${quoteSummary(summary)}${mergeNote}`;
   }
-}
-
-function clip(text: string): string {
-  const trimmed = text.trim();
-  return trimmed.length <= SUBTASK_SUMMARY_MAX_LENGTH
-    ? trimmed
-    : `${trimmed.slice(0, SUBTASK_SUMMARY_MAX_LENGTH)}…`;
 }

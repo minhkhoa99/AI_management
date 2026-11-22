@@ -1,5 +1,6 @@
 import {
   apiErrorResponseSchema,
+  buildWorkflowExportDocument,
   type Department,
   departmentSchema,
   type Workflow,
@@ -197,6 +198,133 @@ describe('workflows API', () => {
         sensitiveActionsNeedApproval: true,
         allowAgentSubsteps: true,
       },
+    });
+  });
+
+  it('imports an exported workflow as an identical new one', async () => {
+    const created = await createWorkflow({
+      name: 'Phát triển',
+      description: 'Có review',
+      source: { kind: 'template', templateId: 'software' },
+    });
+    const original = workflowSchema.parse(
+      (
+        await app.callApi('PATCH', `/api/workflows/${created.id}/rules`, {
+          enforce: false,
+          rules: { allowAgentSubsteps: true },
+        })
+      ).body,
+    );
+
+    const imported = await createWorkflow({
+      name: 'Bản nhập',
+      description: 'Có review',
+      source: { kind: 'import', document: buildWorkflowExportDocument(original) },
+    });
+
+    expect(imported.id).not.toBe(original.id);
+    expect(imported.steps[0]?.id).not.toBe(original.steps[0]?.id);
+    expect(buildWorkflowExportDocument(imported)).toEqual({
+      ...buildWorkflowExportDocument(original),
+      name: 'Bản nhập',
+    });
+  });
+
+  it('refuses an import document with an unknown field (400)', async () => {
+    const original = await createWorkflow({ name: 'Trống', source: { kind: 'blank' } });
+
+    const response = await app.callApi('POST', `/api/departments/${department.id}/workflows`, {
+      name: 'Bản nhập',
+      source: {
+        kind: 'import',
+        document: { ...buildWorkflowExportDocument(original), owner: 'agent' },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(await listWorkflows()).toHaveLength(1);
+  });
+
+  describe('handoff steps', () => {
+    let review: Department;
+
+    beforeEach(async () => {
+      review = departmentSchema.parse(
+        (await app.callApi('POST', '/api/departments', { name: 'Review', color: '#22C55E' })).body,
+      );
+    });
+
+    const workStep = {
+      name: 'Code',
+      ownerRole: 'dev',
+      gate: 'auto',
+      onFail: 'stop',
+      returnToStepIndex: null,
+      maxRetries: 0,
+      requiredOutput: '',
+    };
+    const handoffStep = (handoffDepartmentId: string) => ({
+      name: 'Review',
+      ownerRole: 'department',
+      gate: 'auto',
+      onFail: 'return_to_step',
+      returnToStepIndex: 0,
+      maxRetries: 0,
+      requiredOutput: 'Nhận xét',
+      handoffDepartmentId,
+    });
+
+    it('saves a handoff step to another department', async () => {
+      const workflow = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
+
+      const saved = await app.callApi('PUT', `/api/workflows/${workflow.id}/steps`, {
+        steps: [workStep, handoffStep(review.id)],
+      });
+
+      expect(saved.statusCode, JSON.stringify(saved.body)).toBe(200);
+      const steps = workflowSchema.parse(saved.body).steps;
+      expect(steps[1]?.handoffDepartmentId).toBe(review.id);
+      expect(steps[0]?.handoffDepartmentId).toBeNull();
+    });
+
+    it('refuses an unknown handoff department with 400', async () => {
+      const workflow = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
+
+      const saved = await app.callApi('PUT', `/api/workflows/${workflow.id}/steps`, {
+        steps: [workStep, handoffStep('missing-dept')],
+      });
+      const imported = await app.callApi('POST', `/api/departments/${department.id}/workflows`, {
+        name: 'Bản nhập',
+        source: {
+          kind: 'import',
+          document: {
+            ...buildWorkflowExportDocument(workflow),
+            steps: [workStep, handoffStep('missing-dept')],
+          },
+        },
+      });
+
+      expect(saved.statusCode).toBe(400);
+      expect(readErrorCode(saved)).toBe('WORKFLOW_HANDOFF_TARGET_NOT_FOUND');
+      expect(imported.statusCode).toBe(400);
+      expect(readErrorCode(imported)).toBe('WORKFLOW_HANDOFF_TARGET_NOT_FOUND');
+      expect(await listWorkflows()).toHaveLength(1);
+    });
+
+    it('refuses to delete a department that receives handoffs', async () => {
+      const workflow = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
+      await app.callApi('PUT', `/api/workflows/${workflow.id}/steps`, {
+        steps: [workStep, handoffStep(review.id)],
+      });
+
+      const refused = await app.callApi('DELETE', `/api/departments/${review.id}`);
+      expect(refused.statusCode).toBe(409);
+      expect(readErrorCode(refused)).toBe('DEPARTMENT_RECEIVES_HANDOFFS');
+
+      expect((await app.callApi('DELETE', `/api/departments/${department.id}`)).statusCode).toBe(
+        204,
+      );
+      expect((await app.callApi('DELETE', `/api/departments/${review.id}`)).statusCode).toBe(204);
     });
   });
 

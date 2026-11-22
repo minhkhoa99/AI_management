@@ -1,0 +1,217 @@
+import path from 'node:path';
+import { DEFAULT_WORKFLOW_RULES, TASK_PRIORITY } from '@aiteam/contracts';
+import { describe, expect, it, vi } from 'vitest';
+import { Task, type EngineSnapshot } from '../../domain/entities/task';
+import { Workflow, type WorkflowStepState } from '../../domain/entities/workflow';
+import { TaskProgression } from './task-progression';
+
+const ROOT = path.resolve('/repo');
+
+const SNAPSHOT: EngineSnapshot = {
+  agentId: 'agent-1',
+  provider: 'claude_code',
+  connectionId: null,
+  model: null,
+  accessLevel: 'edit_workspace',
+  networkAccess: false,
+};
+
+function step(id: string, overrides: Partial<WorkflowStepState> = {}): WorkflowStepState {
+  return {
+    id,
+    name: id,
+    ownerRole: 'dev',
+    gate: 'auto',
+    onFail: 'retry',
+    returnToStepId: null,
+    maxRetries: 2,
+    requiredOutput: '',
+    handoffDepartmentId: null,
+    ...overrides,
+  };
+}
+
+const workflow = Workflow.restore({
+  id: 'wf-1',
+  departmentId: 'dept-1',
+  name: 'Quy trình',
+  description: '',
+  isDefault: true,
+  enforce: true,
+  rules: { ...DEFAULT_WORKFLOW_RULES },
+  steps: [
+    step('build'),
+    step('test', { onFail: 'return_to_step', returnToStepId: 'build' }),
+    step('approve', { onFail: 'stop' }),
+  ],
+});
+
+function setUp(parent?: Task) {
+  const eventLog = { recordTaskEvent: vi.fn() };
+  const knowledge = { recordLesson: vi.fn() };
+  const logger = { warn: vi.fn() };
+  const progression = new TaskProgression(
+    { findTaskById: () => parent } as never,
+    { findWorkflowById: () => workflow } as never,
+    eventLog as never,
+    knowledge as never,
+    logger as never,
+  );
+  return { eventLog, knowledge, logger, progression };
+}
+
+function taskOn(stepId: string): Task {
+  const task = Task.createNew({
+    id: 'task-1',
+    sequenceNumber: 1,
+    departmentId: 'dept-1',
+    workflowId: 'wf-1',
+    assigneeAgentId: 'agent-1',
+    workingDirectory: null,
+    title: 'Việc',
+    description: '',
+    criteria: '',
+    priority: TASK_PRIORITY.medium,
+    testCommand: null,
+    previewCommand: null,
+  });
+  task.startTurn(stepId, SNAPSHOT);
+  return task;
+}
+
+describe('TaskProgression.applyGateResult', () => {
+  it('records the evaluated step on step_passed although the task moved to the next step', () => {
+    const { eventLog, progression } = setUp();
+    const task = taskOn('build');
+
+    progression.applyGateResult(task, true, null);
+
+    expect(task.toState().currentStepId).toBe('test');
+    expect(eventLog.recordTaskEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'step_passed',
+        payload: { detail: 'Sang bước "test".', stepId: 'build' },
+      }),
+    );
+  });
+
+  it('records stepId on step_returned, task_failed (stop) and task_succeeded (last step)', () => {
+    const { eventLog, progression } = setUp();
+
+    progression.applyGateResult(taskOn('test'), false, 'Thiếu test');
+    progression.applyGateResult(taskOn('approve'), false, null);
+    progression.applyGateResult(taskOn('approve'), true, null);
+
+    const recorded = eventLog.recordTaskEvent.mock.calls.map(([event]) => [
+      (event as { kind: string }).kind,
+      (event as { payload: unknown }).payload,
+    ]);
+    expect(recorded).toEqual([
+      ['step_returned', { detail: 'Thiếu test', stepId: 'test' }],
+      ['task_failed', { detail: 'Bước "approve" không đạt.', stepId: 'approve' }],
+      ['task_succeeded', { detail: null, stepId: 'approve' }],
+    ]);
+  });
+
+  it('records stepId on step_retried and a null stepId on a free run', () => {
+    const { eventLog, progression } = setUp();
+    const freeTask = taskOn('build');
+    freeTask.startTurn(null, SNAPSHOT);
+
+    progression.applyGateResult(taskOn('build'), false, 'Sai');
+    progression.applyGateResult(freeTask, true, null);
+
+    const payloads = eventLog.recordTaskEvent.mock.calls.map(
+      ([event]) => (event as { payload: unknown }).payload,
+    );
+    expect(payloads).toEqual([
+      { detail: 'Sai', stepId: 'build' },
+      { detail: null, stepId: null },
+    ]);
+  });
+
+  it('ends a task handed off by another department at its first failed gate', () => {
+    const parent = Task.restore({
+      ...taskOn('build').toState(),
+      id: 'parent',
+      departmentId: 'dev',
+    });
+    const { eventLog, progression } = setUp(parent);
+    const task = Task.restore({ ...taskOn('build').toState(), parentTaskId: 'parent' });
+
+    progression.applyGateResult(task, false, 'Thiếu test');
+
+    expect(task.toState()).toMatchObject({ status: 'failed', statusNote: 'Thiếu test' });
+    expect(eventLog.recordTaskEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'task_failed',
+        payload: { detail: 'Thiếu test', stepId: 'build', reason: 'gate_rejected' },
+      }),
+    );
+  });
+
+  it('keeps the workflow on_fail for a subtask of the same department', () => {
+    const parent = Task.restore({ ...taskOn('build').toState(), id: 'parent' });
+    const { progression } = setUp(parent);
+    const task = Task.restore({ ...taskOn('build').toState(), parentTaskId: 'parent' });
+
+    progression.applyGateResult(task, false, 'Sai');
+
+    expect(task.toState()).toMatchObject({ status: 'queued', currentStepId: 'build' });
+  });
+
+  it('learns from the feedback of a failed gate, even when a handed-off task ends there', () => {
+    const parent = Task.restore({
+      ...taskOn('build').toState(),
+      id: 'parent',
+      departmentId: 'dev',
+    });
+    const { knowledge, progression } = setUp(parent);
+    const task = Task.restore({
+      ...taskOn('build').toState(),
+      parentTaskId: 'parent',
+      workingDirectory: path.join(ROOT, 'shop'),
+      repositoryRoot: ROOT,
+    });
+
+    progression.applyGateResult(task, false, 'Thiếu test', 'qc_feedback');
+
+    expect(knowledge.recordLesson).toHaveBeenCalledWith({
+      projectKey: ROOT,
+      departmentId: 'dept-1',
+      sourceTaskId: 'task-1',
+      source: 'qc_feedback',
+      body: 'Thiếu test',
+      agentDirectory: 'shop',
+    });
+  });
+
+  it('learns nothing without a lesson source, feedback or repository', () => {
+    const { knowledge, progression } = setUp();
+    const inRepository = () => Task.restore({ ...taskOn('build').toState(), repositoryRoot: ROOT });
+
+    progression.applyGateResult(inRepository(), false, 'Sai');
+    progression.applyGateResult(inRepository(), false, null, 'agent_failure');
+    progression.applyGateResult(inRepository(), true, null, 'agent_failure');
+    progression.applyGateResult(taskOn('build'), false, 'Sai', 'agent_failure');
+
+    expect(knowledge.recordLesson).not.toHaveBeenCalled();
+  });
+
+  it('keeps moving the task when the lesson cannot be saved, without logging its text', () => {
+    const { knowledge, logger, progression } = setUp();
+    knowledge.recordLesson.mockImplementation(() => {
+      throw new Error('disk I/O error');
+    });
+    const task = Task.restore({ ...taskOn('build').toState(), repositoryRoot: ROOT });
+
+    progression.applyGateResult(task, false, 'Bí mật', 'agent_failure');
+
+    expect(task.toState()).toMatchObject({ status: 'queued', currentStepId: 'build' });
+    expect(logger.warn).toHaveBeenCalledWith(
+      { err: expect.any(Error), taskId: 'task-1' },
+      'lesson not recorded',
+    );
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('Bí mật');
+  });
+});

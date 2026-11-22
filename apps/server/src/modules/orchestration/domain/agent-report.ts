@@ -26,7 +26,13 @@ const reportSchema = z.object({
   approvalRequest: z.string().max(4_000).nullable().default(null),
   /** Checked item by item below: one bad subtask must not void the whole report. */
   subtasks: z.array(z.unknown()).max(50).default([]),
+  /** Checked item by item too: general lessons for later tasks in the repository. */
+  learnings: z.array(z.unknown()).max(20).default([]),
 });
+
+/** At most this many learnings per report; extra ones are dropped. */
+const MAX_LEARNINGS_PER_REPORT = 3;
+const learningSchema = z.string().trim().min(15).max(400);
 
 const subtaskRequestSchema = z.object({
   title: z.string().trim().min(1).max(TASK_TITLE_MAX_LENGTH),
@@ -47,6 +53,8 @@ export interface AgentReport {
   wellFormed: boolean;
   /** Valid subtasks the agent asked for (at most MAX_SUBTASKS_PER_SPLIT); usually empty. */
   subtasks: SubtaskRequest[];
+  /** Valid general lessons the agent drew (at most MAX_LEARNINGS_PER_REPORT); usually empty. */
+  learnings: string[];
 }
 
 export function interpretAgentReport(finalText: string | null): AgentReport {
@@ -69,6 +77,10 @@ export function interpretAgentReport(finalText: string | null): AgentReport {
             .map((candidate) => subtaskRequestSchema.safeParse(candidate))
             .flatMap((result) => (result.success ? [result.data] : []))
             .slice(0, MAX_SUBTASKS_PER_SPLIT),
+          learnings: parsed.data.learnings
+            .map((candidate) => learningSchema.safeParse(candidate))
+            .flatMap((result) => (result.success ? [result.data] : []))
+            .slice(0, MAX_LEARNINGS_PER_REPORT),
         };
       }
     } catch {
@@ -81,6 +93,7 @@ export function interpretAgentReport(finalText: string | null): AgentReport {
     approvalRequest: null,
     wellFormed: false,
     subtasks: [],
+    learnings: [],
   };
 }
 
@@ -90,4 +103,14 @@ function stripReports(text: string): string {
 
 function clip(text: string): string {
   return text.length <= SUMMARY_MAX_LENGTH ? text : `${text.slice(0, SUMMARY_MAX_LENGTH)}…`;
+}
+
+const QUOTED_SUMMARY_MAX_LENGTH = 1_200;
+
+/** A report summary quoted in another task's prompt or description, trimmed and shortened. */
+export function quoteSummary(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length <= QUOTED_SUMMARY_MAX_LENGTH
+    ? trimmed
+    : `${trimmed.slice(0, QUOTED_SUMMARY_MAX_LENGTH)}…`;
 }

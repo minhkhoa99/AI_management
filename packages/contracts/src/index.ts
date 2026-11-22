@@ -12,3 +12,4 @@ export * from './monitor';
 export * from './skills';
 export * from './engine-quota';
 export * from './engine-quota-display';
+export * from './knowledge';

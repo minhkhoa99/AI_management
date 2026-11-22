@@ -83,6 +83,10 @@ function describeEventText(event: DescribableTaskEvent): string {
       return 'các task con đã xong, tiếp tục bước';
     case 'subtasks_ignored':
       return `không tách task con: ${text('detail')}`;
+    case 'handoff_sent':
+      return `bàn giao bước "${text('stepName')}" cho phòng ${text('departmentName')} (${text('childCode')})`;
+    case 'handoff_returned':
+      return `phòng ${text('departmentName')} (${text('childCode') || 'task đã xoá'}) báo ${HANDOFF_VERDICT_LABELS[text('verdict')] ?? text('verdict')}`;
     case 'step_passed':
     case 'step_retried':
     case 'step_returned':
@@ -109,6 +113,12 @@ function describeSubtasks(subtasks: unknown): string {
     })
     .join(', ');
 }
+
+const HANDOFF_VERDICT_LABELS: Record<string, string> = {
+  passed: 'đạt',
+  rejected: 'không đạt',
+  technical: 'lỗi kỹ thuật',
+};
 
 const STEP_OUTCOME_LABELS: Record<string, string> = {
   step_passed: 'bước đạt',

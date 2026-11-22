@@ -52,6 +52,10 @@ export interface TaskState {
   parentTaskId: string | null;
   /** The superior's review of the current step waits for the plan quota: reopen it next turn. */
   reviewPending: boolean;
+  /** The child task of the current handoff round, while the step is with another department. */
+  handoffTaskId: string | null;
+  /** Root of the repository the worktree belongs to: the knowledge key (index, lessons). */
+  repositoryRoot: string | null;
 }
 
 export interface TaskContent {
@@ -108,6 +112,8 @@ export class Task {
       baseSha: null,
       parentTaskId: null,
       reviewPending: false,
+      handoffTaskId: null,
+      repositoryRoot: null,
     });
   }
 
@@ -141,6 +147,37 @@ export class Task {
     return subtask;
   }
 
+  /**
+   * `parent`'s current step, handed to another department: that department's workflow and
+   * assignee, the parent's content and folder (its worktree forks from the parent's code).
+   */
+  static createHandoff(input: {
+    id: string;
+    sequenceNumber: number;
+    parent: TaskState;
+    departmentId: string;
+    workflowId: string | null;
+    assigneeAgentId: string;
+    description: string;
+  }): Task {
+    const child = Task.createNew({
+      id: input.id,
+      sequenceNumber: input.sequenceNumber,
+      departmentId: input.departmentId,
+      workflowId: input.workflowId,
+      title: input.parent.title,
+      description: input.description,
+      criteria: input.parent.criteria,
+      priority: input.parent.priority,
+      assigneeAgentId: input.assigneeAgentId,
+      workingDirectory: input.parent.workingDirectory,
+      testCommand: input.parent.testCommand,
+      previewCommand: input.parent.previewCommand,
+    });
+    child.state.parentTaskId = input.parent.id;
+    return child;
+  }
+
   /** Rebuilds a task loaded from storage (already validated when it was saved). */
   static restore(state: TaskState): Task {
     return new Task({ ...state });
@@ -168,6 +205,10 @@ export class Task {
 
   get parentTaskId(): string | null {
     return this.state.parentTaskId;
+  }
+
+  get handoffTaskId(): string | null {
+    return this.state.handoffTaskId;
   }
 
   get isSubtask(): boolean {
@@ -227,9 +268,10 @@ export class Task {
 
   // ---- Execution ----------------------------------------------------------------------------
 
-  rememberWorktree(worktreePath: string, baseSha: string | null): void {
+  rememberWorktree(worktreePath: string, baseSha: string | null, repositoryRoot: string): void {
     this.state.worktreePath = worktreePath;
     this.state.baseSha ??= baseSha;
+    this.state.repositoryRoot = repositoryRoot;
   }
 
   /** Stopped by the user: the scheduler leaves it alone, the engine session is kept. */
@@ -349,6 +391,19 @@ export class Task {
     this.state.runAfter = null;
     this.state.statusNote = null;
     this.addFeedback(feedback);
+  }
+
+  /** The step went to another department: the task waits until `childTaskId` is finished. */
+  waitForHandoff(stepId: string, childTaskId: string, note: string): void {
+    this.state.status = 'waiting_children';
+    this.state.currentStepId = stepId;
+    this.state.handoffTaskId = childTaskId;
+    this.state.runAfter = null;
+    this.state.statusNote = note;
+  }
+
+  finishHandoff(): void {
+    this.state.handoffTaskId = null;
   }
 
   waitForApproval(note: string): void {

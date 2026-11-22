@@ -1,4 +1,4 @@
-import type { AgentRole } from '@aiteam/contracts';
+import type { AgentRole, KnowledgeLessonSource } from '@aiteam/contracts';
 import type { EngineSnapshot } from '../../domain/entities/task';
 import type { StaffMember } from '../../domain/step-assignee';
 import type {
@@ -40,6 +40,51 @@ export interface PreparedTaskWorkspace {
   skillManifestPaths: Map<string, string>;
   /** HEAD when the worktree was created now; null when it already existed. */
   baseSha: string | null;
+  /** The repository the worktree belongs to (a subtask shares its parent's). */
+  repositoryRoot: string;
+}
+
+/** A source file of the worktree's HEAD, read from git (never from the worktree). */
+export interface CodeTreeEntry {
+  path: string;
+  blobSha: string;
+  /** null: blob không đổi (có trong knownShas) hoặc vượt ngân sách byte của lượt */
+  text: string | null;
+}
+
+// ---- Knowledge shared per repository (knowledge module) -------------------------------------
+
+export const TASK_KNOWLEDGE = Symbol('TASK_KNOWLEDGE');
+
+export interface TaskKnowledgeBriefing {
+  /** null when nothing relevant was found. */
+  promptSection: string | null;
+  lessonsMarkdown: string;
+  codeMapMarkdown: string;
+}
+
+export interface TaskKnowledge {
+  /** Reads the tree (blobs whose sha is known are skipped) and updates the repository index. */
+  refreshCodeIndex(
+    projectKey: string,
+    readTree: (knownShas: ReadonlyMap<string, string>) => Promise<readonly CodeTreeEntry[]>,
+  ): Promise<void>;
+  describeTaskKnowledge(input: {
+    projectKey: string;
+    keywords: readonly string[];
+    relatedPaths: readonly string[];
+  }): TaskKnowledgeBriefing;
+  recordLesson(input: {
+    projectKey: string;
+    departmentId: string;
+    sourceTaskId: string;
+    source: KnowledgeLessonSource;
+    body: string;
+    /** The agent's folder relative to the repository root (paths in the body are relative to it). */
+    agentDirectory: string | null;
+  }): void;
+  /** Bodies of the repository's most frequent lessons. */
+  listFrequentLessons(projectKey: string, limit: number): string[];
 }
 
 export interface WorkspaceFile {
@@ -86,6 +131,23 @@ export interface TaskWorkspace {
     subtaskId: string,
     message: string,
   ): Promise<'merged' | 'conflict'>;
+  /**
+   * Small source files of HEAD (.ts .tsx .js .mjs .cjs .py, package.json; no links or
+   * submodules). Blobs whose sha matches `knownShas` (path -> sha) are not read again.
+   */
+  readCodeTree(
+    worktreePath: string,
+    knownShas: ReadonlyMap<string, string>,
+  ): Promise<CodeTreeEntry[]>;
+  /**
+   * Rebuilds .aiteam-knowledge/ (kept out of git) under the agent's folder with lessons.md and
+   * code-map.md; null removes it. Returns the folder relative to agentDirectory, or null.
+   */
+  replaceKnowledgeFolder(
+    worktreePath: string,
+    agentDirectory: string,
+    files: { lessonsMarkdown: string; codeMapMarkdown: string } | null,
+  ): Promise<string | null>;
   /** Commits everything the agent changed ("mốc"); null when nothing changed. */
   saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null>;
   /**
@@ -149,6 +211,20 @@ export interface AgentRunPreparer {
   prepareAgentRun(snapshot: EngineSnapshot): PreparedAgentRun;
 }
 
+export const ONE_SHOT_AGENT_RUNNER = Symbol('ONE_SHOT_AGENT_RUNNER');
+
+/**
+ * One question to an agent's engine, answered once: read-only, offline, in an empty throw-away
+ * folder, at most one run per `runKey` at a time. Resolves with the final answer text.
+ */
+export interface OneShotAgentRunner {
+  askAgentOnce(request: {
+    snapshot: EngineSnapshot;
+    prompt: string;
+    runKey: string;
+  }): Promise<string>;
+}
+
 // ---- Staff ----------------------------------------------------------------------------------
 
 export const STAFF_DIRECTORY = Symbol('STAFF_DIRECTORY');
@@ -190,6 +266,8 @@ export interface TaskEventLog {
   listStepReports(taskId: string): StepReportRecord[];
   /** Newest first. */
   listTaskEvents(taskId: string, limit: number): TaskEventRecord[];
+  /** Every event of these kinds, newest first. */
+  listTaskEventsOfKinds(taskId: string, kinds: readonly string[]): TaskEventRecord[];
   hasTask(taskId: string): boolean;
   /** Writes buffered events now (reads of aggregates call it first). */
   flushPendingEvents(): void;

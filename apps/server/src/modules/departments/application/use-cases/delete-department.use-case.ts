@@ -39,6 +39,13 @@ export class DeleteDepartmentUseCase {
         { code: 'DEPARTMENT_HAS_TASKS' },
       );
     }
+    const handoffStepCount = this.workload.countHandoffStepsTargeting(departmentId);
+    if (handoffStepCount > 0) {
+      throw new ConflictError(
+        `Phòng "${department.name}" đang nhận bàn giao từ ${handoffStepCount} bước quy trình. Sửa các bước đó trước.`,
+        { code: 'DEPARTMENT_RECEIVES_HANDOFFS' },
+      );
+    }
     this.departmentRepository.deleteDepartment(departmentId);
   }
 }

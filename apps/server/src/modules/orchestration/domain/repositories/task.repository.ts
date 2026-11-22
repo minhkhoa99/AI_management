@@ -11,12 +11,16 @@ export interface TaskRepository {
   deleteTask(taskId: string): void;
   /** Queued tasks of enabled departments whose back-off has passed: priority, then oldest. */
   listRunnableTaskIds(nowIso: string): string[];
-  /** Subtasks of a task, oldest first. */
+  /** Subtasks of a task, oldest first (handoff children of other departments included). */
   listSubtaskIds(parentTaskId: string): string[];
+  /** Subtasks the task's agent split off: those of the parent's own department, oldest first. */
+  listSplitSubtaskIds(parentTaskId: string): string[];
   /** Tasks waiting for subtasks of which none is left unfinished. */
   listParentIdsReadyToResume(): string[];
   /** Queued tasks assigned to the agent, whatever their back-off. */
   listQueuedTaskIdsAssignedTo(agentId: string): string[];
   /** Queued tasks whose next turn is a superior's review (the reviewer is not stored). */
   listQueuedTaskIdsWaitingForReview(): string[];
+  /** Repository of the department's newest task that has one (its knowledge), or null. */
+  findLatestRepositoryRoot(departmentId: string): string | null;
 }

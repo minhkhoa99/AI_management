@@ -48,7 +48,7 @@ export class EngineTestRunRegistry {
       (testRun) => testRun.targetKey === targetKey && !testRun.finished,
     );
     if (running) {
-      throw new ConflictError('Đang có một lần chạy thử cho mục này. Chờ xong hoặc huỷ trước.', {
+      throw new ConflictError('Đang có một lượt chạy cho mục này. Chờ xong hoặc huỷ trước.', {
         code: 'TEST_RUN_IN_PROGRESS',
       });
     }

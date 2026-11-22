@@ -1,9 +1,12 @@
 import {
   type CreateWorkflowRequest,
+  type DraftWorkflowStepsRequest,
+  type ProposeWorkflowOptimizationRequest,
   type ReplaceWorkflowStepsRequest,
   type UpdateWorkflowRequest,
   type UpdateWorkflowRulesRequest,
   workflowListSchema,
+  workflowProposalSchema,
   workflowSchema,
   workflowTemplateListSchema,
 } from '@aiteam/contracts';
@@ -70,4 +73,24 @@ export const replaceWorkflowSteps = (workflowId: string, request: ReplaceWorkflo
 export const updateWorkflowRules = (workflowId: string, request: UpdateWorkflowRulesRequest) =>
   refreshAfterWrite(
     sendApiJson('PATCH', `/api/workflows/${encodeId(workflowId)}/rules`, request, workflowSchema),
+  );
+
+// AI proposals are never saved by the server: nothing to refresh.
+export const draftWorkflowSteps = (departmentId: string, request: DraftWorkflowStepsRequest) =>
+  sendApiJson(
+    'POST',
+    `/api/departments/${encodeId(departmentId)}/workflow-drafts`,
+    request,
+    workflowProposalSchema,
+  );
+
+export const proposeWorkflowOptimization = (
+  workflowId: string,
+  request: ProposeWorkflowOptimizationRequest,
+) =>
+  sendApiJson(
+    'POST',
+    `/api/workflows/${encodeId(workflowId)}/optimization-proposals`,
+    request,
+    workflowProposalSchema,
   );

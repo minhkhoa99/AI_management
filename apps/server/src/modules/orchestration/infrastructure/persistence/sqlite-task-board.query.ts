@@ -38,6 +38,7 @@ interface TaskSummaryRow {
   attachment_count: number;
   parent_id: string | null;
   parent_sequence_number: number | null;
+  parent_department_id: string | null;
 }
 
 interface TaskAgentRow {
@@ -57,7 +58,8 @@ const TASK_SUMMARY_SELECT = `
          w.id AS workflow_id, w.name AS workflow_name,
          s.id AS step_id, s.name AS step_name, s.gate AS step_gate,
          (SELECT COUNT(*) FROM task_attachments ta WHERE ta.task_id = t.id) AS attachment_count,
-         p.id AS parent_id, p.sequence_number AS parent_sequence_number
+         p.id AS parent_id, p.sequence_number AS parent_sequence_number,
+         p.department_id AS parent_department_id
   FROM tasks t
   JOIN departments d ON d.id = t.department_id
   LEFT JOIN agents a ON a.id = t.assignee_agent_id
@@ -193,9 +195,15 @@ function toTaskSummary(row: TaskSummaryRow): TaskSummary {
     statusNote: row.status_note,
     attachmentCount: Number(row.attachment_count),
     parentTask:
-      row.parent_id === null || row.parent_sequence_number === null
+      row.parent_id === null ||
+      row.parent_sequence_number === null ||
+      row.parent_department_id === null
         ? null
-        : { id: row.parent_id, code: formatTaskCode(Number(row.parent_sequence_number)) },
+        : {
+            id: row.parent_id,
+            code: formatTaskCode(Number(row.parent_sequence_number)),
+            departmentId: row.parent_department_id,
+          },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

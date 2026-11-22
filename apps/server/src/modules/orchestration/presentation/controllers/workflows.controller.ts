@@ -2,7 +2,11 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put } from
 import {
   type CreateWorkflowRequest,
   createWorkflowRequestSchema,
+  type DraftWorkflowStepsRequest,
+  draftWorkflowStepsRequestSchema,
   entityIdSchema,
+  type ProposeWorkflowOptimizationRequest,
+  proposeWorkflowOptimizationRequestSchema,
   type ReplaceWorkflowStepsRequest,
   replaceWorkflowStepsRequestSchema,
   type SetDefaultWorkflowRequest,
@@ -12,14 +16,17 @@ import {
   type UpdateWorkflowRulesRequest,
   updateWorkflowRulesRequestSchema,
   type Workflow,
+  type WorkflowProposal,
   type WorkflowTemplate,
 } from '@aiteam/contracts';
 import { ZodRequestPipe } from '../../../../shared/validation/zod-request.pipe';
 import { CreateWorkflowUseCase } from '../../application/use-cases/create-workflow.use-case';
+import { DraftWorkflowStepsUseCase } from '../../application/use-cases/draft-workflow-steps.use-case';
 import { DeleteWorkflowUseCase } from '../../application/use-cases/delete-workflow.use-case';
 import { DuplicateWorkflowUseCase } from '../../application/use-cases/duplicate-workflow.use-case';
 import { ListWorkflowTemplatesUseCase } from '../../application/use-cases/list-workflow-templates.use-case';
 import { ListWorkflowsUseCase } from '../../application/use-cases/list-workflows.use-case';
+import { ProposeWorkflowOptimizationUseCase } from '../../application/use-cases/propose-workflow-optimization.use-case';
 import { ReplaceWorkflowStepsUseCase } from '../../application/use-cases/replace-workflow-steps.use-case';
 import { SetDefaultWorkflowUseCase } from '../../application/use-cases/set-default-workflow.use-case';
 import { UpdateWorkflowRulesUseCase } from '../../application/use-cases/update-workflow-rules.use-case';
@@ -40,6 +47,8 @@ export class WorkflowsController {
     private readonly deleteWorkflowUseCase: DeleteWorkflowUseCase,
     private readonly replaceWorkflowStepsUseCase: ReplaceWorkflowStepsUseCase,
     private readonly updateWorkflowRulesUseCase: UpdateWorkflowRulesUseCase,
+    private readonly draftWorkflowStepsUseCase: DraftWorkflowStepsUseCase,
+    private readonly proposeWorkflowOptimizationUseCase: ProposeWorkflowOptimizationUseCase,
   ) {}
 
   @Get('workflow-templates')
@@ -103,5 +112,25 @@ export class WorkflowsController {
     request: UpdateWorkflowRulesRequest,
   ): Workflow {
     return this.updateWorkflowRulesUseCase.updateWorkflowRules(workflowId, request);
+  }
+
+  /** AI proposals are never saved here: 200, the editor saves them through PUT steps. */
+  @Post('departments/:departmentId/workflow-drafts')
+  @HttpCode(200)
+  draftWorkflowSteps(
+    @Param('departmentId', departmentIdPipe) departmentId: string,
+    @Body(new ZodRequestPipe(draftWorkflowStepsRequestSchema)) request: DraftWorkflowStepsRequest,
+  ): Promise<WorkflowProposal> {
+    return this.draftWorkflowStepsUseCase.draftWorkflowSteps(departmentId, request);
+  }
+
+  @Post('workflows/:workflowId/optimization-proposals')
+  @HttpCode(200)
+  proposeWorkflowOptimization(
+    @Param('workflowId', workflowIdPipe) workflowId: string,
+    @Body(new ZodRequestPipe(proposeWorkflowOptimizationRequestSchema))
+    request: ProposeWorkflowOptimizationRequest,
+  ): Promise<WorkflowProposal> {
+    return this.proposeWorkflowOptimizationUseCase.proposeWorkflowOptimization(workflowId, request);
   }
 }

@@ -1,12 +1,21 @@
+import path from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
+import type { KnowledgeLessonSource } from '@aiteam/contracts';
+import { APP_LOGGER, type AppLogger } from '../../../../shared/logging/app-logger';
 import type { Task } from '../../domain/entities/task';
 import type { WorkflowStepState } from '../../domain/entities/workflow';
+import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
 import {
   WORKFLOW_REPOSITORY,
   type WorkflowRepository,
 } from '../../domain/repositories/workflow.repository';
 import { decideNextStep } from '../../domain/step-progression';
-import { TASK_EVENT_LOG, type TaskEventLog } from '../ports/task-execution.ports';
+import {
+  TASK_EVENT_LOG,
+  TASK_KNOWLEDGE,
+  type TaskEventLog,
+  type TaskKnowledge,
+} from '../ports/task-execution.ports';
 
 /** The steps a task follows, or null when it has no enforced workflow (free run). */
 export interface TaskRoute {
@@ -20,8 +29,11 @@ export interface TaskRoute {
 @Injectable()
 export class TaskProgression {
   constructor(
+    @Inject(TASK_REPOSITORY) private readonly taskRepository: TaskRepository,
     @Inject(WORKFLOW_REPOSITORY) private readonly workflowRepository: WorkflowRepository,
     @Inject(TASK_EVENT_LOG) private readonly eventLog: TaskEventLog,
+    @Inject(TASK_KNOWLEDGE) private readonly knowledge: TaskKnowledge,
+    @Inject(APP_LOGGER) private readonly logger: AppLogger,
   ) {}
 
   /** Steps and rules of the task's workflow; free run when absent, empty or not enforced. */
@@ -48,10 +60,27 @@ export class TaskProgression {
 
   /**
    * Applies the gate result to the task (the caller saves it). A free run simply succeeds or
-   * fails. `feedback` is handed to whoever works on the task next.
+   * fails. `feedback` is handed to whoever works on the task next. A task handed off by another
+   * department ends at its first failed gate: the verdict goes back to that department.
+   * With a `lessonSource`, the feedback of a failed gate is kept as a lesson of the repository.
    */
-  applyGateResult(task: Task, passed: boolean, feedback: string | null): void {
+  applyGateResult(
+    task: Task,
+    passed: boolean,
+    feedback: string | null,
+    lessonSource: KnowledgeLessonSource | null = null,
+  ): void {
+    if (!passed && lessonSource !== null && feedback !== null) {
+      this.recordLesson(task, lessonSource, feedback);
+    }
     const state = task.toState();
+    if (!passed && this.isHandedOff(task)) {
+      task.fail(feedback ?? 'Không đạt.');
+      this.recordOutcome(task, 'task_failed', feedback, state.currentStepId, {
+        reason: 'gate_rejected',
+      });
+      return;
+    }
     const route = this.resolveTaskRoute(state.workflowId);
     if (route === null || state.currentStepId === null) {
       if (passed) {
@@ -59,7 +88,12 @@ export class TaskProgression {
       } else {
         task.fail(feedback ?? 'Không đạt.');
       }
-      this.recordOutcome(task, passed ? 'task_succeeded' : 'task_failed', feedback);
+      this.recordOutcome(
+        task,
+        passed ? 'task_succeeded' : 'task_failed',
+        feedback,
+        state.currentStepId,
+      );
       return;
     }
 
@@ -70,12 +104,17 @@ export class TaskProgression {
       case 'advance':
         if (decision.nextStepId === null) {
           task.succeed();
-          this.recordOutcome(task, 'task_succeeded', null);
+          this.recordOutcome(task, 'task_succeeded', null, state.currentStepId);
         } else {
           // The next step may be someone else: an engine session is not carried over.
           task.forgetEngineSession(null);
           task.requeue({ stepId: decision.nextStepId, retriesUsed: 0 });
-          this.recordOutcome(task, 'step_passed', `Sang bước "${stepName(decision.nextStepId)}".`);
+          this.recordOutcome(
+            task,
+            'step_passed',
+            `Sang bước "${stepName(decision.nextStepId)}".`,
+            state.currentStepId,
+          );
         }
         return;
       case 'retry_step':
@@ -85,7 +124,7 @@ export class TaskProgression {
           retriesUsed: state.stepAttempt + 1,
           note: `Thử lại bước "${stepName(state.currentStepId)}" (lần ${state.stepAttempt + 1}).`,
         });
-        this.recordOutcome(task, 'step_retried', feedback);
+        this.recordOutcome(task, 'step_retried', feedback, state.currentStepId);
         return;
       case 'return_to_step':
         if (feedback !== null) task.addFeedback(feedback);
@@ -95,22 +134,60 @@ export class TaskProgression {
           retriesUsed: 0,
           note: `Quay lại bước "${stepName(decision.stepId)}".`,
         });
-        this.recordOutcome(task, 'step_returned', feedback);
+        this.recordOutcome(task, 'step_returned', feedback, state.currentStepId);
         return;
       case 'stop':
         task.fail(feedback === null ? decision.reason : `${decision.reason} ${feedback}`);
         // "Dừng và báo quản lý": the failure is on the board and in the task log.
-        this.recordOutcome(task, 'task_failed', decision.reason);
+        this.recordOutcome(task, 'task_failed', decision.reason, state.currentStepId);
         return;
     }
   }
 
-  private recordOutcome(task: Task, kind: string, detail: string | null): void {
+  /** Knowledge is extra: a lesson that cannot be saved is skipped (its text is never logged). */
+  recordLesson(task: Task, source: KnowledgeLessonSource, body: string): void {
+    const { repositoryRoot, workingDirectory } = task.toState();
+    if (repositoryRoot === null) return;
+    try {
+      this.knowledge.recordLesson({
+        projectKey: repositoryRoot,
+        departmentId: task.departmentId,
+        sourceTaskId: task.id,
+        source,
+        body,
+        agentDirectory: agentDirectoryOf(repositoryRoot, workingDirectory),
+      });
+    } catch (error) {
+      this.logger.warn({ err: error, taskId: task.id }, 'lesson not recorded');
+    }
+  }
+
+  private isHandedOff(task: Task): boolean {
+    if (task.parentTaskId === null) return false;
+    const parent = this.taskRepository.findTaskById(task.parentTaskId);
+    return parent !== undefined && parent.departmentId !== task.departmentId;
+  }
+
+  /** `stepId` is the step whose gate was evaluated (not the next one); null on a free run. */
+  private recordOutcome(
+    task: Task,
+    kind: string,
+    detail: string | null,
+    stepId: string | null,
+    extra: Record<string, unknown> = {},
+  ): void {
     this.eventLog.recordTaskEvent({
       taskId: task.id,
       agentId: task.assigneeAgentId,
       kind,
-      payload: { detail },
+      payload: { detail, stepId, ...extra },
     });
   }
+}
+
+/** The agent's folder relative to the repository root, as the worktree places it; null outside. */
+function agentDirectoryOf(repositoryRoot: string, workingDirectory: string | null): string | null {
+  if (workingDirectory === null) return null;
+  const relative = path.relative(repositoryRoot, workingDirectory);
+  return relative.startsWith('..') || path.isAbsolute(relative) ? null : relative;
 }

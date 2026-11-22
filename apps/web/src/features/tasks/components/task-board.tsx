@@ -4,6 +4,7 @@ import { AgentAvatar } from '../../organization/components/agent-identity';
 import { ROLE_LABELS } from '../../organization/organization-labels';
 import {
   BOARD_COLUMN_PRESENTATION,
+  describeParentTask,
   PRIORITY_PRESENTATION,
   shortenDirectory,
   STATUS_NOTES,
@@ -128,7 +129,7 @@ function TaskCard({
       <div className={styles.cardChips}>
         {task.parentTask !== null && (
           <span className={`${styles.goalChip} ${styles.subtaskChip}`}>
-            Task con của {task.parentTask.code}
+            {describeParentTask(task, task.parentTask)}
           </span>
         )}
         {task.workingDirectory !== null && (

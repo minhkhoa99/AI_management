@@ -16,7 +16,11 @@ import {
 import { TASK_REPOSITORY, type TaskRepository } from '../../domain/repositories/task.repository';
 import { ROLE_LABELS_FOR_PROMPTS } from '../../domain/role-labels';
 import { chooseStepAgent } from '../../domain/step-assignee';
-import { buildStepPrompt, type StepPromptInput } from '../../domain/step-prompt';
+import {
+  buildStepPrompt,
+  type StepKnowledge,
+  type StepPromptInput,
+} from '../../domain/step-prompt';
 import {
   AGENT_RUN_PREPARER,
   STAFF_DIRECTORY,
@@ -32,10 +36,12 @@ import {
   type TaskWorkspace,
 } from '../ports/task-execution.ports';
 import { ApprovalRequests } from './approval-requests';
+import { DepartmentHandoff } from './department-handoff';
 import { FinishTaskTurnUseCase } from './finish-task-turn.use-case';
 import { SessionEventRecorder } from './session-event-recorder';
 import { StepReviewLauncher } from './step-review-launcher';
 import { TaskProgression } from './task-progression';
+import { TaskKnowledgeBriefer } from './task-knowledge-briefer';
 import { TaskSplitter } from './task-splitter';
 import { TaskRunRegistry } from './task-run-registry';
 
@@ -70,6 +76,8 @@ export class StartTaskTurnUseCase {
     private readonly finishTaskTurnUseCase: FinishTaskTurnUseCase,
     private readonly taskSplitter: TaskSplitter,
     private readonly reviewLauncher: StepReviewLauncher,
+    private readonly departmentHandoff: DepartmentHandoff,
+    private readonly knowledgeBriefer: TaskKnowledgeBriefer,
   ) {}
 
   /** Never rejects: whatever goes wrong fails this task only. */
@@ -107,6 +115,10 @@ export class StartTaskTurnUseCase {
 
     if (step?.ownerRole === 'user') {
       this.askUserForStep(task, step);
+      return;
+    }
+    if (step?.ownerRole === 'department') {
+      this.departmentHandoff.handOffStep(task, step);
       return;
     }
 
@@ -175,9 +187,18 @@ export class StartTaskTurnUseCase {
       this.runRegistry.releaseRun(taskId);
       return;
     }
-    current.rememberWorktree(workspace.worktreePath, workspace.baseSha);
+    current.rememberWorktree(workspace.worktreePath, workspace.baseSha, workspace.repositoryRoot);
     this.taskRepository.updateTask(current);
     this.runRegistry.rememberWorkDirectory(taskId, workspace.agentDirectory);
+    const knowledge = await this.knowledgeBriefer.prepareTurnKnowledge({
+      taskId,
+      title: state.title,
+      description: state.description,
+      stepName: step?.name ?? null,
+      feedback,
+      provider: snapshot.provider,
+      workspace,
+    });
     if (this.runRegistry.stopReasonOf(taskId) !== null) {
       // Deleted or reconfigured while the worktree was being prepared.
       await this.finishTaskTurnUseCase.finishTaskTurn(taskId, { kind: 'cancelled' });
@@ -189,6 +210,9 @@ export class StartTaskTurnUseCase {
       qaDocumentPaths: workspace.qaDocumentPaths,
       skills,
       skillManifestPaths: workspace.skillManifestPaths,
+      knowledge,
+      // The engine settings are the ceiling; a Custom API agent cannot browse.
+      canUseNetwork: prepared.permissions.networkAccess && snapshot.provider !== 'custom_api',
     });
     this.launchSession(
       current,
@@ -275,6 +299,7 @@ export class StartTaskTurnUseCase {
         stepName: step?.name ?? 'Thực hiện task',
         agentName: snapshot.name,
         resumed: resumeSessionRef !== null,
+        stepId: step?.id ?? null,
       },
     });
     const sessionId = this.sessionSupervisor.startSupervisedSession({
@@ -316,6 +341,8 @@ export class StartTaskTurnUseCase {
       qaDocumentPaths: string[];
       skills: readonly AgentSkillFolder[];
       skillManifestPaths: ReadonlyMap<string, string>;
+      knowledge: StepKnowledge | null;
+      canUseNetwork: boolean;
     },
   ): string {
     const state = task.toState();
@@ -359,8 +386,14 @@ export class StartTaskTurnUseCase {
       subtaskOf:
         parent === undefined
           ? null
-          : { taskCode: formatTaskCode(parent.sequenceNumber), title: parent.title },
+          : {
+              taskCode: formatTaskCode(parent.sequenceNumber),
+              title: parent.title,
+              handedOff: parent.departmentId !== state.departmentId,
+            },
       canEditWorkspace: snapshot.accessLevel === 'edit_workspace',
+      knowledge: extras.knowledge,
+      canUseNetwork: extras.canUseNetwork,
     });
   }
 

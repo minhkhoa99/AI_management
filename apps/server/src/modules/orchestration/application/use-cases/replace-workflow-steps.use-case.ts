@@ -7,6 +7,10 @@ import {
 import { ConflictError } from '../../../../shared/errors/app-error';
 import { ID_GENERATOR, type IdGenerator } from '../../../../shared/identifiers/id-generator';
 import {
+  DEPARTMENT_REPOSITORY,
+  type DepartmentRepository,
+} from '../../../departments/domain/repositories/department.repository';
+import {
   WORKFLOW_TASK_USAGE,
   type WorkflowTaskUsage,
 } from '../../domain/repositories/workflow-task-usage.repository';
@@ -14,7 +18,7 @@ import {
   WORKFLOW_REPOSITORY,
   type WorkflowRepository,
 } from '../../domain/repositories/workflow.repository';
-import { requireWorkflow } from './workflow-lookup';
+import { assertHandoffTargetsExist, requireWorkflow } from './workflow-lookup';
 import { WorkflowPresenter } from './workflow-presenter';
 
 /** Saves the whole chain at once ("Lưu quy trình"); a step with unfinished tasks cannot go. */
@@ -22,6 +26,7 @@ import { WorkflowPresenter } from './workflow-presenter';
 export class ReplaceWorkflowStepsUseCase {
   constructor(
     @Inject(WORKFLOW_REPOSITORY) private readonly workflowRepository: WorkflowRepository,
+    @Inject(DEPARTMENT_REPOSITORY) private readonly departmentRepository: DepartmentRepository,
     @Inject(WORKFLOW_TASK_USAGE) private readonly taskUsage: WorkflowTaskUsage,
     @Inject(TRANSACTION_RUNNER) private readonly transactionRunner: TransactionRunner,
     @Inject(ID_GENERATOR) private readonly idGenerator: IdGenerator,
@@ -39,6 +44,7 @@ export class ReplaceWorkflowStepsUseCase {
           { code: 'WORKFLOW_STEP_IN_USE' },
         );
       }
+      assertHandoffTargetsExist(this.departmentRepository, target.steps);
       this.workflowRepository.updateWorkflow(target);
       return target;
     });

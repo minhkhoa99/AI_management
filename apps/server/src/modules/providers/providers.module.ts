@@ -7,7 +7,10 @@ import {
 } from '../../shared/runtime/local-engine-adapters-override';
 import { AgentsModule } from '../agents/agents.module';
 import { AGENT_ENGINE_RESOLVER } from '../orchestration/application/ports/agent-engine.port';
-import { AGENT_RUN_PREPARER } from '../orchestration/application/ports/task-execution.ports';
+import {
+  AGENT_RUN_PREPARER,
+  ONE_SHOT_AGENT_RUNNER,
+} from '../orchestration/application/ports/task-execution.ports';
 import { ENGINE_QUOTA_GATEWAY } from '../orchestration/application/ports/engine-quota.port';
 import {
   ENGINE_QUOTA_READERS,
@@ -18,6 +21,7 @@ import { CliAntigravityQuotaReader } from './infrastructure/adapters/quota/cli-a
 import { CliClaudeQuotaReader } from './infrastructure/adapters/quota/cli-claude-quota.reader';
 import { CliCodexQuotaReader } from './infrastructure/adapters/quota/cli-codex-quota.reader';
 import { EngineQuotaController } from './presentation/controllers/engine-quota.controller';
+import { AskAgentOnceUseCase } from './application/use-cases/ask-agent-once.use-case';
 import { PrepareAgentRunUseCase } from './application/use-cases/prepare-agent-run.use-case';
 import { EngineTestRunRegistry } from './application/engine-test-run-registry';
 import { ANTIGRAVITY_MODEL_CATALOG } from './application/ports/antigravity-model-catalog.port';
@@ -168,8 +172,9 @@ import { ProviderConnectionsController } from './presentation/controllers/provid
     CancelEngineTestRunUseCase,
     WatchEngineTestRunUseCase,
     { provide: AGENT_RUN_PREPARER, useClass: PrepareAgentRunUseCase },
+    { provide: ONE_SHOT_AGENT_RUNNER, useClass: AskAgentOnceUseCase },
   ],
-  // Orchestration starts task sessions through these.
-  exports: [AGENT_ENGINE_RESOLVER, AGENT_RUN_PREPARER, ENGINE_QUOTA_GATEWAY],
+  // Orchestration starts task sessions (and one-shot AI questions) through these.
+  exports: [AGENT_ENGINE_RESOLVER, AGENT_RUN_PREPARER, ENGINE_QUOTA_GATEWAY, ONE_SHOT_AGENT_RUNNER],
 })
 export class ProvidersModule {}

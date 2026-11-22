@@ -33,6 +33,7 @@ import { TracingModule } from '../tracing/tracing.module';
 import { ApprovalPresenter } from './application/use-cases/approval-presenter';
 import { ApprovalRequests } from './application/use-cases/approval-requests';
 import { AutoDelegateByWorkloadUseCase } from './application/use-cases/auto-delegate-task.use-case';
+import { DepartmentHandoff } from './application/use-cases/department-handoff';
 import { DecideApprovalUseCase } from './application/use-cases/decide-approval.use-case';
 import { DelegateTaskToSubordinateUseCase } from './application/use-cases/delegate-task.use-case';
 import { FinishTaskTurnUseCase } from './application/use-cases/finish-task-turn.use-case';
@@ -44,6 +45,7 @@ import { SessionEventRecorder } from './application/use-cases/session-event-reco
 import { StartTaskTurnUseCase } from './application/use-cases/start-task-turn.use-case';
 import { ResumeSplitTasksUseCase } from './application/use-cases/resume-split-tasks.use-case';
 import { StepReviewLauncher } from './application/use-cases/step-review-launcher';
+import { TaskKnowledgeBriefer } from './application/use-cases/task-knowledge-briefer';
 import { QuotaWaitPlanner } from './application/use-cases/quota-wait-planner';
 import { TaskCheckpoints } from './application/use-cases/task-checkpoints';
 import { TaskHandover } from './application/use-cases/task-handover';
@@ -54,6 +56,7 @@ import { TaskRunRegistry } from './application/use-cases/task-run-registry';
 import {
   AGENT_SKILL_SOURCE,
   STAFF_DIRECTORY,
+  TASK_KNOWLEDGE,
   TASK_WORKSPACE,
   TEST_COMMAND_RUNNER,
 } from './application/ports/task-execution.ports';
@@ -124,6 +127,13 @@ import { SqliteTaskRecoveryRepository } from './infrastructure/persistence/sqlit
 import { SqliteWorkflowTaskUsage } from './infrastructure/persistence/sqlite-workflow-task-usage';
 import { SqliteWorkflowRepository } from './infrastructure/persistence/sqlite-workflow.repository';
 import { WorkflowsController } from './presentation/controllers/workflows.controller';
+import { WORKFLOW_RUN_HISTORY_QUERY } from './application/ports/workflow-run-history.query';
+import { DraftWorkflowStepsUseCase } from './application/use-cases/draft-workflow-steps.use-case';
+import { ProposeWorkflowOptimizationUseCase } from './application/use-cases/propose-workflow-optimization.use-case';
+import { WorkflowProposalAuthor } from './application/use-cases/workflow-proposal-author';
+import { SqliteWorkflowRunHistoryQuery } from './infrastructure/persistence/sqlite-workflow-run-history.query';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { TaskKnowledgeLibrary } from '../knowledge/application/use-cases/task-knowledge-library';
 
 /**
  * Tasks, delegation, workflows, step gates, approvals and the task scheduler (phase 3).
@@ -132,7 +142,14 @@ import { WorkflowsController } from './presentation/controllers/workflows.contro
 import { AgentSkillLibrary } from '../skills/application/use-cases/agent-skill.use-cases';
 import { SkillsModule } from '../skills/skills.module';
 @Module({
-  imports: [DepartmentsModule, AgentsModule, ProvidersModule, TracingModule, SkillsModule],
+  imports: [
+    DepartmentsModule,
+    AgentsModule,
+    ProvidersModule,
+    TracingModule,
+    SkillsModule,
+    KnowledgeModule,
+  ],
   controllers: [
     WorkflowsController,
     TasksController,
@@ -147,6 +164,7 @@ import { SkillsModule } from '../skills/skills.module';
     { provide: WORKFLOW_TASK_USAGE, useClass: SqliteWorkflowTaskUsage },
     { provide: TASK_REPOSITORY, useClass: SqliteTaskRepository },
     { provide: AGENT_SKILL_SOURCE, useExisting: AgentSkillLibrary },
+    { provide: TASK_KNOWLEDGE, useExisting: TaskKnowledgeLibrary },
     { provide: TASK_ATTACHMENT_REPOSITORY, useClass: SqliteTaskAttachmentRepository },
     { provide: WORKSPACE_SETTINGS_REPOSITORY, useClass: SqliteWorkspaceSettingsRepository },
     { provide: TASK_BOARD_QUERY, useClass: SqliteTaskBoardQuery },
@@ -174,6 +192,10 @@ import { SkillsModule } from '../skills/skills.module';
     DeleteWorkflowUseCase,
     ReplaceWorkflowStepsUseCase,
     UpdateWorkflowRulesUseCase,
+    { provide: WORKFLOW_RUN_HISTORY_QUERY, useClass: SqliteWorkflowRunHistoryQuery },
+    WorkflowProposalAuthor,
+    DraftWorkflowStepsUseCase,
+    ProposeWorkflowOptimizationUseCase,
     WorkingDirectoryPolicy,
     TaskPlacementPolicy,
     ListTasksUseCase,
@@ -198,7 +220,9 @@ import { SkillsModule } from '../skills/skills.module';
     TaskHandover,
     SessionEventRecorder,
     StepReviewLauncher,
+    TaskKnowledgeBriefer,
     TaskSplitter,
+    DepartmentHandoff,
     ResumeSplitTasksUseCase,
     FinishTaskTurnUseCase,
     StartTaskTurnUseCase,

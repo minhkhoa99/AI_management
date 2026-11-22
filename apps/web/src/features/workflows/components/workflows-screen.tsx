@@ -58,6 +58,7 @@ export function WorkflowsScreen() {
         <DepartmentWorkflows
           key={selectedDepartment.id}
           department={selectedDepartment}
+          departments={departmentList}
           requestedWorkflowId={searchParams.get('workflow')}
           onSelectWorkflow={(workflowId) => navigateTo(selectedDepartment.id, workflowId)}
         />
@@ -70,10 +71,12 @@ type WorkflowPanel = 'none' | 'create' | 'edit';
 
 function DepartmentWorkflows({
   department,
+  departments,
   requestedWorkflowId,
   onSelectWorkflow,
 }: {
   department: Department;
+  departments: readonly Department[];
   requestedWorkflowId: string | null;
   onSelectWorkflow: (workflowId: string) => void;
 }) {
@@ -153,6 +156,7 @@ function DepartmentWorkflows({
           key={selectedWorkflow.id}
           workflow={selectedWorkflow}
           departmentName={department.name}
+          departments={departments}
           departmentAgents={agents.status === 'success' ? agents.result : []}
           templates={templates.status === 'success' ? templates.result : []}
           unsavedSteps={unsavedSteps[selectedWorkflow.id]}

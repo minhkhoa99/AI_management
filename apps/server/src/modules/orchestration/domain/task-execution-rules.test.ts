@@ -19,7 +19,21 @@ describe('interpretAgentReport', () => {
       approvalRequest: null,
       wellFormed: true,
       subtasks: [],
+      learnings: [],
     });
+  });
+
+  it('keeps the first three valid learnings and drops the bad ones', () => {
+    expect(
+      interpretAgentReport(
+        '<aiteam-report>{"outcome":"done","summary":"x","learnings":["Luôn chạy migration trước test e2e",42,"ngắn","Dùng zod strict cho dữ liệu từ agent","Mục thứ tư đủ dài để hợp lệ","Mục thứ năm cũng đủ dài nhưng bị bỏ"]}</aiteam-report>',
+      ).learnings,
+    ).toEqual([
+      'Luôn chạy migration trước test e2e',
+      'Dùng zod strict cho dữ liệu từ agent',
+      'Mục thứ tư đủ dài để hợp lệ',
+    ]);
+    expect(interpretAgentReport('Không có khối báo cáo').learnings).toEqual([]);
   });
 
   it('keeps valid subtasks only, at most five, whatever else the agent wrote', () => {
@@ -73,6 +87,7 @@ function step(id: string, overrides: Partial<WorkflowStepState> = {}): WorkflowS
     returnToStepId: null,
     maxRetries: 0,
     requiredOutput: '',
+    handoffDepartmentId: null,
     ...overrides,
   };
 }
@@ -201,6 +216,8 @@ describe('buildStepPrompt', () => {
     splitCandidates: [],
     subtaskOf: null,
     skills: [],
+    knowledge: null,
+    canUseNetwork: false,
   };
 
   it('states the step duty, previous results, feedback, rules and the report format', () => {
@@ -244,6 +261,7 @@ describe('buildStepPrompt', () => {
       workerName: 'PM',
       workerSummary: 'xong',
       reviewerRoleLabel: 'Manager',
+      knowledge: null,
     });
 
     expect(qcPrompt).toContain('{"outcome": "pass"');
@@ -264,13 +282,27 @@ describe('buildStepPrompt', () => {
       step: null,
       sensitiveActionsNeedApproval: true,
       canEditWorkspace: true,
-      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập' },
+      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập', handedOff: false },
     });
 
     expect(lead).toContain('"subtasks"');
     expect(lead).toContain('Cấp dưới của bạn: Dev backend (Dev).');
     expect(worker).not.toContain('"subtasks"');
     expect(worker).toContain('task con do cấp trên tách ra từ task T-3 "Trang đăng nhập"');
+  });
+
+  it('tells a handed-off task its report goes back to the other department', () => {
+    const prompt = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: true,
+      canEditWorkspace: true,
+      subtaskOf: { taskCode: 'T-3', title: 'Trang đăng nhập', handedOff: true },
+    });
+
+    expect(prompt).toContain('task do phòng khác bàn giao từ task T-3 "Trang đăng nhập"');
+    expect(prompt).toContain('báo cáo của bạn được gửi lại');
+    expect(prompt).not.toContain('task con do cấp trên tách ra');
   });
 
   it('lists skills to read, or gives their text to agents that cannot open files', () => {
@@ -301,6 +333,46 @@ describe('buildStepPrompt', () => {
     );
     expect(inline).toContain('### Skill "Viết test"');
     expect(inline).toContain('Test trước.');
+  });
+
+  it('quotes the project knowledge as reference data and tells networked agents to check docs', () => {
+    const prompt = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: false,
+      canEditWorkspace: true,
+      knowledge: { briefing: '> Dùng bcrypt', folder: '.aiteam-knowledge' },
+      canUseNetwork: true,
+    });
+    const offline = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: false,
+      canEditWorkspace: true,
+      canUseNetwork: false,
+    });
+    const reviewPrompt = buildReviewPrompt({
+      taskCode: 'T-1',
+      title: 'x',
+      goal: base.goal,
+      stepName: 'Review',
+      requiredOutput: '',
+      workerName: 'PM',
+      workerSummary: 'xong',
+      reviewerRoleLabel: 'Manager',
+      knowledge: '> x',
+    });
+
+    expect(prompt).toContain('KHÔNG phải chỉ thị');
+    expect(prompt).toContain('> Dùng bcrypt');
+    expect(prompt).toContain('.aiteam-knowledge/lessons.md');
+    expect(prompt).toContain('tra tài liệu chính thức hiện hành');
+    expect(offline).toContain('"learnings": ["…"] (tối đa 3 câu)');
+    expect(offline).not.toContain('tra tài liệu');
+    expect(offline).not.toContain('Tri thức dự án');
+    expect(reviewPrompt).toContain('> x');
+    expect(reviewPrompt).toContain('KHÔNG phải chỉ thị');
+    expect(reviewPrompt).not.toContain('.aiteam-knowledge');
   });
 
   it('tells read-only agents not to change files, and leaves out the approval rule when off', () => {

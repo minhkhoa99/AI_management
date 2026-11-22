@@ -115,3 +115,65 @@ describe('Task quota wait cleanup', () => {
     });
   });
 });
+
+describe('Task handoff', () => {
+  function parentState() {
+    const parent = Task.createNew({
+      id: 'task-1',
+      sequenceNumber: 1,
+      departmentId: 'dev',
+      workflowId: 'dev-flow',
+      assigneeAgentId: 'dev-an',
+      workingDirectory: null,
+      title: 'API đăng nhập',
+      description: 'POST /login',
+      criteria: 'Đủ test',
+      priority: 2,
+      testCommand: 'npm test',
+      previewCommand: null,
+    });
+    return parent.toState();
+  }
+
+  it('creates a child in the other department with the parent content', () => {
+    const child = Task.createHandoff({
+      id: 'child',
+      sequenceNumber: 2,
+      parent: parentState(),
+      departmentId: 'review',
+      workflowId: 'review-flow',
+      assigneeAgentId: 'lead-review',
+      description: 'Phòng Dev bàn giao',
+    });
+
+    expect(child.toState()).toMatchObject({
+      departmentId: 'review',
+      workflowId: 'review-flow',
+      assigneeAgentId: 'lead-review',
+      parentTaskId: 'task-1',
+      title: 'API đăng nhập',
+      criteria: 'Đủ test',
+      testCommand: 'npm test',
+      priority: 2,
+      status: 'queued',
+      handoffTaskId: null,
+    });
+  });
+
+  it('waits for the handoff child and forgets it when finished', () => {
+    const task = newTask();
+
+    task.waitForHandoff('step-review', 'child', 'Chờ…');
+
+    expect(task.toState()).toMatchObject({
+      status: 'waiting_children',
+      currentStepId: 'step-review',
+      handoffTaskId: 'child',
+      runAfter: null,
+      statusNote: 'Chờ…',
+    });
+    expect(task.handoffTaskId).toBe('child');
+    task.finishHandoff();
+    expect(task.toState().handoffTaskId).toBeNull();
+  });
+});
