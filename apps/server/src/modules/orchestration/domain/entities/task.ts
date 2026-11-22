@@ -54,6 +54,8 @@ export interface TaskState {
   reviewPending: boolean;
   /** The child task of the current handoff round, while the step is with another department. */
   handoffTaskId: string | null;
+  /** Root of the repository the worktree belongs to: the knowledge key (index, lessons). */
+  repositoryRoot: string | null;
 }
 
 export interface TaskContent {
@@ -111,6 +113,7 @@ export class Task {
       parentTaskId: null,
       reviewPending: false,
       handoffTaskId: null,
+      repositoryRoot: null,
     });
   }
 
@@ -265,9 +268,10 @@ export class Task {
 
   // ---- Execution ----------------------------------------------------------------------------
 
-  rememberWorktree(worktreePath: string, baseSha: string | null): void {
+  rememberWorktree(worktreePath: string, baseSha: string | null, repositoryRoot: string): void {
     this.state.worktreePath = worktreePath;
     this.state.baseSha ??= baseSha;
+    this.state.repositoryRoot = repositoryRoot;
   }
 
   /** Stopped by the user: the scheduler leaves it alone, the engine session is kept. */

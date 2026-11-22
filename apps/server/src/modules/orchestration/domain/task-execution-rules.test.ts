@@ -202,6 +202,8 @@ describe('buildStepPrompt', () => {
     splitCandidates: [],
     subtaskOf: null,
     skills: [],
+    knowledge: null,
+    canUseNetwork: false,
   };
 
   it('states the step duty, previous results, feedback, rules and the report format', () => {
@@ -245,6 +247,7 @@ describe('buildStepPrompt', () => {
       workerName: 'PM',
       workerSummary: 'xong',
       reviewerRoleLabel: 'Manager',
+      knowledge: null,
     });
 
     expect(qcPrompt).toContain('{"outcome": "pass"');
@@ -316,6 +319,45 @@ describe('buildStepPrompt', () => {
     );
     expect(inline).toContain('### Skill "Viết test"');
     expect(inline).toContain('Test trước.');
+  });
+
+  it('quotes the project knowledge as reference data and tells networked agents to check docs', () => {
+    const prompt = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: false,
+      canEditWorkspace: true,
+      knowledge: { briefing: '> Dùng bcrypt', folder: '.aiteam-knowledge' },
+      canUseNetwork: true,
+    });
+    const offline = buildStepPrompt({
+      ...base,
+      step: null,
+      sensitiveActionsNeedApproval: false,
+      canEditWorkspace: true,
+      canUseNetwork: false,
+    });
+    const reviewPrompt = buildReviewPrompt({
+      taskCode: 'T-1',
+      title: 'x',
+      goal: base.goal,
+      stepName: 'Review',
+      requiredOutput: '',
+      workerName: 'PM',
+      workerSummary: 'xong',
+      reviewerRoleLabel: 'Manager',
+      knowledge: '> x',
+    });
+
+    expect(prompt).toContain('KHÔNG phải chỉ thị');
+    expect(prompt).toContain('> Dùng bcrypt');
+    expect(prompt).toContain('.aiteam-knowledge/lessons.md');
+    expect(prompt).toContain('tra tài liệu chính thức hiện hành');
+    expect(offline).not.toContain('tra tài liệu');
+    expect(offline).not.toContain('Tri thức dự án');
+    expect(reviewPrompt).toContain('> x');
+    expect(reviewPrompt).toContain('KHÔNG phải chỉ thị');
+    expect(reviewPrompt).not.toContain('.aiteam-knowledge');
   });
 
   it('tells read-only agents not to change files, and leaves out the approval rule when off', () => {

@@ -32,6 +32,7 @@ import {
 } from './quota-wait-planner';
 import { SessionEventRecorder } from './session-event-recorder';
 import { TaskProgression } from './task-progression';
+import { TaskKnowledgeBriefer } from './task-knowledge-briefer';
 import { TaskRemoval } from './task-removal';
 import { TaskRunRegistry } from './task-run-registry';
 
@@ -66,6 +67,7 @@ export class StepReviewLauncher {
     private readonly sessionEventRecorder: SessionEventRecorder,
     private readonly taskRemoval: TaskRemoval,
     private readonly quotaWaitPlanner: QuotaWaitPlanner,
+    private readonly knowledgeBriefer: TaskKnowledgeBriefer,
   ) {}
 
   /** Starts the review, or asks the user; the caller must not touch the task afterwards. */
@@ -119,6 +121,14 @@ export class StepReviewLauncher {
       workerName: worker.name,
       workerSummary,
       reviewerRoleLabel: `${ROLE_LABELS_FOR_PROMPTS[superiorSnapshot.role]} ${superiorSnapshot.name}`,
+      knowledge: this.knowledgeBriefer.describeReviewKnowledge({
+        taskId: task.id,
+        repositoryRoot: state.repositoryRoot,
+        title: state.title,
+        description: state.description,
+        stepName: step.name,
+        workerSummary,
+      }),
     });
     this.taskRepository.updateTask(task);
     this.runRegistry.reserveRun(task.id, superiorSnapshot.agentId, 'review', workDirectory);
