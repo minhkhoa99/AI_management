@@ -2,6 +2,7 @@
 
 import {
   AGENT_ROLES,
+  buildWorkflowExportDocument,
   listWorkflowStepProblems,
   STEP_FAILURE_ACTIONS,
   STEP_GATES,
@@ -12,6 +13,7 @@ import {
   type StepGate,
   type StepOwner,
   type Workflow,
+  type WorkflowProposal,
   type WorkflowStepProblem,
   type WorkflowTemplate,
 } from '@aiteam/contracts';
@@ -32,16 +34,32 @@ import {
   changeStepOwner,
   type EditableStep,
   editableStepsFromBlueprints,
+  editableStepsFromProposal,
   editableStepsOf,
   removeStep,
   swapSteps,
   toStepDrafts,
 } from '../workflow-step-drafts';
 import { replaceWorkflowSteps, updateWorkflowRules } from '../workflows-api';
+import { type WorkflowAiMode, WorkflowAiPanel } from './workflow-ai-panel';
 import styles from './workflows.module.css';
 
 const PLUS_ICON = 'M12 5v14M5 12h14';
 const ARROW_ICON = 'M4 12h14M13 6l6 6-6 6';
+
+/** Saves the workflow as `<name>.aiteam-workflow.json` (the saved version, built in the browser). */
+function downloadWorkflowExport(workflow: Workflow): void {
+  const json = JSON.stringify(buildWorkflowExportDocument(workflow), null, 2);
+  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${workflow.name}.aiteam-workflow.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+type ProposalNotes = Pick<WorkflowProposal, 'changes' | 'warnings'>;
+
 const RETRY_CHOICES = Array.from(
   { length: STEP_RETRY_LIMITS.max - STEP_RETRY_LIMITS.min + 1 },
   (_unused, offset) => STEP_RETRY_LIMITS.min + offset,
@@ -70,6 +88,9 @@ export function WorkflowEditor({
 }: WorkflowEditorProps) {
   const steps = unsavedSteps ?? editableStepsOf(workflow);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [aiMode, setAiMode] = useState<WorkflowAiMode | null>(null);
+  // What the last AI proposal changed and why; dropped once its steps are saved or discarded.
+  const [proposalNotes, setProposalNotes] = useState<ProposalNotes | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
   const problems = listWorkflowStepProblems(steps);
   const isDirty = unsavedSteps !== undefined;
@@ -89,10 +110,20 @@ export function WorkflowEditor({
     void performAction(
       () => replaceWorkflowSteps(workflow.id, { steps: toStepDrafts(steps) }),
       () => {
+        setProposalNotes(null);
         onStepsSavedOrDiscarded();
         return `Đã lưu ${workflow.name}.`;
       },
     );
+  const discardSteps = () => {
+    setProposalNotes(null);
+    onStepsSavedOrDiscarded();
+  };
+  const acceptProposal = (proposal: WorkflowProposal) => {
+    editSteps(editableStepsFromProposal(proposal), 0);
+    setProposalNotes({ changes: proposal.changes, warnings: proposal.warnings });
+    setAiMode(null);
+  };
 
   return (
     <>
@@ -111,16 +142,58 @@ export function WorkflowEditor({
               key={template.id}
               type="button"
               className={controlStyles.pillButton}
-              onClick={() => editSteps(editableStepsFromBlueprints(template.steps), 0)}
+              onClick={() => {
+                setProposalNotes(null);
+                editSteps(editableStepsFromBlueprints(template.steps), 0);
+              }}
             >
               {template.label}
             </button>
           ))}
         </div>
+        <div role="group" aria-label="AI và tệp JSON" className={styles.templatePills}>
+          <button
+            type="button"
+            className={controlStyles.pillButton}
+            aria-pressed={aiMode === 'draft'}
+            onClick={() => setAiMode('draft')}
+          >
+            AI soạn bước
+          </button>
+          <button
+            type="button"
+            className={controlStyles.pillButton}
+            aria-pressed={aiMode === 'optimize'}
+            onClick={() => setAiMode('optimize')}
+          >
+            AI tối ưu
+          </button>
+          <button
+            type="button"
+            className={controlStyles.pillButton}
+            disabled={isDirty}
+            title={isDirty ? 'Lưu hoặc bỏ thay đổi trước khi xuất' : undefined}
+            onClick={() => downloadWorkflowExport(workflow)}
+          >
+            Xuất JSON
+          </button>
+        </div>
         <span className={styles.templateHint}>
           Chọn mẫu sẽ thay các bước hiện tại. Sửa tiếp từng bước bên dưới rồi bấm Lưu quy trình.
         </span>
       </section>
+
+      {aiMode !== null && (
+        <WorkflowAiPanel
+          key={aiMode}
+          mode={aiMode}
+          departmentId={workflow.departmentId}
+          workflowId={workflow.id}
+          departmentAgents={departmentAgents}
+          onProposal={acceptProposal}
+          onClose={() => setAiMode(null)}
+        />
+      )}
 
       <section aria-label="Các bước của quy trình" className={styles.chainSection}>
         <div className={styles.chainHeader}>
@@ -145,7 +218,7 @@ export function WorkflowEditor({
               <button
                 type="button"
                 className={controlStyles.secondaryButton}
-                onClick={onStepsSavedOrDiscarded}
+                onClick={discardSteps}
               >
                 Bỏ thay đổi
               </button>
@@ -160,6 +233,7 @@ export function WorkflowEditor({
             </button>
           </div>
         </div>
+        {proposalNotes !== null && <ProposalNotesList notes={proposalNotes} />}
         <div className={styles.chainScroll}>
           <ol className={styles.chain}>
             {steps.map((step, index) => (
@@ -222,6 +296,34 @@ export function WorkflowEditor({
         <RulesPanel workflow={workflow} />
       </div>
     </>
+  );
+}
+
+/** What the AI proposal changed and why, plus its warnings; the steps are not saved yet. */
+function ProposalNotesList({ notes }: { notes: ProposalNotes }) {
+  return (
+    <div className={styles.proposalNotes}>
+      <p className={styles.proposalTitle}>
+        Đề xuất của AI (chưa lưu): xem lại các bước rồi bấm Lưu quy trình hoặc Bỏ thay đổi.
+      </p>
+      {notes.changes.length > 0 && (
+        <ul className={styles.proposalList}>
+          {notes.changes.map((change, index) => (
+            <li key={index}>
+              <strong>{change.title}</strong>
+              {change.reason !== '' && `: ${change.reason}`}
+            </li>
+          ))}
+        </ul>
+      )}
+      {notes.warnings.length > 0 && (
+        <ul className={styles.problemList}>
+          {notes.warnings.map((warning, index) => (
+            <li key={index}>{warning}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

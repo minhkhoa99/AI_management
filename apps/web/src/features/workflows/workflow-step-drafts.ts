@@ -3,6 +3,7 @@ import {
   type StepFailureAction,
   type StepOwner,
   type Workflow,
+  type WorkflowProposal,
   type WorkflowStepDraft,
 } from '@aiteam/contracts';
 
@@ -28,11 +29,21 @@ export function editableStepsOf(workflow: Workflow): EditableStep[] {
   }));
 }
 
-/** Template steps have no ids: saving them replaces the whole chain. */
+/**
+ * Template steps have no ids (saving them replaces the whole chain); AI proposals keep the ids of
+ * the steps they come from, so tasks on those steps stay where they are.
+ */
 export function editableStepsFromBlueprints(
-  blueprints: readonly Omit<WorkflowStepDraft, 'id'>[],
+  blueprints: readonly WorkflowStepDraft[],
 ): EditableStep[] {
   return blueprints.map((blueprint) => ({ ...blueprint, key: createStepKey() }));
+}
+
+/** The draft schema is strict: `fromStepIndex` only matters to the server. */
+export function editableStepsFromProposal(proposal: WorkflowProposal): EditableStep[] {
+  return editableStepsFromBlueprints(
+    proposal.steps.map(({ fromStepIndex: _fromStepIndex, ...draft }) => draft),
+  );
 }
 
 export function toStepDrafts(steps: readonly EditableStep[]): WorkflowStepDraft[] {

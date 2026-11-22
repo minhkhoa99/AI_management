@@ -1,10 +1,12 @@
 'use client';
 
-import { type FormEvent, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useState } from 'react';
 import {
   createWorkflowRequestSchema,
   updateWorkflowRequestSchema,
   type Workflow,
+  type WorkflowExportDocument,
+  workflowExportDocumentSchema,
   type WorkflowSource,
   type WorkflowTemplate,
   workflowTemplateIdSchema,
@@ -28,16 +30,44 @@ interface WorkflowFormPanelProps {
 
 const BLANK_SOURCE = 'blank';
 const COPY_SOURCE = 'copy';
+const IMPORT_SOURCE = 'import';
+const IMPORT_MAX_BYTES = 256 * 1024;
 
-function toWorkflowSource(choice: string, copyableWorkflowId: string | undefined): WorkflowSource {
+function toWorkflowSource(
+  choice: string,
+  copyableWorkflowId: string | undefined,
+  importedDocument: WorkflowExportDocument | null,
+): WorkflowSource {
   if (choice === COPY_SOURCE && copyableWorkflowId !== undefined) {
     return { kind: 'copy', workflowId: copyableWorkflowId };
+  }
+  if (choice === IMPORT_SOURCE && importedDocument !== null) {
+    return { kind: 'import', document: importedDocument };
   }
   const templateId = workflowTemplateIdSchema.safeParse(choice);
   return templateId.success ? { kind: 'template', templateId: templateId.data } : { kind: 'blank' };
 }
 
-/** Create (blank / template / copy) or rename a workflow. */
+/** Reads an exported workflow file; null with a message when it is not one. */
+function readWorkflowExport(
+  text: string,
+): { document: WorkflowExportDocument; problem: null } | { document: null; problem: string } {
+  if (text.length > IMPORT_MAX_BYTES) {
+    return { document: null, problem: 'Tệp quá lớn (tối đa 256 KB).' };
+  }
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { document: null, problem: 'Không đọc được JSON.' };
+  }
+  const parsed = workflowExportDocumentSchema.safeParse(json);
+  return parsed.success
+    ? { document: parsed.data, problem: null }
+    : { document: null, problem: 'Không phải tệp quy trình aiteam hợp lệ.' };
+}
+
+/** Create (blank / template / copy / imported JSON) or rename a workflow. */
 export function WorkflowFormPanel({
   departmentId,
   departmentName,
@@ -50,6 +80,9 @@ export function WorkflowFormPanel({
   const [name, setName] = useState(editedWorkflow?.name ?? '');
   const [description, setDescription] = useState(editedWorkflow?.description ?? '');
   const [sourceChoice, setSourceChoice] = useState(BLANK_SOURCE);
+  const [importText, setImportText] = useState('');
+  const [importedDocument, setImportedDocument] = useState<WorkflowExportDocument | null>(null);
+  const [importProblem, setImportProblem] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
   const isCreating = editedWorkflow === undefined;
@@ -57,14 +90,42 @@ export function WorkflowFormPanel({
   const reportInvalidName = (message: string | undefined) =>
     setNameError(message ?? 'Nhập tên cho quy trình.');
 
+  const refuseImport = (problem: string | null) => {
+    setImportedDocument(null);
+    setImportProblem(problem);
+  };
+
+  const acceptImportText = (text: string) => {
+    setImportText(text);
+    if (text.trim() === '') return refuseImport(null);
+    const { document: imported, problem } = readWorkflowExport(text);
+    setImportedDocument(imported);
+    setImportProblem(problem);
+    if (imported !== null) {
+      setName((current) => (current.trim() === '' ? imported.name : current));
+      setDescription((current) => (current.trim() === '' ? imported.description : current));
+    }
+  };
+
+  const acceptImportFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file === undefined) return;
+    if (file.size > IMPORT_MAX_BYTES) return refuseImport('Tệp quá lớn (tối đa 256 KB).');
+    void file.text().then(acceptImportText, () => refuseImport('Không đọc được tệp.'));
+  };
+
   const submitWorkflow = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     let saveWorkflow: () => Promise<Workflow>;
     if (editedWorkflow === undefined) {
+      if (sourceChoice === IMPORT_SOURCE && importedDocument === null) {
+        setImportProblem(importProblem ?? 'Chọn tệp hoặc dán JSON của quy trình.');
+        return;
+      }
       const parsed = createWorkflowRequestSchema.safeParse({
         name,
         description,
-        source: toWorkflowSource(sourceChoice, copyableWorkflow?.id),
+        source: toWorkflowSource(sourceChoice, copyableWorkflow?.id, importedDocument),
       });
       if (!parsed.success) return reportInvalidName(parsed.error.issues[0]?.message);
       saveWorkflow = () => createWorkflow(departmentId, parsed.data);
@@ -133,8 +194,42 @@ export function WorkflowFormPanel({
               {copyableWorkflow !== undefined && (
                 <option value={COPY_SOURCE}>Sao chép “{copyableWorkflow.name}”</option>
               )}
+              <option value={IMPORT_SOURCE}>Nhập từ JSON</option>
             </select>
           </label>
+        )}
+        {isCreating && sourceChoice === IMPORT_SOURCE && (
+          <>
+            <label className={controlStyles.field}>
+              Tệp quy trình (.aiteam-workflow.json, tối đa 256 KB)
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={acceptImportFile}
+                className={controlStyles.fieldInput}
+              />
+            </label>
+            <label className={controlStyles.field}>
+              Hoặc dán nội dung JSON
+              <textarea
+                value={importText}
+                rows={6}
+                onChange={(event) => acceptImportText(event.target.value)}
+                className={styles.textInput}
+                aria-invalid={importProblem !== null}
+              />
+            </label>
+            {importProblem !== null && (
+              <span role="alert" className={controlStyles.fieldError}>
+                {importProblem}
+              </span>
+            )}
+            {importedDocument !== null && (
+              <span role="status" className={styles.mutedText}>
+                Đã đọc “{importedDocument.name}”: {importedDocument.steps.length} bước.
+              </span>
+            )}
+          </>
         )}
         <StatusNotice outcome={outcome} />
         <div className={controlStyles.buttonRow}>

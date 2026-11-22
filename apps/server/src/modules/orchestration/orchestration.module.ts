@@ -124,6 +124,11 @@ import { SqliteTaskRecoveryRepository } from './infrastructure/persistence/sqlit
 import { SqliteWorkflowTaskUsage } from './infrastructure/persistence/sqlite-workflow-task-usage';
 import { SqliteWorkflowRepository } from './infrastructure/persistence/sqlite-workflow.repository';
 import { WorkflowsController } from './presentation/controllers/workflows.controller';
+import { WORKFLOW_RUN_HISTORY_QUERY } from './application/ports/workflow-run-history.query';
+import { DraftWorkflowStepsUseCase } from './application/use-cases/draft-workflow-steps.use-case';
+import { ProposeWorkflowOptimizationUseCase } from './application/use-cases/propose-workflow-optimization.use-case';
+import { WorkflowProposalAuthor } from './application/use-cases/workflow-proposal-author';
+import { SqliteWorkflowRunHistoryQuery } from './infrastructure/persistence/sqlite-workflow-run-history.query';
 
 /**
  * Tasks, delegation, workflows, step gates, approvals and the task scheduler (phase 3).
@@ -174,6 +179,10 @@ import { SkillsModule } from '../skills/skills.module';
     DeleteWorkflowUseCase,
     ReplaceWorkflowStepsUseCase,
     UpdateWorkflowRulesUseCase,
+    { provide: WORKFLOW_RUN_HISTORY_QUERY, useClass: SqliteWorkflowRunHistoryQuery },
+    WorkflowProposalAuthor,
+    DraftWorkflowStepsUseCase,
+    ProposeWorkflowOptimizationUseCase,
     WorkingDirectoryPolicy,
     TaskPlacementPolicy,
     ListTasksUseCase,
