@@ -300,7 +300,11 @@ export class FinishTaskTurnUseCase {
     terminal: Extract<TerminalEngineEvent, { kind: 'failed' }>,
   ): void {
     const state = task.toState();
-    this.recordEvent(task, 'engine_failed', { code: terminal.code, message: terminal.message });
+    this.recordEvent(task, 'engine_failed', {
+      code: terminal.code,
+      message: terminal.message,
+      stepId: state.currentStepId,
+    });
     if (!terminal.retryable) {
       task.fail(`Bộ não báo lỗi (${terminal.code}): ${terminal.message}`);
       return;

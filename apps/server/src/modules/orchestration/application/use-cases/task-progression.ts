@@ -59,7 +59,12 @@ export class TaskProgression {
       } else {
         task.fail(feedback ?? 'Không đạt.');
       }
-      this.recordOutcome(task, passed ? 'task_succeeded' : 'task_failed', feedback);
+      this.recordOutcome(
+        task,
+        passed ? 'task_succeeded' : 'task_failed',
+        feedback,
+        state.currentStepId,
+      );
       return;
     }
 
@@ -70,12 +75,17 @@ export class TaskProgression {
       case 'advance':
         if (decision.nextStepId === null) {
           task.succeed();
-          this.recordOutcome(task, 'task_succeeded', null);
+          this.recordOutcome(task, 'task_succeeded', null, state.currentStepId);
         } else {
           // The next step may be someone else: an engine session is not carried over.
           task.forgetEngineSession(null);
           task.requeue({ stepId: decision.nextStepId, retriesUsed: 0 });
-          this.recordOutcome(task, 'step_passed', `Sang bước "${stepName(decision.nextStepId)}".`);
+          this.recordOutcome(
+            task,
+            'step_passed',
+            `Sang bước "${stepName(decision.nextStepId)}".`,
+            state.currentStepId,
+          );
         }
         return;
       case 'retry_step':
@@ -85,7 +95,7 @@ export class TaskProgression {
           retriesUsed: state.stepAttempt + 1,
           note: `Thử lại bước "${stepName(state.currentStepId)}" (lần ${state.stepAttempt + 1}).`,
         });
-        this.recordOutcome(task, 'step_retried', feedback);
+        this.recordOutcome(task, 'step_retried', feedback, state.currentStepId);
         return;
       case 'return_to_step':
         if (feedback !== null) task.addFeedback(feedback);
@@ -95,22 +105,28 @@ export class TaskProgression {
           retriesUsed: 0,
           note: `Quay lại bước "${stepName(decision.stepId)}".`,
         });
-        this.recordOutcome(task, 'step_returned', feedback);
+        this.recordOutcome(task, 'step_returned', feedback, state.currentStepId);
         return;
       case 'stop':
         task.fail(feedback === null ? decision.reason : `${decision.reason} ${feedback}`);
         // "Dừng và báo quản lý": the failure is on the board and in the task log.
-        this.recordOutcome(task, 'task_failed', decision.reason);
+        this.recordOutcome(task, 'task_failed', decision.reason, state.currentStepId);
         return;
     }
   }
 
-  private recordOutcome(task: Task, kind: string, detail: string | null): void {
+  /** `stepId` is the step whose gate was evaluated (not the next one); null on a free run. */
+  private recordOutcome(
+    task: Task,
+    kind: string,
+    detail: string | null,
+    stepId: string | null,
+  ): void {
     this.eventLog.recordTaskEvent({
       taskId: task.id,
       agentId: task.assigneeAgentId,
       kind,
-      payload: { detail },
+      payload: { detail, stepId },
     });
   }
 }

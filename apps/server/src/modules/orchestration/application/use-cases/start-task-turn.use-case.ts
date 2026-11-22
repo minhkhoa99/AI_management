@@ -275,6 +275,7 @@ export class StartTaskTurnUseCase {
         stepName: step?.name ?? 'Thực hiện task',
         agentName: snapshot.name,
         resumed: resumeSessionRef !== null,
+        stepId: step?.id ?? null,
       },
     });
     const sessionId = this.sessionSupervisor.startSupervisedSession({
