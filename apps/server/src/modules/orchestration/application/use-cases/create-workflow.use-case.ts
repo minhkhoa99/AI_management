@@ -20,7 +20,7 @@ import { BLANK_WORKFLOW_STEPS, findWorkflowTemplate } from '../../domain/workflo
 import { assertWorkflowNameIsFree } from './workflow-lookup';
 import { WorkflowPresenter } from './workflow-presenter';
 
-/** New workflow from scratch, a template or a copy; the department's first one is the default. */
+/** New workflow from scratch, a template, a copy or an imported JSON file; the department's first one is the default. */
 @Injectable()
 export class CreateWorkflowUseCase {
   constructor(
@@ -47,6 +47,10 @@ export class CreateWorkflowUseCase {
         steps: this.resolveStartingSteps(departmentId, request.source),
         idGenerator: this.idGenerator,
       });
+      if (request.source.kind === 'import') {
+        const { enforce, rules } = request.source.document;
+        created.changeRules({ enforce, rules });
+      }
       this.workflowRepository.insertWorkflow(created);
       return created;
     });
@@ -71,6 +75,8 @@ export class CreateWorkflowUseCase {
         }
         return original.copyStepBlueprints();
       }
+      case 'import':
+        return source.document.steps;
     }
   }
 }

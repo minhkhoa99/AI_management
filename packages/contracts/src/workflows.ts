@@ -17,6 +17,7 @@ export const WORKFLOW_DESCRIPTION_MAX_LENGTH = 200;
 export const WORKFLOW_STEP_NAME_MAX_LENGTH = 80;
 export const WORKFLOW_STEP_OUTPUT_MAX_LENGTH = 300;
 export const WORKFLOW_MAX_STEPS = 20;
+export const WORKFLOW_GOAL_MAX_LENGTH = 4000;
 
 const workflowNameSchema = z
   .string()
@@ -160,10 +161,52 @@ export const workflowTemplateSchema = z.object({
 export type WorkflowTemplate = z.infer<typeof workflowTemplateSchema>;
 export const workflowTemplateListSchema = z.array(workflowTemplateSchema);
 
+// ---- JSON import/export --------------------------------------------------------------------
+
+/** A workflow saved to a file: no ids, return targets as step indexes. */
+export const workflowExportDocumentSchema = z
+  .object({
+    format: z.literal('aiteam-workflow'),
+    version: z.literal(1),
+    name: workflowNameSchema,
+    description: workflowDescriptionSchema,
+    enforce: z.boolean(),
+    rules: workflowRulesSchema,
+    steps: z
+      .array(workflowStepDraftSchema.omit({ id: true }))
+      .min(1)
+      .max(WORKFLOW_MAX_STEPS),
+  })
+  .strict();
+export type WorkflowExportDocument = z.infer<typeof workflowExportDocumentSchema>;
+
+export function buildWorkflowExportDocument(workflow: Workflow): WorkflowExportDocument {
+  const indexById = new Map(workflow.steps.map((step, index) => [step.id, index]));
+  return {
+    format: 'aiteam-workflow',
+    version: 1,
+    name: workflow.name,
+    description: workflow.description,
+    enforce: workflow.enforce,
+    rules: { ...workflow.rules },
+    steps: workflow.steps.map((step) => ({
+      name: step.name,
+      ownerRole: step.ownerRole,
+      gate: step.gate,
+      onFail: step.onFail,
+      returnToStepIndex:
+        step.returnToStepId === null ? null : (indexById.get(step.returnToStepId) ?? null),
+      maxRetries: step.maxRetries,
+      requiredOutput: step.requiredOutput,
+    })),
+  };
+}
+
 export const workflowSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('blank') }).strict(),
   z.object({ kind: z.literal('template'), templateId: workflowTemplateIdSchema }).strict(),
   z.object({ kind: z.literal('copy'), workflowId: entityIdSchema }).strict(),
+  z.object({ kind: z.literal('import'), document: workflowExportDocumentSchema }).strict(),
 ]);
 export type WorkflowSource = z.infer<typeof workflowSourceSchema>;
 
@@ -210,3 +253,44 @@ export type UpdateWorkflowRulesRequest = z.infer<typeof updateWorkflowRulesReque
 
 export const setDefaultWorkflowRequestSchema = z.object({ workflowId: entityIdSchema }).strict();
 export type SetDefaultWorkflowRequest = z.infer<typeof setDefaultWorkflowRequestSchema>;
+
+// ---- AI proposals --------------------------------------------------------------------------
+
+export const draftWorkflowStepsRequestSchema = z
+  .object({
+    goal: z.string().trim().min(1, 'Nhập mục tiêu cho quy trình').max(WORKFLOW_GOAL_MAX_LENGTH),
+    agentId: entityIdSchema.optional(),
+  })
+  .strict();
+export type DraftWorkflowStepsRequest = z.infer<typeof draftWorkflowStepsRequestSchema>;
+
+export const proposeWorkflowOptimizationRequestSchema = z
+  .object({ agentId: entityIdSchema.optional() })
+  .strict();
+export type ProposeWorkflowOptimizationRequest = z.infer<
+  typeof proposeWorkflowOptimizationRequestSchema
+>;
+
+/** A proposed step; `fromStepIndex` points at the current step it keeps (null = new step). */
+export const workflowProposalStepSchema = workflowStepDraftSchema.extend({
+  fromStepIndex: z.number().int().min(0).nullable(),
+});
+export type WorkflowProposalStep = z.infer<typeof workflowProposalStepSchema>;
+
+/** What the AI suggests; never saved by the server, the user saves it through the editor. */
+export const workflowProposalSchema = z.object({
+  steps: z.array(workflowProposalStepSchema).min(1).max(WORKFLOW_MAX_STEPS),
+  changes: z
+    .array(
+      z
+        .object({
+          title: z.string().trim().min(1).max(120),
+          reason: z.string().trim().max(500),
+        })
+        .strict(),
+    )
+    .max(20),
+  warnings: z.array(z.string()),
+  basedOnTaskCount: z.number().int().nonnegative(),
+});
+export type WorkflowProposal = z.infer<typeof workflowProposalSchema>;

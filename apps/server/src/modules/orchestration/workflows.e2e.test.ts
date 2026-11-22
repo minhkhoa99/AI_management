@@ -1,5 +1,6 @@
 import {
   apiErrorResponseSchema,
+  buildWorkflowExportDocument,
   type Department,
   departmentSchema,
   type Workflow,
@@ -198,6 +199,50 @@ describe('workflows API', () => {
         allowAgentSubsteps: true,
       },
     });
+  });
+
+  it('imports an exported workflow as an identical new one', async () => {
+    const created = await createWorkflow({
+      name: 'Phát triển',
+      description: 'Có review',
+      source: { kind: 'template', templateId: 'software' },
+    });
+    const original = workflowSchema.parse(
+      (
+        await app.callApi('PATCH', `/api/workflows/${created.id}/rules`, {
+          enforce: false,
+          rules: { allowAgentSubsteps: true },
+        })
+      ).body,
+    );
+
+    const imported = await createWorkflow({
+      name: 'Bản nhập',
+      description: 'Có review',
+      source: { kind: 'import', document: buildWorkflowExportDocument(original) },
+    });
+
+    expect(imported.id).not.toBe(original.id);
+    expect(imported.steps[0]?.id).not.toBe(original.steps[0]?.id);
+    expect(buildWorkflowExportDocument(imported)).toEqual({
+      ...buildWorkflowExportDocument(original),
+      name: 'Bản nhập',
+    });
+  });
+
+  it('refuses an import document with an unknown field (400)', async () => {
+    const original = await createWorkflow({ name: 'Trống', source: { kind: 'blank' } });
+
+    const response = await app.callApi('POST', `/api/departments/${department.id}/workflows`, {
+      name: 'Bản nhập',
+      source: {
+        kind: 'import',
+        document: { ...buildWorkflowExportDocument(original), owner: 'agent' },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(await listWorkflows()).toHaveLength(1);
   });
 
   it('moves the default, blocks deleting the last workflow, and hands tasks to the successor', async () => {
