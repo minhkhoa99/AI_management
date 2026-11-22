@@ -40,6 +40,16 @@ export interface PreparedTaskWorkspace {
   skillManifestPaths: Map<string, string>;
   /** HEAD when the worktree was created now; null when it already existed. */
   baseSha: string | null;
+  /** The repository the worktree belongs to (a subtask shares its parent's). */
+  repositoryRoot: string;
+}
+
+/** A source file of the worktree's HEAD, read from git (never from the worktree). */
+export interface CodeTreeEntry {
+  path: string;
+  blobSha: string;
+  /** null: blob không đổi (có trong knownShas) hoặc vượt ngân sách byte của lượt */
+  text: string | null;
 }
 
 export interface WorkspaceFile {
@@ -86,6 +96,23 @@ export interface TaskWorkspace {
     subtaskId: string,
     message: string,
   ): Promise<'merged' | 'conflict'>;
+  /**
+   * Small source files of HEAD (.ts .tsx .js .mjs .cjs .py, package.json; no links or
+   * submodules). Blobs whose sha matches `knownShas` (path -> sha) are not read again.
+   */
+  readCodeTree(
+    worktreePath: string,
+    knownShas: ReadonlyMap<string, string>,
+  ): Promise<CodeTreeEntry[]>;
+  /**
+   * Rebuilds .aiteam-knowledge/ (kept out of git) under the agent's folder with lessons.md and
+   * code-map.md; null removes it. Returns the folder relative to agentDirectory, or null.
+   */
+  replaceKnowledgeFolder(
+    worktreePath: string,
+    agentDirectory: string,
+    files: { lessonsMarkdown: string; codeMapMarkdown: string } | null,
+  ): Promise<string | null>;
   /** Commits everything the agent changed ("mốc"); null when nothing changed. */
   saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null>;
   /**

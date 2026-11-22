@@ -12,6 +12,7 @@ import {
   readSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import path from 'node:path';
 import { Inject, Injectable } from '@nestjs/common';
@@ -24,6 +25,7 @@ import {
   SAFE_GIT_OPTIONS,
 } from '../../../../shared/runtime/safe-git-options';
 import type {
+  CodeTreeEntry,
   PreparedTaskWorkspace,
   LeftOutPaths,
   SavedCheckpoint,
@@ -42,6 +44,15 @@ const SKILLS_FOLDER = '.aiteam-skills';
 const MAX_LISTED_FILES = 5_000;
 const MAX_FILE_BYTES = 512 * 1024;
 const MAX_LISTED_LEFT_OUT_PATHS = 20;
+/** Lessons and the code map handed to the agent; rebuilt every turn and kept out of git. */
+const KNOWLEDGE_FOLDER = '.aiteam-knowledge';
+const MAX_CODE_TREE_FILES = 5_000;
+const MAX_CODE_FILE_BYTES = 256 * 1024;
+/** Blob bytes read per call; the rest is read on a later turn. */
+const MAX_CODE_TREE_BYTES_PER_READ = 8 * 1024 * 1024;
+const CODE_FILE_PATTERN = /\.(?:ts|tsx|js|mjs|cjs|py)$/;
+/** `<mode> <type> <sha> <size>\t<path>` of `git ls-tree -l` (size is padded with spaces). */
+const LS_TREE_LINE = /^(\d+) (\w+) ([0-9a-f]+) +(\S+)\t(.+)$/s;
 
 /**
  * Pathspecs that select engine-managed names: content below such a folder (`**\/<name>/**`) and
@@ -136,7 +147,77 @@ export class GitTaskWorkspace implements TaskWorkspace {
       agentDirectory,
       input.skills ?? [],
     );
-    return { worktreePath, agentDirectory, qaDocumentPaths, skillManifestPaths, baseSha };
+    return {
+      worktreePath,
+      agentDirectory,
+      qaDocumentPaths,
+      skillManifestPaths,
+      baseSha,
+      repositoryRoot,
+    };
+  }
+
+  async readCodeTree(
+    worktreePath: string,
+    knownShas: ReadonlyMap<string, string>,
+  ): Promise<CodeTreeEntry[]> {
+    const output = await this.runGit(worktreePath, [
+      'ls-tree',
+      '-r',
+      '-l',
+      '-z',
+      '--full-tree',
+      'HEAD',
+    ]);
+    const files: Array<{ path: string; blobSha: string; size: number }> = [];
+    for (const line of output.split('\0')) {
+      const match = LS_TREE_LINE.exec(line);
+      if (match === null) continue;
+      const [, mode, type, blobSha = '', sizeText, filePath = ''] = match;
+      const size = Number(sizeText);
+      if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) continue;
+      if (!CODE_FILE_PATTERN.test(filePath) && path.posix.basename(filePath) !== 'package.json') {
+        continue;
+      }
+      if (size > MAX_CODE_FILE_BYTES) continue;
+      files.push({ path: filePath, blobSha, size });
+      if (files.length === MAX_CODE_TREE_FILES) break;
+    }
+    const shasToRead = new Set<string>();
+    let remainingBytes = MAX_CODE_TREE_BYTES_PER_READ;
+    for (const file of files) {
+      if (knownShas.get(file.path) === file.blobSha || shasToRead.has(file.blobSha)) continue;
+      if (file.size > remainingBytes) continue;
+      remainingBytes -= file.size;
+      shasToRead.add(file.blobSha);
+    }
+    const blobs = await this.readGitBlobs(worktreePath, [...shasToRead]);
+    return files.map((file) => {
+      const blob = blobs.get(file.blobSha);
+      const text =
+        blob === undefined
+          ? null
+          : blob.subarray(0, 8_000).includes(0)
+            ? ''
+            : blob.toString('utf8');
+      return { path: file.path, blobSha: file.blobSha, text };
+    });
+  }
+
+  async replaceKnowledgeFolder(
+    worktreePath: string,
+    agentDirectory: string,
+    files: { lessonsMarkdown: string; codeMapMarkdown: string } | null,
+  ): Promise<string | null> {
+    const knowledgeDirectory = path.join(agentDirectory, KNOWLEDGE_FOLDER);
+    removeUnlessRealEntry(knowledgeDirectory, 'directory');
+    rmSync(knowledgeDirectory, { recursive: true, force: true });
+    if (files === null) return null;
+    mkdirSync(knowledgeDirectory, { recursive: true });
+    await this.excludeFromGit(worktreePath, KNOWLEDGE_FOLDER);
+    writeFileSync(path.join(knowledgeDirectory, 'lessons.md'), files.lessonsMarkdown);
+    writeFileSync(path.join(knowledgeDirectory, 'code-map.md'), files.codeMapMarkdown);
+    return KNOWLEDGE_FOLDER;
   }
 
   async saveCheckpoint(worktreePath: string, message: string): Promise<SavedCheckpoint | null> {
@@ -428,6 +509,40 @@ export class GitTaskWorkspace implements TaskWorkspace {
     }
   }
 
+  /** Contents of these blobs by sha, from one `git cat-file --batch` (shas on stdin). */
+  private readGitBlobs(directory: string, shas: string[]): Promise<Map<string, Buffer>> {
+    if (shas.length === 0) return Promise.resolve(new Map());
+    return new Promise((resolve, reject) => {
+      const child = execFile(
+        'git',
+        [...SAFE_GIT_OPTIONS, '-C', directory, 'cat-file', '--batch'],
+        {
+          timeout: GIT_TIMEOUT_MS,
+          windowsHide: true,
+          env: buildGitEnvironmentWithoutPathspecOverrides(),
+          encoding: 'buffer',
+          // Blob bytes plus one header line per blob.
+          maxBuffer: MAX_CODE_TREE_BYTES_PER_READ + shas.length * 100,
+        },
+        (error, stdout) => {
+          if (error === null) {
+            resolve(parseCatFileBatch(stdout));
+            return;
+          }
+          reject(
+            new AppError({
+              code: 'GIT_COMMAND_FAILED',
+              message: 'git cat-file thất bại.',
+              retryable: false,
+              cause: error,
+            }),
+          );
+        },
+      );
+      child.stdin?.end(`${shas.join('\n')}\n`);
+    });
+  }
+
   private async succeeds(directory: string, args: string[]): Promise<boolean> {
     try {
       await this.runGit(directory, args);
@@ -489,6 +604,23 @@ function removeUnlessRealEntry(entryPath: string, kind: 'directory' | 'file'): v
   if (!isExpected || entry.isSymbolicLink()) {
     rmSync(entryPath, { recursive: true, force: true });
   }
+}
+
+/** `<sha> blob <size>\n<content>\n` per object; other answers (`<sha> missing`) are skipped. */
+function parseCatFileBatch(output: Buffer): Map<string, Buffer> {
+  const blobs = new Map<string, Buffer>();
+  let offset = 0;
+  while (offset < output.length) {
+    const headerEnd = output.indexOf(0x0a, offset);
+    if (headerEnd === -1) break;
+    const [sha = '', type, size] = output.subarray(offset, headerEnd).toString('latin1').split(' ');
+    offset = headerEnd + 1;
+    if (size === undefined) continue;
+    const contentEnd = offset + Number(size);
+    if (type === 'blob') blobs.set(sha, output.subarray(offset, contentEnd));
+    offset = contentEnd + 1;
+  }
+  return blobs;
 }
 
 /** Every task works on its own branch, kept after the task is deleted. */

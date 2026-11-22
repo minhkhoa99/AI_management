@@ -256,4 +256,123 @@ describe('GitTaskWorkspace with agent-planted files', { timeout: 30_000 }, () =>
       expect(await workspace.saveCheckpoint(worktreePath, 'mốc')).toBeNull();
     });
   });
+  describe('code tree and knowledge folder', () => {
+    function git(args: string[]): string {
+      return execFileSync(
+        'git',
+        ['-C', repositoryDirectory, '-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+        { encoding: 'utf8' },
+      ).trim();
+    }
+
+    /** A repository whose HEAD also holds a symlink and a submodule entry (on every OS). */
+    function commitSourceTree(): void {
+      mkdirSync(path.join(repositoryDirectory, 'src'));
+      writeFileSync(path.join(repositoryDirectory, 'src', 'a.ts'), "import { b } from './b';");
+      writeFileSync(path.join(repositoryDirectory, 'src', 'b.ts'), 'export const b = 1;');
+      writeFileSync(path.join(repositoryDirectory, 'package.json'), '{"name":"p"}');
+      writeFileSync(path.join(repositoryDirectory, 'notes.md'), '# notes');
+      writeFileSync(path.join(repositoryDirectory, 'big.ts'), 'x'.repeat(256 * 1024 + 1));
+      git(['init', '-q']);
+      git(['add', '-A']);
+      git(['commit', '-q', '-m', 'first']);
+      const head = git(['rev-parse', 'HEAD']);
+      const linkSha = execFileSync(
+        'git',
+        ['-C', repositoryDirectory, 'hash-object', '-w', '--stdin'],
+        { input: 'src/a.ts', encoding: 'utf8' },
+      ).trim();
+      git(['update-index', '--add', '--cacheinfo', `120000,${linkSha},link.ts`]);
+      git(['update-index', '--add', '--cacheinfo', `160000,${head},vendor/sub`]);
+      git(['commit', '-q', '-m', 'links']);
+    }
+
+    it('lists only small regular source files and reads their text', async () => {
+      commitSourceTree();
+      const { worktreePath } = await prepare();
+
+      const tree = await workspace.readCodeTree(worktreePath, new Map());
+
+      expect(tree.map((entry) => entry.path)).toEqual(['package.json', 'src/a.ts', 'src/b.ts']);
+      expect(tree.find((entry) => entry.path === 'src/a.ts')?.text).toBe(
+        "import { b } from './b';",
+      );
+      expect(tree.every((entry) => /^[0-9a-f]{40,64}$/.test(entry.blobSha))).toBe(true);
+    });
+
+    it('does not read blobs it already knows', async () => {
+      commitSourceTree();
+      const { worktreePath } = await prepare();
+      const first = await workspace.readCodeTree(worktreePath, new Map());
+
+      const second = await workspace.readCodeTree(
+        worktreePath,
+        new Map(first.map((entry) => [entry.path, entry.blobSha])),
+      );
+
+      expect(second.map((entry) => entry.path)).toEqual(first.map((entry) => entry.path));
+      expect(second.every((entry) => entry.text === null)).toBe(true);
+    });
+
+    it('gives a binary source file empty text', async () => {
+      writeFileSync(path.join(repositoryDirectory, 'bin.js'), Buffer.from([0x61, 0, 0x62]));
+      const { worktreePath } = await prepare();
+
+      expect(await workspace.readCodeTree(worktreePath, new Map())).toEqual([
+        expect.objectContaining({ path: 'bin.js', text: '' }),
+      ]);
+    });
+
+    it('writes the knowledge folder out of git and removes a planted junction', async () => {
+      const { worktreePath } = await prepare();
+      const outside = path.join(rootDirectory, 'outside');
+      mkdirSync(outside);
+      symlinkSync(outside, path.join(worktreePath, '.aiteam-knowledge'), 'junction');
+
+      expect(
+        await workspace.replaceKnowledgeFolder(worktreePath, worktreePath, {
+          lessonsMarkdown: 'L',
+          codeMapMarkdown: 'C',
+        }),
+      ).toBe('.aiteam-knowledge');
+
+      expect(existsSync(path.join(outside, 'lessons.md'))).toBe(false);
+      const folder = path.join(worktreePath, '.aiteam-knowledge');
+      expect(readFileSync(path.join(folder, 'lessons.md'), 'utf8')).toBe('L');
+      expect(readFileSync(path.join(folder, 'code-map.md'), 'utf8')).toBe('C');
+      expect(await workspace.saveCheckpoint(worktreePath, 'm')).toBeNull();
+    });
+
+    it('removes the folder when there is no knowledge', async () => {
+      const { worktreePath } = await prepare();
+      await workspace.replaceKnowledgeFolder(worktreePath, worktreePath, {
+        lessonsMarkdown: 'L',
+        codeMapMarkdown: 'C',
+      });
+
+      expect(await workspace.replaceKnowledgeFolder(worktreePath, worktreePath, null)).toBeNull();
+      expect(existsSync(path.join(worktreePath, '.aiteam-knowledge'))).toBe(false);
+    });
+
+    it('gives a forked task the parent repository root', async () => {
+      const parent = await workspace.prepareTaskWorkspace({
+        taskId: 'task-1',
+        workingDirectory: null,
+        worktreePath: null,
+        qaDocuments: [],
+      });
+      const child = await workspace.prepareTaskWorkspace({
+        taskId: 'task-2',
+        workingDirectory: null,
+        worktreePath: null,
+        qaDocuments: [],
+        forkFromTaskId: 'task-1',
+      });
+
+      expect(child.repositoryRoot).toBe(parent.repositoryRoot);
+      expect(parent.repositoryRoot).toBe(
+        path.join(rootDirectory, 'data', 'task-folders', 'task-1'),
+      );
+    });
+  });
 });
