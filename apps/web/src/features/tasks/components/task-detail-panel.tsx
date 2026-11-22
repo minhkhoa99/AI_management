@@ -13,6 +13,7 @@ import { ROLE_LABELS } from '../../organization/organization-labels';
 import { GATE_PRESENTATION } from '../../workflows/workflow-labels';
 import {
   BOARD_COLUMN_PRESENTATION,
+  describeParentTask,
   formatFileSize,
   PRIORITY_PRESENTATION,
   STATUS_NOTES,
@@ -92,7 +93,7 @@ export function TaskDetailPanel({
               className={styles.subtaskLink}
               href={`/tasks/?task=${encodeURIComponent(detail.parentTask.id)}`}
             >
-              Task con của {detail.parentTask.code}
+              {describeParentTask(detail, detail.parentTask)}
             </Link>
           )}
           {statusNote !== undefined && (

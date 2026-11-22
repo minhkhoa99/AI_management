@@ -186,6 +186,8 @@ describe('department handoff', () => {
     ).id;
 
     expect(child.departmentId).toBe(review.id);
+    expect(waiting.subtasks[0]!.parentTask?.departmentId).toBe(dev.id);
+    expect(child.parentTask?.departmentId).toBe(dev.id);
     expect(child.workflow?.id).toBe(reviewFlowId);
     expect(child.assignee?.id).toBe(qcHead.id);
     expect(child.description).toContain('Phòng Dev bàn giao bước «Review» của');

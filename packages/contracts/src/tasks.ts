@@ -214,7 +214,9 @@ export const taskSummarySchema = z.object({
   statusNote: z.string().nullable(),
   attachmentCount: z.number().int().nonnegative(),
   /** Set on a subtask: the task whose agent split its step into this one. */
-  parentTask: z.object({ id: entityIdSchema, code: z.string() }).nullable(),
+  parentTask: z
+    .object({ id: entityIdSchema, code: z.string(), departmentId: entityIdSchema })
+    .nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

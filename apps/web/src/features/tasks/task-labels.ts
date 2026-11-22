@@ -1,4 +1,4 @@
-import type { TaskBoardColumn, TaskPriority, TaskStatus } from '@aiteam/contracts';
+import type { TaskBoardColumn, TaskPriority, TaskStatus, TaskSummary } from '@aiteam/contracts';
 
 export const BOARD_COLUMN_PRESENTATION: Record<TaskBoardColumn, { label: string; color: string }> =
   {
@@ -41,6 +41,16 @@ export const SUBTASK_STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 /** Last two folders of a path, for chips ("…/shop-api/src"). */
+/** A child in another department was handed off by its parent's step; otherwise it is a subtask. */
+export function describeParentTask(
+  task: Pick<TaskSummary, 'departmentId'>,
+  parentTask: NonNullable<TaskSummary['parentTask']>,
+): string {
+  return parentTask.departmentId === task.departmentId
+    ? `Task con của ${parentTask.code}`
+    : `Bàn giao từ ${parentTask.code}`;
+}
+
 export function shortenDirectory(directoryPath: string): string {
   const segments = directoryPath.split(/[\\/]+/).filter(Boolean);
   return segments.length <= 2 ? directoryPath : `…/${segments.slice(-2).join('/')}`;

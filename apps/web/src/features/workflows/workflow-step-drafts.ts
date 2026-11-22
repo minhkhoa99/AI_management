@@ -105,11 +105,22 @@ export function swapSteps(
   return reordered;
 }
 
-/** Keeps dependent fields consistent when the owner changes (the user only approves). */
+/**
+ * Keeps dependent fields consistent when the owner changes: the user only approves; another
+ * department's step passes automatically and is never retried; only that step names a department.
+ */
 export function changeStepOwner(step: EditableStep, ownerRole: StepOwner): EditableStep {
-  return ownerRole === 'user'
-    ? { ...step, ownerRole, gate: 'user_approval' }
-    : { ...step, ownerRole };
+  if (ownerRole === 'department') {
+    return {
+      ...step,
+      ownerRole,
+      gate: 'auto',
+      onFail: step.onFail === 'retry' ? 'stop' : step.onFail,
+      maxRetries: 0,
+    };
+  }
+  const changed = { ...step, ownerRole, handoffDepartmentId: null };
+  return ownerRole === 'user' ? { ...changed, gate: 'user_approval' } : changed;
 }
 
 export function changeFailureAction(
