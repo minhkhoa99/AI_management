@@ -49,6 +49,7 @@ export class SqliteTaskRepository implements TaskRepository {
   private readonly deleteStatement: StatementSync;
   private readonly runnableStatement: StatementSync;
   private readonly subtasksStatement: StatementSync;
+  private readonly splitSubtasksStatement: StatementSync;
   private readonly readyParentsStatement: StatementSync;
   private readonly queuedAssignedStatement: StatementSync;
   private readonly queuedReviewStatement: StatementSync;
@@ -79,6 +80,11 @@ export class SqliteTaskRepository implements TaskRepository {
     );
     this.subtasksStatement = database.prepare(
       'SELECT id FROM tasks WHERE parent_task_id = ? ORDER BY sequence_number',
+    );
+    this.splitSubtasksStatement = database.prepare(
+      `SELECT c.id FROM tasks c JOIN tasks p ON p.id = c.parent_task_id
+        WHERE c.parent_task_id = ? AND p.department_id = c.department_id
+        ORDER BY c.sequence_number`,
     );
     this.readyParentsStatement = database.prepare(
       `SELECT p.id FROM tasks p
@@ -178,6 +184,12 @@ export class SqliteTaskRepository implements TaskRepository {
 
   listSubtaskIds(parentTaskId: string): string[] {
     return (this.subtasksStatement.all(parentTaskId) as unknown as Array<{ id: string }>).map(
+      (row) => row.id,
+    );
+  }
+
+  listSplitSubtaskIds(parentTaskId: string): string[] {
+    return (this.splitSubtasksStatement.all(parentTaskId) as unknown as Array<{ id: string }>).map(
       (row) => row.id,
     );
   }

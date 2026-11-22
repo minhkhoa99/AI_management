@@ -41,6 +41,7 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
   private readonly lastIdStatement: StatementSync;
   private readonly reportsStatement: StatementSync;
   private readonly listStatement: StatementSync;
+  private readonly listOfKindsStatement: StatementSync;
   private readonly taskStatement: StatementSync;
   private readonly agentNameStatement: StatementSync;
   private readonly agentEventsStatement: StatementSync;
@@ -67,6 +68,12 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
        FROM task_events e LEFT JOIN agents a ON a.id = e.agent_id
        WHERE e.task_id = ? AND e.kind NOT IN ('usage', 'session_started')
        ORDER BY e.id DESC LIMIT ?`,
+    );
+    this.listOfKindsStatement = database.prepare(
+      `SELECT e.id, e.kind, a.name AS agent_name, e.payload_json, e.created_at
+       FROM task_events e LEFT JOIN agents a ON a.id = e.agent_id
+       WHERE e.task_id = ? AND e.kind IN (SELECT value FROM json_each(?))
+       ORDER BY e.id DESC`,
     );
     this.taskStatement = database.prepare('SELECT department_id FROM tasks WHERE id = ?');
     this.agentNameStatement = database.prepare('SELECT name FROM agents WHERE id = ?');
@@ -115,20 +122,16 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
 
   listTaskEvents(taskId: string, limit: number): TaskEventRecord[] {
     this.flushPendingEvents();
-    const rows = this.listStatement.all(taskId, limit) as unknown as Array<{
-      id: number;
-      kind: string;
-      agent_name: string | null;
-      payload_json: string;
-      created_at: string;
-    }>;
-    return rows.map((row) => ({
-      id: Number(row.id),
-      kind: row.kind,
-      agentName: row.agent_name,
-      payload: JSON.parse(row.payload_json) as Record<string, unknown>,
-      createdAt: row.created_at,
-    }));
+    return (this.listStatement.all(taskId, limit) as unknown as TaskEventRow[]).map(
+      restoreTaskEvent,
+    );
+  }
+
+  listTaskEventsOfKinds(taskId: string, kinds: readonly string[]): TaskEventRecord[] {
+    this.flushPendingEvents();
+    return (
+      this.listOfKindsStatement.all(taskId, JSON.stringify(kinds)) as unknown as TaskEventRow[]
+    ).map(restoreTaskEvent);
   }
 
   /** "Hoạt động" of an agent across all its tasks, newest first. */
@@ -217,4 +220,22 @@ export class BatchedTaskEventLog implements TaskEventLog, OnApplicationShutdown 
       this.logger.error({ err: error }, 'task events could not be written');
     }
   }
+}
+
+interface TaskEventRow {
+  id: number;
+  kind: string;
+  agent_name: string | null;
+  payload_json: string;
+  created_at: string;
+}
+
+function restoreTaskEvent(row: TaskEventRow): TaskEventRecord {
+  return {
+    id: Number(row.id),
+    kind: row.kind,
+    agentName: row.agent_name,
+    payload: JSON.parse(row.payload_json) as Record<string, unknown>,
+    createdAt: row.created_at,
+  };
 }

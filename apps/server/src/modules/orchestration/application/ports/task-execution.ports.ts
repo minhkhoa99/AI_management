@@ -204,6 +204,8 @@ export interface TaskEventLog {
   listStepReports(taskId: string): StepReportRecord[];
   /** Newest first. */
   listTaskEvents(taskId: string, limit: number): TaskEventRecord[];
+  /** Every event of these kinds, newest first. */
+  listTaskEventsOfKinds(taskId: string, kinds: readonly string[]): TaskEventRecord[];
   hasTask(taskId: string): boolean;
   /** Writes buffered events now (reads of aggregates call it first). */
   flushPendingEvents(): void;

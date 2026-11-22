@@ -12,6 +12,7 @@ import {
   workflowSchema,
 } from '@aiteam/contracts';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { TASK_REPOSITORY, type TaskRepository } from './domain/repositories/task.repository';
 import {
   agentReport,
   ScriptedEngine,
@@ -148,6 +149,15 @@ describe('department handoff', () => {
     ).worktree_path;
   const requestsOf = (taskId: string) =>
     engine.requests.filter((request) => request.workingDirectory.includes(taskId));
+  /** Payloads of the task's events of `kind`, oldest first (events are written in batches). */
+  const payloadsOf = (taskId: string, kind: string) =>
+    (
+      app.database
+        .prepare('SELECT payload_json FROM task_events WHERE task_id = ? AND kind = ? ORDER BY id')
+        .all(taskId, kind) as Array<{ payload_json: string }>
+    ).map((row) => JSON.parse(row.payload_json) as Record<string, unknown>);
+  const devRequests = () =>
+    engine.requests.filter((request) => !request.prompt.includes(HANDED_OFF));
 
   it('hands the step to the head of the other department on its default workflow', async () => {
     const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
@@ -323,5 +333,139 @@ describe('department handoff', () => {
       (statusCode) => statusCode === 404,
       'handoff child deleted',
     );
+  }, 30_000);
+
+  it("merges the other department's code and moves on when it passes", async () => {
+    const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
+    engine.respond = (request) =>
+      Promise.resolve(
+        request.prompt.includes(HANDED_OFF)
+          ? agentReport('pass', 'Code ổn')
+          : agentReport('done', 'Đã code'),
+      );
+    const task = await createTask(devFlow.id);
+
+    const done = await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'succeeded',
+      'parent succeeded',
+    );
+    const childId = done.subtasks[0]!.id;
+    const childFiles = readdirSync(worktreeOf(childId)).filter((file) => file.startsWith('turn-'));
+
+    expect(childFiles.length).toBeGreaterThan(1);
+    expect(readdirSync(worktreeOf(task.id))).toEqual(expect.arrayContaining(childFiles));
+    const returned = await waitFor(
+      () => payloadsOf(task.id, 'handoff_returned'),
+      (payloads) => payloads.length === 1,
+      'handoff_returned written',
+    );
+    expect(returned[0]).toMatchObject({ verdict: 'passed', childTaskId: childId });
+  }, 30_000);
+
+  it('sends the feedback back to the developer and hands off again', async () => {
+    const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
+    let reviews = 0;
+    engine.respond = (request) => {
+      if (!request.prompt.includes(HANDED_OFF))
+        return Promise.resolve(agentReport('done', 'Đã code'));
+      reviews += 1;
+      return Promise.resolve(
+        reviews === 1 ? agentReport('fail', 'Thiếu test') : agentReport('pass', 'Đủ test'),
+      );
+    };
+    const task = await createTask(devFlow.id);
+
+    const done = await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'succeeded',
+      'parent succeeded',
+    );
+
+    const secondDevPrompt = devRequests()[1]?.prompt ?? '';
+    expect(secondDevPrompt).toContain('Phòng Review (T-');
+    expect(secondDevPrompt).toContain('không đạt');
+    expect(secondDevPrompt).toContain('Thiếu test');
+    expect(done.subtasks).toHaveLength(2);
+    const tasks = app.application.get<symbol, TaskRepository>(TASK_REPOSITORY);
+    expect(tasks.listSplitSubtaskIds(task.id)).toEqual([]);
+    expect(tasks.listSubtaskIds(task.id)).toHaveLength(2);
+  }, 30_000);
+
+  it('stops after 3 rejected rounds and counts again after a retry', async () => {
+    const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
+    engine.respond = (request) =>
+      Promise.resolve(
+        request.prompt.includes(HANDED_OFF)
+          ? agentReport('fail', 'Thiếu test')
+          : agentReport('done', 'Đã code'),
+      );
+    const task = await createTask(devFlow.id);
+
+    const failed = await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'failed',
+      'parent failed',
+    );
+
+    expect(failed.statusNote).toBe('Quá 3 vòng bàn giao cho phòng Review.');
+    expect(failed.subtasks).toHaveLength(3);
+    expect(devRequests()).toHaveLength(4);
+
+    const retried = await app.callApi('POST', `/api/tasks/${task.id}/retries`);
+    expect(retried.statusCode, JSON.stringify(retried.body)).toBeLessThan(300);
+    await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.subtasks.length === 4,
+      'a fourth round after the retry',
+    );
+  }, 60_000);
+
+  it('treats an engine failure in the other department as technical', async () => {
+    const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
+    engine.respond = () => Promise.resolve(agentReport('done', 'Đã code'));
+    engine.failWith = (request) =>
+      request.prompt.includes(HANDED_OFF)
+        ? { code: 'ENGINE_CRASHED', message: 'hỏng', retryable: false }
+        : null;
+    const task = await createTask(devFlow.id);
+
+    const failed = await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'failed',
+      'parent failed',
+    );
+
+    expect(failed.statusNote).toMatch(/^Phòng Review lỗi kỹ thuật/);
+    expect(devRequests()).toHaveLength(1);
+  }, 30_000);
+
+  it('fails the parent when its handoff child is deleted', async () => {
+    const devFlow = await saveWorkflow(dev, 'Code và duyệt', [codeStep, handoffStep(review.id)]);
+    engine.respond = (request, signal) =>
+      request.prompt.includes(HANDED_OFF)
+        ? untilAborted(signal)
+        : Promise.resolve(agentReport('done', 'Đã code'));
+    const task = await createTask(devFlow.id);
+    const waiting = await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'waiting_children' && detail.subtasks.length === 1,
+      'parent waiting for the other department',
+    );
+    const childId = waiting.subtasks[0]!.id;
+    await waitFor(
+      () => requestsOf(childId).length,
+      (count) => count === 1,
+      'review turn started',
+    );
+
+    await app.callApi('DELETE', `/api/tasks/${childId}`);
+
+    const failed = await waitFor(
+      () => readTask(task.id),
+      (detail) => detail.status === 'failed',
+      'parent failed',
+    );
+    expect(failed.statusNote).toMatch(/^Phòng Review lỗi kỹ thuật \(task đã xoá\)/);
   }, 30_000);
 });

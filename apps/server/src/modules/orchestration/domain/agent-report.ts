@@ -91,3 +91,13 @@ function stripReports(text: string): string {
 function clip(text: string): string {
   return text.length <= SUMMARY_MAX_LENGTH ? text : `${text.slice(0, SUMMARY_MAX_LENGTH)}…`;
 }
+
+const QUOTED_SUMMARY_MAX_LENGTH = 1_200;
+
+/** A report summary quoted in another task's prompt or description, trimmed and shortened. */
+export function quoteSummary(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length <= QUOTED_SUMMARY_MAX_LENGTH
+    ? trimmed
+    : `${trimmed.slice(0, QUOTED_SUMMARY_MAX_LENGTH)}…`;
+}
