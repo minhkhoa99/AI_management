@@ -141,3 +141,14 @@ export type EngineQuotaState = z.infer<typeof engineQuotaStateSchema>;
 export const QUOTA_WINDOWS = ['five_hour', 'weekly', 'other'] as const;
 export const quotaWindowSchema = z.enum(QUOTA_WINDOWS);
 export type QuotaWindow = z.infer<typeof quotaWindowSchema>;
+
+/** Where a lesson of the knowledge graph came from. */
+export const KNOWLEDGE_LESSON_SOURCES = [
+  'review_feedback',
+  'qc_feedback',
+  'user_review',
+  'agent_failure',
+  'agent_learning',
+] as const;
+export const knowledgeLessonSourceSchema = z.enum(KNOWLEDGE_LESSON_SOURCES);
+export type KnowledgeLessonSource = z.infer<typeof knowledgeLessonSourceSchema>;

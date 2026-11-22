@@ -4,6 +4,7 @@ import {
   APPROVAL_KINDS,
   APPROVAL_STATUSES,
   DELEGATION_REASONS,
+  KNOWLEDGE_LESSON_SOURCES,
   LINE_COMMENT_STATUSES,
   SKILL_SOURCE_KINDS,
   AGENT_ROLES,
@@ -250,6 +251,18 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
         )
         .run(rowId, nextStepPosition(), value, targetStepId, maxRetries);
     },
+  },
+  {
+    table: 'knowledge_lessons',
+    column: 'source',
+    contractValues: KNOWLEDGE_LESSON_SOURCES,
+    invalidValue: 'chat',
+    insertRowWith: (database, value, rowId) =>
+      database
+        .prepare(
+          "INSERT INTO knowledge_lessons (id, project_key, source, body, body_hash) VALUES (?, 'repo', ?, 'b', ?)",
+        )
+        .run(rowId, value, rowId),
   },
 ];
 
