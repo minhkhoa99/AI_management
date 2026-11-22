@@ -54,6 +54,7 @@ export class SqliteTaskRepository implements TaskRepository {
   private readonly readyParentsStatement: StatementSync;
   private readonly queuedAssignedStatement: StatementSync;
   private readonly queuedReviewStatement: StatementSync;
+  private readonly latestRepositoryRootStatement: StatementSync;
 
   constructor(
     @Inject(SQLITE_DATABASE) database: DatabaseSync,
@@ -101,6 +102,9 @@ export class SqliteTaskRepository implements TaskRepository {
     );
     this.queuedReviewStatement = database.prepare(
       "SELECT id FROM tasks WHERE status = 'queued' AND review_pending = 1 ORDER BY sequence_number",
+    );
+    this.latestRepositoryRootStatement = database.prepare(
+      'SELECT repository_root FROM tasks WHERE department_id = ? AND repository_root IS NOT NULL ORDER BY sequence_number DESC LIMIT 1',
     );
   }
 
@@ -205,6 +209,12 @@ export class SqliteTaskRepository implements TaskRepository {
     return (this.queuedReviewStatement.all() as unknown as Array<{ id: string }>).map(
       (row) => row.id,
     );
+  }
+
+  findLatestRepositoryRoot(departmentId: string): string | null {
+    const row = this.latestRepositoryRootStatement.get(departmentId) as
+      { repository_root: string } | undefined;
+    return row?.repository_root ?? null;
   }
 
   listParentIdsReadyToResume(): string[] {

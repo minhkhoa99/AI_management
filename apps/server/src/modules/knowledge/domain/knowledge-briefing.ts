@@ -64,14 +64,18 @@ export function scoreTokenOverlap(query: ReadonlySet<string>, terms: ReadonlySet
 
 /**
  * Feedback turned into a lesson body: agent-written text, so control characters and report
- * tags go, code fences are defused, and the platform's own prefix is dropped.
+ * tags go, code fences are defused, and the platform's own prefixes are dropped.
  */
 export function normalizeLessonText(text: string): string {
   let body = stripAiteamTags(text.replace(/(?!\n)\p{Cc}/gu, ''))
     .replace(/```/g, "'''")
     .trim();
-  for (const prefix of TASK_FEEDBACK_PREFIXES) {
-    body = body.replace(prefix, '');
+  // Feedback may carry several prefixes ("Phòng X (T-1) không đạt: Agent báo không hoàn thành: …").
+  for (let previous = ''; previous !== body;) {
+    previous = body;
+    for (const prefix of TASK_FEEDBACK_PREFIXES) {
+      body = body.replace(prefix, '');
+    }
   }
   return body.trim().slice(0, LESSON_BODY_MAX_LENGTH).trimEnd();
 }

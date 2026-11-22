@@ -21,4 +21,6 @@ export interface TaskRepository {
   listQueuedTaskIdsAssignedTo(agentId: string): string[];
   /** Queued tasks whose next turn is a superior's review (the reviewer is not stored). */
   listQueuedTaskIdsWaitingForReview(): string[];
+  /** Repository of the department's newest task that has one (its knowledge), or null. */
+  findLatestRepositoryRoot(departmentId: string): string | null;
 }

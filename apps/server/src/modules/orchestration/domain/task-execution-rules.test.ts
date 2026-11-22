@@ -19,7 +19,21 @@ describe('interpretAgentReport', () => {
       approvalRequest: null,
       wellFormed: true,
       subtasks: [],
+      learnings: [],
     });
+  });
+
+  it('keeps the first three valid learnings and drops the bad ones', () => {
+    expect(
+      interpretAgentReport(
+        '<aiteam-report>{"outcome":"done","summary":"x","learnings":["Luôn chạy migration trước test e2e",42,"ngắn","Dùng zod strict cho dữ liệu từ agent","Mục thứ tư đủ dài để hợp lệ","Mục thứ năm cũng đủ dài nhưng bị bỏ"]}</aiteam-report>',
+      ).learnings,
+    ).toEqual([
+      'Luôn chạy migration trước test e2e',
+      'Dùng zod strict cho dữ liệu từ agent',
+      'Mục thứ tư đủ dài để hợp lệ',
+    ]);
+    expect(interpretAgentReport('Không có khối báo cáo').learnings).toEqual([]);
   });
 
   it('keeps valid subtasks only, at most five, whatever else the agent wrote', () => {
@@ -353,6 +367,7 @@ describe('buildStepPrompt', () => {
     expect(prompt).toContain('> Dùng bcrypt');
     expect(prompt).toContain('.aiteam-knowledge/lessons.md');
     expect(prompt).toContain('tra tài liệu chính thức hiện hành');
+    expect(offline).toContain('"learnings": ["…"] (tối đa 3 câu)');
     expect(offline).not.toContain('tra tài liệu');
     expect(offline).not.toContain('Tri thức dự án');
     expect(reviewPrompt).toContain('> x');

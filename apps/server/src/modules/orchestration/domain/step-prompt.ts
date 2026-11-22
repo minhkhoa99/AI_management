@@ -136,6 +136,9 @@ export function buildStepPrompt(input: StepPromptInput): string {
       ].join(' '),
     );
   }
+  rules.push(
+    'Nếu rút ra được điều tổng quát đáng nhớ cho các task sau ở repo này (không phải chi tiết riêng của task), thêm "learnings": ["…"] (tối đa 3 câu) vào khối báo cáo.',
+  );
   sections.push(`Quy tắc:\n${rules.map((rule) => `- ${rule}`).join('\n')}`);
   const gate = input.step?.gate ?? null;
   sections.push(

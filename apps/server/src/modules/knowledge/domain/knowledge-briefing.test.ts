@@ -29,6 +29,12 @@ describe('normalizeLessonText', () => {
     expect(normalizeLessonText(text)).toBe(expected);
   });
 
+  it('strips stacked task prefixes', () => {
+    expect(
+      normalizeLessonText('Phòng Review (T-13) không đạt: Agent báo không hoàn thành: X'),
+    ).toBe('X');
+  });
+
   it('keeps line breaks and cuts at 1500 characters', () => {
     expect(normalizeLessonText('a\nb')).toBe('a\nb');
     expect(normalizeLessonText('x'.repeat(2000))).toHaveLength(1500);

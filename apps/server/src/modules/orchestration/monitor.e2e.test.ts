@@ -211,6 +211,9 @@ describe('live monitor and code review', () => {
       (await app.callApi('GET', `/api/checkpoints/${checkpoint!.id}/line-comments`)).body,
     );
     expect(comments.map((stored) => stored.status)).toEqual(['sent']);
+    expect(app.database.prepare('SELECT source, body FROM knowledge_lessons').all()).toEqual([
+      { source: 'user_review', body: 'turn-1.txt: Đổi thông báo lỗi sang tiếng Việt' },
+    ]);
   }, 30_000);
 
   it('"Yêu cầu sửa" needs feedback, and "Duyệt thay đổi" passes the pending user approval', async () => {

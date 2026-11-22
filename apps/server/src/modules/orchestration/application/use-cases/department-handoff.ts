@@ -156,6 +156,7 @@ export class DepartmentHandoff {
         current,
         false,
         `Phòng ${departmentName} (${childCode}) không đạt: ${child?.statusNote ?? ''}`,
+        'review_feedback',
       );
     } else {
       current.fail(

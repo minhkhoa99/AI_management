@@ -225,6 +225,7 @@ export class StepReviewLauncher {
       task,
       passed,
       passed ? null : `${reviewer.name} (cấp trên) yêu cầu sửa: ${report.summary}`,
+      'review_feedback',
     );
     this.taskRepository.updateTask(task);
   }

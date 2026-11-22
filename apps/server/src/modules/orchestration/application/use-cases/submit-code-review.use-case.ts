@@ -89,6 +89,10 @@ export class SubmitCodeReviewUseCase {
         checkpoint.stepId !== null && route?.steps.some((step) => step.id === checkpoint.stepId)
           ? checkpoint.stepId
           : task.currentStepId;
+      for (const comment of openComments) {
+        this.progression.recordLesson(task, 'user_review', `${comment.filePath}: ${comment.body}`);
+      }
+      if (request.note !== '') this.progression.recordLesson(task, 'user_review', request.note);
       if (checkpoint.agentId !== null) task.assignTo(checkpoint.agentId);
       task.requeue({ stepId, retriesUsed: 0, note: 'Bạn yêu cầu sửa theo góp ý.' });
       this.taskRepository.updateTask(task);

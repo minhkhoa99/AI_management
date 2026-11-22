@@ -68,7 +68,12 @@ export class DecideApprovalUseCase {
         approval.kind === 'sensitive_action'
           ? `Người dùng TỪ CHỐI việc nhạy cảm: ${approval.detail.request}.${noteText} Tìm cách khác không cần việc này.`
           : `Người dùng từ chối kết quả bước.${noteText}`;
-      this.progression.applyGateResult(task, approved, approved ? null : reason);
+      this.progression.applyGateResult(
+        task,
+        approved,
+        approved ? null : reason,
+        approval.kind === 'step_gate' && note !== null ? 'user_review' : null,
+      );
     }
     this.taskRepository.updateTask(task);
   }

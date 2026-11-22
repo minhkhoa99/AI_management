@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import type { KnowledgeLessonSource } from '@aiteam/contracts';
 import type { TerminalEngineEvent } from '../../../../shared/runtime/agent-session-supervisor';
 import { interpretAgentReport, type AgentReport } from '../../domain/agent-report';
 import { formatTaskCode, type Task } from '../../domain/entities/task';
@@ -115,6 +116,9 @@ export class FinishTaskTurnUseCase {
         wellFormed: report.wellFormed,
       },
     });
+    for (const learning of report.learnings) {
+      this.progression.recordLesson(task, 'agent_learning', learning);
+    }
     await this.checkpoints.saveTaskCheckpoint(
       task,
       `${formatTaskCode(state.sequenceNumber)} ${step?.name ?? state.title}: ${firstLine(report.summary)}`,
@@ -137,7 +141,12 @@ export class FinishTaskTurnUseCase {
       return;
     }
     if (step === undefined) {
-      this.progression.applyGateResult(task, report.outcome !== 'fail', failureFeedback(report));
+      this.progression.applyGateResult(
+        task,
+        report.outcome !== 'fail',
+        failureFeedback(report),
+        'agent_failure',
+      );
       this.taskRepository.updateTask(task);
       return;
     }
@@ -155,7 +164,13 @@ export class FinishTaskTurnUseCase {
     worker: { agentId: string; name: string; workDirectory: string },
   ): Promise<void> {
     if (report.outcome === 'fail') {
-      this.applyGate(task, step, false, failureFeedback(report));
+      this.applyGate(
+        task,
+        step,
+        false,
+        failureFeedback(report),
+        step.gate === 'qc_pass' ? 'qc_feedback' : 'agent_failure',
+      );
       return;
     }
     switch (step.gate) {
@@ -168,6 +183,7 @@ export class FinishTaskTurnUseCase {
           step,
           report.outcome === 'pass',
           report.outcome === 'pass' ? null : `QC chưa xác nhận đạt: ${report.summary}`,
+          'qc_feedback',
         );
         return;
       case 'tests_pass':
@@ -202,6 +218,7 @@ export class FinishTaskTurnUseCase {
         task,
         step,
         true,
+        null,
         null,
         'Task chưa có lệnh kiểm thử: dựa vào báo cáo của agent.',
       );
@@ -243,6 +260,7 @@ export class FinishTaskTurnUseCase {
     step: WorkflowStepState,
     passed: boolean,
     feedback: string | null,
+    lessonSource: KnowledgeLessonSource | null = null,
     detail: string | null = null,
   ) {
     this.recordEvent(task, 'gate_evaluated', {
@@ -250,7 +268,7 @@ export class FinishTaskTurnUseCase {
       passed,
       detail: detail ?? feedback,
     });
-    this.progression.applyGateResult(task, passed, feedback);
+    this.progression.applyGateResult(task, passed, feedback, lessonSource);
     this.taskRepository.updateTask(task);
   }
 
