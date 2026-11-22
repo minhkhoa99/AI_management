@@ -5,4 +5,6 @@ export interface DepartmentWorkload {
   countTasksOfDepartment(departmentId: string): number;
   /** Tasks of the agent that are not succeeded, failed or cancelled. */
   countUnfinishedTasksOfAgent(agentId: string): number;
+  /** Workflow steps (of any department) that hand tasks off to this department. */
+  countHandoffStepsTargeting(departmentId: string): number;
 }

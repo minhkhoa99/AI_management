@@ -219,12 +219,21 @@ const ENUMERATED_COLUMNS: EnumeratedColumn[] = [
     column: 'owner_role',
     contractValues: STEP_OWNERS,
     invalidValue: 'Bạn',
-    insertRowWith: (database, value, rowId) =>
+    insertRowWith: (database, value, rowId) => {
+      // A handoff step needs a target department and the automatic gate.
+      const isHandoff = value === 'department';
       database
         .prepare(
-          "INSERT INTO workflow_steps (id, workflow_id, position, name, owner_role, gate, on_fail) VALUES (?, 'flow', ?, 'S', ?, 'user_approval', 'stop')",
+          "INSERT INTO workflow_steps (id, workflow_id, position, name, owner_role, gate, on_fail, handoff_department_id) VALUES (?, 'flow', ?, 'S', ?, ?, 'stop', ?)",
         )
-        .run(rowId, nextStepPosition(), value),
+        .run(
+          rowId,
+          nextStepPosition(),
+          value,
+          isHandoff ? 'auto' : 'user_approval',
+          isHandoff ? 'dept' : null,
+        );
+    },
   },
   {
     table: 'workflow_steps',

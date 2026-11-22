@@ -17,7 +17,7 @@ import {
   type WorkflowRepository,
 } from '../../domain/repositories/workflow.repository';
 import { BLANK_WORKFLOW_STEPS, findWorkflowTemplate } from '../../domain/workflow-templates';
-import { assertWorkflowNameIsFree } from './workflow-lookup';
+import { assertHandoffTargetsExist, assertWorkflowNameIsFree } from './workflow-lookup';
 import { WorkflowPresenter } from './workflow-presenter';
 
 /** New workflow from scratch, a template, a copy or an imported JSON file; the department's first one is the default. */
@@ -38,19 +38,21 @@ export class CreateWorkflowUseCase {
     const workflow = this.transactionRunner.runInTransaction(() => {
       requireDepartment(this.departmentRepository, departmentId);
       assertWorkflowNameIsFree(this.workflowRepository, departmentId, request.name);
+      const startingSteps = this.resolveStartingSteps(departmentId, request.source);
       const created = Workflow.createNew({
         id: this.idGenerator.generateId(),
         departmentId,
         name: request.name,
         description: request.description,
         isDefault: this.workflowRepository.listWorkflowsByDepartment(departmentId).length === 0,
-        steps: this.resolveStartingSteps(departmentId, request.source),
+        steps: startingSteps,
         idGenerator: this.idGenerator,
       });
       if (request.source.kind === 'import') {
         const { enforce, rules } = request.source.document;
         created.changeRules({ enforce, rules });
       }
+      assertHandoffTargetsExist(this.departmentRepository, startingSteps);
       this.workflowRepository.insertWorkflow(created);
       return created;
     });

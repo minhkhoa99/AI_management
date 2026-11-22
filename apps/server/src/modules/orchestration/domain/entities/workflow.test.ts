@@ -17,6 +17,7 @@ function draft(overrides: Partial<WorkflowStepDraft> = {}): WorkflowStepDraft {
     returnToStepIndex: null,
     maxRetries: 0,
     requiredOutput: '',
+    handoffDepartmentId: null,
     ...overrides,
   };
 }

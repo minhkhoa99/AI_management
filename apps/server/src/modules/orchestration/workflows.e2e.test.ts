@@ -245,6 +245,89 @@ describe('workflows API', () => {
     expect(await listWorkflows()).toHaveLength(1);
   });
 
+  describe('handoff steps', () => {
+    let review: Department;
+
+    beforeEach(async () => {
+      review = departmentSchema.parse(
+        (await app.callApi('POST', '/api/departments', { name: 'Review', color: '#22C55E' })).body,
+      );
+    });
+
+    const workStep = {
+      name: 'Code',
+      ownerRole: 'dev',
+      gate: 'auto',
+      onFail: 'stop',
+      returnToStepIndex: null,
+      maxRetries: 0,
+      requiredOutput: '',
+    };
+    const handoffStep = (handoffDepartmentId: string) => ({
+      name: 'Review',
+      ownerRole: 'department',
+      gate: 'auto',
+      onFail: 'return_to_step',
+      returnToStepIndex: 0,
+      maxRetries: 0,
+      requiredOutput: 'Nhận xét',
+      handoffDepartmentId,
+    });
+
+    it('saves a handoff step to another department', async () => {
+      const workflow = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
+
+      const saved = await app.callApi('PUT', `/api/workflows/${workflow.id}/steps`, {
+        steps: [workStep, handoffStep(review.id)],
+      });
+
+      expect(saved.statusCode, JSON.stringify(saved.body)).toBe(200);
+      const steps = workflowSchema.parse(saved.body).steps;
+      expect(steps[1]?.handoffDepartmentId).toBe(review.id);
+      expect(steps[0]?.handoffDepartmentId).toBeNull();
+    });
+
+    it('refuses an unknown handoff department with 400', async () => {
+      const workflow = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
+
+      const saved = await app.callApi('PUT', `/api/workflows/${workflow.id}/steps`, {
+        steps: [workStep, handoffStep('missing-dept')],
+      });
+      const imported = await app.callApi('POST', `/api/departments/${department.id}/workflows`, {
+        name: 'Bản nhập',
+        source: {
+          kind: 'import',
+          document: {
+            ...buildWorkflowExportDocument(workflow),
+            steps: [workStep, handoffStep('missing-dept')],
+          },
+        },
+      });
+
+      expect(saved.statusCode).toBe(400);
+      expect(readErrorCode(saved)).toBe('WORKFLOW_HANDOFF_TARGET_NOT_FOUND');
+      expect(imported.statusCode).toBe(400);
+      expect(readErrorCode(imported)).toBe('WORKFLOW_HANDOFF_TARGET_NOT_FOUND');
+      expect(await listWorkflows()).toHaveLength(1);
+    });
+
+    it('refuses to delete a department that receives handoffs', async () => {
+      const workflow = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
+      await app.callApi('PUT', `/api/workflows/${workflow.id}/steps`, {
+        steps: [workStep, handoffStep(review.id)],
+      });
+
+      const refused = await app.callApi('DELETE', `/api/departments/${review.id}`);
+      expect(refused.statusCode).toBe(409);
+      expect(readErrorCode(refused)).toBe('DEPARTMENT_RECEIVES_HANDOFFS');
+
+      expect((await app.callApi('DELETE', `/api/departments/${department.id}`)).statusCode).toBe(
+        204,
+      );
+      expect((await app.callApi('DELETE', `/api/departments/${review.id}`)).statusCode).toBe(204);
+    });
+  });
+
   it('moves the default, blocks deleting the last workflow, and hands tasks to the successor', async () => {
     const first = await createWorkflow({ name: 'Một', source: { kind: 'blank' } });
     const second = await createWorkflow({ name: 'Hai', source: { kind: 'blank' } });

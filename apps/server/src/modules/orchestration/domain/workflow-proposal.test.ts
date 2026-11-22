@@ -99,6 +99,16 @@ describe('interpretWorkflowProposal', () => {
     );
   });
 
+  it('rejects an AI step that carries handoffDepartmentId', () => {
+    expect(() => interpret(block({ steps: [aiStep({ handoffDepartmentId: null })] }))).toThrow(
+      expect.objectContaining({ code: 'AI_PROPOSAL_INVALID' }),
+    );
+  });
+
+  it('gives every proposed step no handoff department', () => {
+    expect(interpret(block({ steps: [aiStep()] })).steps[0]?.handoffDepartmentId).toBeNull();
+  });
+
   it('keeps cross-step problems for the editor', () => {
     const proposal = interpret(block({ steps: [aiStep({ ownerRole: 'user', gate: 'auto' })] }));
     expect(proposal.steps[0]).toMatchObject({ ownerRole: 'user', gate: 'auto' });

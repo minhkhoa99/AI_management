@@ -4,6 +4,7 @@ import {
   workflowProposalSchema,
   workflowProposalStepSchema,
   type AgentRole,
+  type StepOwner,
   type WorkflowProposal,
   type WorkflowProposalStep,
 } from '@aiteam/contracts';
@@ -24,7 +25,8 @@ const answerSchema = z
   })
   .strict();
 
-const proposedStepSchema = workflowProposalStepSchema.omit({ id: true });
+/** The AI never picks a department to hand off to (it does not know their ids). */
+const proposedStepSchema = workflowProposalStepSchema.omit({ id: true, handoffDepartmentId: true });
 
 type RawStep = Record<string, unknown>;
 
@@ -48,8 +50,8 @@ export function interpretWorkflowProposal(input: {
   const steps = keptSteps.map((rawStep): WorkflowProposalStep => {
     const parsed = proposedStepSchema.safeParse(rawStep);
     if (!parsed.success) throw invalidProposal(parsed.error);
-    const step = parsed.data;
-    if (step.ownerRole !== 'user' && !input.staffedRoles.has(step.ownerRole)) {
+    const step = { ...parsed.data, handoffDepartmentId: null };
+    if (isAgentRole(step.ownerRole) && !input.staffedRoles.has(step.ownerRole)) {
       warnings.push(
         `Chưa có agent vai ${ROLE_LABELS_FOR_PROMPTS[step.ownerRole]} đang bật trong phòng (bước "${step.name}").`,
       );
@@ -102,6 +104,10 @@ function dropDepartmentSteps(steps: readonly RawStep[], warnings: string[]): Raw
       const shift = droppedIndexes.filter((dropped) => dropped < target).length;
       return { ...step, returnToStepIndex: target - shift };
     });
+}
+
+function isAgentRole(owner: StepOwner): owner is AgentRole {
+  return owner !== 'user' && owner !== 'department';
 }
 
 function describeRawName(name: unknown): string {

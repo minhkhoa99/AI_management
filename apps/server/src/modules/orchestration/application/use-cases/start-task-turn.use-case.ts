@@ -109,6 +109,12 @@ export class StartTaskTurnUseCase {
       this.askUserForStep(task, step);
       return;
     }
+    if (step?.ownerRole === 'department') {
+      // ponytail: placeholder until handoffs run (plan Task 7 replaces this with handOffStep).
+      task.fail('Bước giao phòng khác chưa chạy được trong phiên bản này.');
+      this.taskRepository.updateTask(task);
+      return;
+    }
 
     const staff = this.staffDirectory.listDepartmentStaff(state.departmentId);
     const role =

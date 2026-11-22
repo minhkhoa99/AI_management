@@ -169,7 +169,9 @@ function describeAnswerFormat(): string {
 }
 
 function describeOwner(owner: StepOwner): string {
-  return owner === 'user' ? 'user' : `${owner} (${ROLE_LABELS_FOR_PROMPTS[owner]})`;
+  if (owner === 'user') return 'user';
+  if (owner === 'department') return 'department (phòng khác)';
+  return `${owner} (${ROLE_LABELS_FOR_PROMPTS[owner]})`;
 }
 
 function quoteAgentText(text: string): string {

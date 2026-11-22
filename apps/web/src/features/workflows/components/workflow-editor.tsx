@@ -92,7 +92,7 @@ export function WorkflowEditor({
   // What the last AI proposal changed and why; dropped once its steps are saved or discarded.
   const [proposalNotes, setProposalNotes] = useState<ProposalNotes | null>(null);
   const { outcome, isPending, performAction } = useActionOutcome();
-  const problems = listWorkflowStepProblems(steps);
+  const problems = listWorkflowStepProblems(steps, workflow.departmentId);
   const isDirty = unsavedSteps !== undefined;
   const selectedStepIndex = Math.min(selectedIndex, steps.length - 1);
   const selectedStep = steps[selectedStepIndex];

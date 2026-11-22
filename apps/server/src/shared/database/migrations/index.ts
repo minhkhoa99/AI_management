@@ -13,6 +13,7 @@ import taskSubtasksSql from './011_task_subtasks.sql';
 import departmentSkillsSql from './012_department_skills.sql';
 import antigravityEngineSql from './013_antigravity_engine.sql';
 import taskReviewPendingSql from './014_task_review_pending.sql';
+import departmentHandoffSql from './015_department_handoff.sql';
 
 /** Every schema migration, in ascending version order. Append only; never edit a released one. */
 export const ALL_MIGRATIONS: readonly SqlMigration[] = [
@@ -50,4 +51,10 @@ export const ALL_MIGRATIONS: readonly SqlMigration[] = [
     rebuildsTables: true,
   },
   { version: 14, name: 'task-review-pending', sql: taskReviewPendingSql },
+  {
+    version: 15,
+    name: 'department-handoff',
+    sql: departmentHandoffSql,
+    rebuildsTables: true,
+  },
 ];

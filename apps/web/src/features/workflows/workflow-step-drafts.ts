@@ -26,6 +26,7 @@ export function editableStepsOf(workflow: Workflow): EditableStep[] {
       step.returnToStepId === null ? null : (indexById.get(step.returnToStepId) ?? null),
     maxRetries: step.maxRetries,
     requiredOutput: step.requiredOutput,
+    handoffDepartmentId: step.handoffDepartmentId,
   }));
 }
 
@@ -62,6 +63,7 @@ export function appendNewStep(steps: readonly EditableStep[]): EditableStep[] {
       returnToStepIndex: null,
       maxRetries: 0,
       requiredOutput: '',
+      handoffDepartmentId: null,
     },
   ];
 }

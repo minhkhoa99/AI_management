@@ -24,6 +24,7 @@ export interface WorkflowStepState {
   returnToStepId: string | null;
   maxRetries: number;
   requiredOutput: string;
+  handoffDepartmentId: string | null;
 }
 
 export interface WorkflowState {
@@ -61,7 +62,7 @@ export class Workflow {
       isDefault: input.isDefault,
       enforce: true,
       rules: { ...DEFAULT_WORKFLOW_RULES },
-      steps: buildWorkflowSteps(input.steps, new Set(), input.idGenerator),
+      steps: buildWorkflowSteps(input.steps, new Set(), input.idGenerator, input.departmentId),
     });
   }
 
@@ -121,7 +122,7 @@ export class Workflow {
    */
   replaceSteps(drafts: readonly WorkflowStepDraft[], idGenerator: IdGenerator): string[] {
     const currentIds = new Set(this.state.steps.map((step) => step.id));
-    const newSteps = buildWorkflowSteps(drafts, currentIds, idGenerator);
+    const newSteps = buildWorkflowSteps(drafts, currentIds, idGenerator, this.state.departmentId);
     const keptIds = new Set(newSteps.map((step) => step.id));
     this.state.steps = newSteps;
     return [...currentIds].filter((stepId) => !keptIds.has(stepId));
@@ -139,6 +140,7 @@ export class Workflow {
         step.returnToStepId === null ? null : (indexById.get(step.returnToStepId) ?? null),
       maxRetries: step.maxRetries,
       requiredOutput: step.requiredOutput,
+      handoffDepartmentId: step.handoffDepartmentId,
     }));
   }
 
@@ -169,13 +171,14 @@ function buildWorkflowSteps(
   drafts: readonly WorkflowStepDraft[],
   existingIds: ReadonlySet<string>,
   idGenerator: IdGenerator,
+  departmentId: string,
 ): WorkflowStepState[] {
   if (drafts.length === 0 || drafts.length > WORKFLOW_MAX_STEPS) {
     throw new ValidationError(`Quy trình cần từ 1 đến ${WORKFLOW_MAX_STEPS} bước.`, {
       code: 'WORKFLOW_STEPS_INVALID',
     });
   }
-  const problems = listWorkflowStepProblems(drafts);
+  const problems = listWorkflowStepProblems(drafts, departmentId);
   if (problems.length > 0) {
     throw new ValidationError(
       `Bước ${(problems[0]?.stepIndex ?? 0) + 1}: ${problems[0]?.message ?? ''}`,
@@ -204,5 +207,6 @@ function buildWorkflowSteps(
     // Retries only mean something for on_fail = retry (SQL CHECK keeps the others at 0).
     maxRetries: draft.onFail === 'retry' ? draft.maxRetries : 0,
     requiredOutput: draft.requiredOutput.normalize('NFC').trim(),
+    handoffDepartmentId: draft.handoffDepartmentId,
   }));
 }

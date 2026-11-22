@@ -22,6 +22,7 @@ export const FAILURE_ACTION_LABELS: Record<StepFailureAction, string> = {
 export const STEP_OWNER_LABELS: Record<StepOwner, string> = {
   ...ROLE_LABELS,
   user: 'Bạn (người dùng)',
+  department: 'Phòng khác',
 };
 
 export const RULE_PRESENTATION: ReadonlyArray<{

@@ -13,6 +13,7 @@ const STEPS: WorkflowStepState[] = [
     returnToStepId: null,
     maxRetries: 2,
     requiredOutput: '',
+    handoffDepartmentId: null,
   },
   {
     id: 'review',
@@ -23,6 +24,7 @@ const STEPS: WorkflowStepState[] = [
     returnToStepId: 'code',
     maxRetries: 0,
     requiredOutput: 'Biên bản',
+    handoffDepartmentId: null,
   },
 ];
 

@@ -23,6 +23,7 @@ function step(id: string, overrides: Partial<WorkflowStepState> = {}): WorkflowS
     returnToStepId: null,
     maxRetries: 2,
     requiredOutput: '',
+    handoffDepartmentId: null,
     ...overrides,
   };
 }

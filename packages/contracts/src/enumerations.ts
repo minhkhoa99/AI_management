@@ -92,9 +92,10 @@ export const STEP_RETRY_LIMITS = { min: 1, max: 5 } as const;
 
 /**
  * Who owns a workflow step: an agent role of the department (the platform picks an enabled
- * agent with that role), or the user. A user-owned step is an approval step (gate user_approval).
+ * agent with that role), the user, or another department. A user-owned step is an approval step
+ * (gate user_approval); a department step hands the task to that department (gate auto).
  */
-export const STEP_OWNERS = [...AGENT_ROLES, 'user'] as const;
+export const STEP_OWNERS = [...AGENT_ROLES, 'user', 'department'] as const;
 export const stepOwnerSchema = z.enum(STEP_OWNERS);
 export type StepOwner = z.infer<typeof stepOwnerSchema>;
 

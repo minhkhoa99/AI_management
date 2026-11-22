@@ -3,6 +3,7 @@ import {
   buildWorkflowExportDocument,
   DEFAULT_WORKFLOW_RULES,
   draftWorkflowStepsRequestSchema,
+  listWorkflowStepProblems,
   type Workflow,
   type WorkflowStep,
   workflowExportDocumentSchema,
@@ -20,6 +21,7 @@ function buildStep(id: string, returnToStepId: string | null = null): WorkflowSt
     returnToStepId,
     maxRetries: 0,
     requiredOutput: 'Báo cáo',
+    handoffDepartmentId: null,
   };
 }
 
@@ -74,6 +76,106 @@ describe('buildWorkflowExportDocument', () => {
       workflowSourceSchema.safeParse({ kind: 'import', document, workflowId: 'wf_1' }).success,
     ).toBe(false);
     expect(workflowSourceSchema.safeParse({ kind: 'import', document }).success).toBe(true);
+  });
+
+  it('round-trips a handoff step through export and import', () => {
+    const workflow: Workflow = {
+      ...workflowWith3StepsWhereStep2ReturnsToStep0,
+      steps: [
+        buildStep('st_a'),
+        {
+          ...buildStep('st_b', 'st_a'),
+          ownerRole: 'department',
+          handoffDepartmentId: 'dep_review',
+        },
+      ],
+    };
+
+    const parsed = workflowExportDocumentSchema.parse(
+      JSON.parse(JSON.stringify(buildWorkflowExportDocument(workflow))),
+    );
+
+    expect(parsed.steps[1]).toMatchObject({
+      ownerRole: 'department',
+      handoffDepartmentId: 'dep_review',
+      returnToStepIndex: 0,
+    });
+    expect(parsed.steps[0]?.handoffDepartmentId).toBeNull();
+  });
+
+  it('reads an older export without handoff departments', () => {
+    const document = buildWorkflowExportDocument(workflowWith3StepsWhereStep2ReturnsToStep0);
+    const steps = document.steps.map(({ handoffDepartmentId: _omitted, ...step }) => step);
+
+    const parsed = workflowExportDocumentSchema.parse({ ...document, steps });
+
+    expect(parsed.steps.map((step) => step.handoffDepartmentId)).toEqual([null, null, null]);
+  });
+});
+
+describe('listWorkflowStepProblems', () => {
+  const step = (over: Record<string, unknown> = {}) =>
+    ({
+      ownerRole: 'dev',
+      gate: 'auto',
+      onFail: 'stop',
+      returnToStepIndex: null,
+      maxRetries: 0,
+      handoffDepartmentId: null,
+      ...over,
+    }) as Parameters<typeof listWorkflowStepProblems>[0][number];
+  const handoff = step({
+    ownerRole: 'department',
+    handoffDepartmentId: 'review',
+    onFail: 'return_to_step',
+    returnToStepIndex: 0,
+  });
+  const messages = (
+    steps: Parameters<typeof listWorkflowStepProblems>[0],
+    ownDepartmentId: string | null,
+  ) => listWorkflowStepProblems(steps, ownDepartmentId).map((problem) => problem.message);
+
+  it('accepts a handoff after a working step', () => {
+    expect(messages([step(), handoff], 'dev')).toEqual([]);
+  });
+
+  it.each([
+    [
+      'a handoff without a department',
+      [step(), { ...handoff, handoffDepartmentId: null }],
+      'Chọn phòng nhận bàn giao.',
+    ],
+    [
+      'a department on a working step',
+      [step({ handoffDepartmentId: 'review' })],
+      'Chỉ chọn phòng khi người phụ trách là "Phòng khác".',
+    ],
+    [
+      'a handoff to the own department',
+      [step(), { ...handoff, handoffDepartmentId: 'dev' }],
+      'Không bàn giao cho chính phòng mình.',
+    ],
+    [
+      'a handoff as the first step',
+      [step({ ownerRole: 'department', handoffDepartmentId: 'review' })],
+      'Bước đầu tiên không giao phòng khác được.',
+    ],
+    [
+      'a handoff with another gate',
+      [step(), { ...handoff, gate: 'qc_pass' }],
+      'Bước giao phòng khác chỉ dùng điều kiện "Tự động chuyển".',
+    ],
+    [
+      'a handoff that retries',
+      [step(), { ...handoff, onFail: 'retry', returnToStepIndex: null, maxRetries: 1 }],
+      'Bước giao phòng khác không dùng "Thử lại".',
+    ],
+  ] as const)('reports %s', (_label, steps, expected) => {
+    expect(messages(steps, 'dev')).toEqual([expected]);
+  });
+
+  it('skips the own-department check without a department', () => {
+    expect(messages([step(), { ...handoff, handoffDepartmentId: 'dev' }], null)).toEqual([]);
   });
 });
 

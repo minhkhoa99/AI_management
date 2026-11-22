@@ -36,11 +36,12 @@ interface WorkflowStepRow {
   fail_target_step_id: string | null;
   max_retries: number;
   required_output: string | null;
+  handoff_department_id: string | null;
 }
 
 const WORKFLOW_COLUMNS = 'id, department_id, name, description, is_default, enforce, rules_json';
 const STEP_COLUMNS =
-  'id, workflow_id, name, owner_role, gate, on_fail, fail_target_step_id, max_retries, required_output';
+  'id, workflow_id, name, owner_role, handoff_department_id, gate, on_fail, fail_target_step_id, max_retries, required_output';
 /** Kept steps park above this position while the chain is rewritten (UNIQUE workflow_id, position). */
 const PARKED_POSITION_OFFSET = 100_000;
 
@@ -90,14 +91,14 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
     this.deleteStepStatement = database.prepare('DELETE FROM workflow_steps WHERE id = ?');
     this.insertStepStatement = database.prepare(
       `INSERT INTO workflow_steps
-         (id, workflow_id, position, name, owner_role, gate, on_fail, fail_target_step_id,
-          max_retries, required_output)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, workflow_id, position, name, owner_role, handoff_department_id, gate, on_fail,
+          fail_target_step_id, max_retries, required_output)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     this.updateStepStatement = database.prepare(
       `UPDATE workflow_steps
-       SET position = ?, name = ?, owner_role = ?, gate = ?, on_fail = ?, fail_target_step_id = ?,
-           max_retries = ?, required_output = ?
+       SET position = ?, name = ?, owner_role = ?, handoff_department_id = ?, gate = ?,
+           on_fail = ?, fail_target_step_id = ?, max_retries = ?, required_output = ?
        WHERE id = ? AND workflow_id = ?`,
     );
   }
@@ -156,6 +157,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
             position,
             step.name,
             step.ownerRole,
+            step.handoffDepartmentId,
             step.gate,
             step.onFail,
             step.returnToStepId,
@@ -182,6 +184,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
       position,
       step.name,
       step.ownerRole,
+      step.handoffDepartmentId,
       step.gate,
       step.onFail,
       step.returnToStepId,
@@ -209,6 +212,7 @@ export class SqliteWorkflowRepository implements WorkflowRepository {
         returnToStepId: stepRow.fail_target_step_id,
         maxRetries: Number(stepRow.max_retries),
         requiredOutput: stepRow.required_output ?? '',
+        handoffDepartmentId: stepRow.handoff_department_id,
       })),
     });
   }

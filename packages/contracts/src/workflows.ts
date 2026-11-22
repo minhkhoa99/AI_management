@@ -62,6 +62,8 @@ export const workflowStepSchema = z.object({
   returnToStepId: entityIdSchema.nullable(),
   maxRetries: z.number().int().min(0).max(STEP_RETRY_LIMITS.max),
   requiredOutput: z.string(),
+  /** Department receiving the task when ownerRole = department; null otherwise. */
+  handoffDepartmentId: entityIdSchema.nullable(),
 });
 export type WorkflowStep = z.infer<typeof workflowStepSchema>;
 
@@ -79,6 +81,7 @@ export const workflowStepDraftSchema = z
     returnToStepIndex: z.number().int().min(0).nullable(),
     maxRetries: z.number().int().min(0).max(STEP_RETRY_LIMITS.max),
     requiredOutput: z.string().trim().max(WORKFLOW_STEP_OUTPUT_MAX_LENGTH),
+    handoffDepartmentId: entityIdSchema.nullable().default(null),
   })
   .strict();
 export type WorkflowStepDraft = z.infer<typeof workflowStepDraftSchema>;
@@ -95,13 +98,18 @@ interface StepRuleInput {
   onFail: StepFailureAction;
   returnToStepIndex: number | null;
   maxRetries: number;
+  handoffDepartmentId: string | null;
 }
 
 /**
  * Rules that span fields or steps. Shared by the editor (inline hints) and the server (which
- * rejects the save). Returns every problem, in step order.
+ * rejects the save). Returns every problem, in step order. `ownDepartmentId` is the department
+ * of the workflow (null skips the "not to itself" check).
  */
-export function listWorkflowStepProblems(steps: readonly StepRuleInput[]): WorkflowStepProblem[] {
+export function listWorkflowStepProblems(
+  steps: readonly StepRuleInput[],
+  ownDepartmentId: string | null,
+): WorkflowStepProblem[] {
   const problems: WorkflowStepProblem[] = [];
   const seenIds = new Set<string>();
   steps.forEach((step, stepIndex) => {
@@ -113,6 +121,7 @@ export function listWorkflowStepProblems(steps: readonly StepRuleInput[]): Workf
     if (step.ownerRole === 'user' && step.gate !== 'user_approval') {
       report('Bước do bạn phụ trách chỉ dùng điều kiện "Bạn duyệt".');
     }
+    reportHandoffProblems(step, stepIndex, ownDepartmentId, report);
     if (step.onFail === 'return_to_step') {
       if (step.returnToStepIndex === null) {
         report('Chọn bước để quay lại.');
@@ -130,6 +139,26 @@ export function listWorkflowStepProblems(steps: readonly StepRuleInput[]): Workf
     }
   });
   return problems;
+}
+
+function reportHandoffProblems(
+  step: StepRuleInput,
+  stepIndex: number,
+  ownDepartmentId: string | null,
+  report: (message: string) => void,
+): void {
+  const isHandoff = step.ownerRole === 'department';
+  if (isHandoff && step.handoffDepartmentId === null) report('Chọn phòng nhận bàn giao.');
+  if (!isHandoff && step.handoffDepartmentId !== null) {
+    report('Chỉ chọn phòng khi người phụ trách là "Phòng khác".');
+  }
+  if (ownDepartmentId !== null && step.handoffDepartmentId === ownDepartmentId) {
+    report('Không bàn giao cho chính phòng mình.');
+  }
+  if (!isHandoff) return;
+  if (stepIndex === 0) report('Bước đầu tiên không giao phòng khác được.');
+  if (step.gate !== 'auto') report('Bước giao phòng khác chỉ dùng điều kiện "Tự động chuyển".');
+  if (step.onFail === 'retry') report('Bước giao phòng khác không dùng "Thử lại".');
 }
 
 // ---- Workflows -----------------------------------------------------------------------------
@@ -198,6 +227,7 @@ export function buildWorkflowExportDocument(workflow: Workflow): WorkflowExportD
         step.returnToStepId === null ? null : (indexById.get(step.returnToStepId) ?? null),
       maxRetries: step.maxRetries,
       requiredOutput: step.requiredOutput,
+      handoffDepartmentId: step.handoffDepartmentId,
     })),
   };
 }

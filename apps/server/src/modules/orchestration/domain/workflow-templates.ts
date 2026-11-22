@@ -22,6 +22,7 @@ function step(
     returnToStepIndex: failure.returnToStepIndex ?? null,
     maxRetries: failure.maxRetries ?? 0,
     requiredOutput,
+    handoffDepartmentId: null,
   };
 }
 
