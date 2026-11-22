@@ -2,6 +2,8 @@ import {
   type CreateWrittenSkillRequest,
   departmentSkillListSchema,
   departmentSkillSchema,
+  knowledgeLessonListSchema,
+  knowledgeLessonSchema,
   skillDetailSchema,
   skillTemplateListSchema,
   type UpdateSkillRequest,
@@ -99,3 +101,17 @@ export const setAgentSkills = (agentId: string, skillIds: string[]) =>
       departmentSkillListSchema,
     ),
   );
+
+export const loadDepartmentLessons = (departmentId: string, searchText: string) =>
+  fetchApiJson(
+    `/api/departments/${encodeId(departmentId)}/lessons?q=${encodeURIComponent(searchText)}`,
+    knowledgeLessonListSchema,
+  );
+
+export const updateLesson = (lessonId: string, body: string) =>
+  refreshAfterWrite(
+    sendApiJson('PATCH', `/api/lessons/${encodeId(lessonId)}`, { body }, knowledgeLessonSchema),
+  );
+
+export const deleteLesson = (lessonId: string) =>
+  refreshAfterWrite(sendApiCommand('DELETE', `/api/lessons/${encodeId(lessonId)}`));

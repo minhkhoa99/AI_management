@@ -7,6 +7,7 @@ import {
 import { APP_FILTER } from '@nestjs/core';
 import { AgentsModule } from './modules/agents/agents.module';
 import { DepartmentsModule } from './modules/departments/departments.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { OrchestrationModule } from './modules/orchestration/orchestration.module';
 import { ProvidersModule } from './modules/providers/providers.module';
 import { SkillsModule } from './modules/skills/skills.module';
@@ -38,6 +39,7 @@ export class AppModule implements NestModule {
         DepartmentsModule,
         AgentsModule,
         SkillsModule,
+        KnowledgeModule,
         OrchestrationModule,
         ProvidersModule,
         TracingModule,

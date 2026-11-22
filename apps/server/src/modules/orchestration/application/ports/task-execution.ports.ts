@@ -1,4 +1,4 @@
-import type { AgentRole } from '@aiteam/contracts';
+import type { AgentRole, KnowledgeLessonSource } from '@aiteam/contracts';
 import type { EngineSnapshot } from '../../domain/entities/task';
 import type { StaffMember } from '../../domain/step-assignee';
 import type {
@@ -50,6 +50,41 @@ export interface CodeTreeEntry {
   blobSha: string;
   /** null: blob không đổi (có trong knownShas) hoặc vượt ngân sách byte của lượt */
   text: string | null;
+}
+
+// ---- Knowledge shared per repository (knowledge module) -------------------------------------
+
+export const TASK_KNOWLEDGE = Symbol('TASK_KNOWLEDGE');
+
+export interface TaskKnowledgeBriefing {
+  /** null when nothing relevant was found. */
+  promptSection: string | null;
+  lessonsMarkdown: string;
+  codeMapMarkdown: string;
+}
+
+export interface TaskKnowledge {
+  /** Reads the tree (blobs whose sha is known are skipped) and updates the repository index. */
+  refreshCodeIndex(
+    projectKey: string,
+    readTree: (knownShas: ReadonlyMap<string, string>) => Promise<readonly CodeTreeEntry[]>,
+  ): Promise<void>;
+  describeTaskKnowledge(input: {
+    projectKey: string;
+    keywords: readonly string[];
+    relatedPaths: readonly string[];
+  }): TaskKnowledgeBriefing;
+  recordLesson(input: {
+    projectKey: string;
+    departmentId: string;
+    sourceTaskId: string;
+    source: KnowledgeLessonSource;
+    body: string;
+    /** The agent's folder relative to the repository root (paths in the body are relative to it). */
+    agentDirectory: string | null;
+  }): void;
+  /** Bodies of the repository's most frequent lessons. */
+  listFrequentLessons(projectKey: string, limit: number): string[];
 }
 
 export interface WorkspaceFile {

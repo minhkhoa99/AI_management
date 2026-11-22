@@ -11,6 +11,7 @@ import { ROLE_LABELS } from '../../organization/organization-labels';
 import { loadAgents, loadDepartments } from '../../organization/organization-api';
 import { copySkill, deleteSkill, loadDepartmentSkills, setAgentSkills } from '../skills-api';
 import { AddSkillPanel } from './add-skill-panel';
+import { LessonsSection } from './lessons-section';
 import { SkillEditorPanel } from './skill-editor-panel';
 import styles from './skills.module.css';
 
@@ -55,11 +56,14 @@ export function SkillsScreen() {
           </p>
         </section>
       ) : (
-        <DepartmentSkills
-          key={selected.id}
-          department={selected}
-          otherDepartments={departmentList.filter((department) => department.id !== selected.id)}
-        />
+        <>
+          <DepartmentSkills
+            key={selected.id}
+            department={selected}
+            otherDepartments={departmentList.filter((department) => department.id !== selected.id)}
+          />
+          <LessonsSection key={`lessons-${selected.id}`} department={selected} />
+        </>
       )}
     </div>
   );

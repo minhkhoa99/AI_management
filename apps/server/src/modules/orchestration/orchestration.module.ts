@@ -55,6 +55,7 @@ import { TaskRunRegistry } from './application/use-cases/task-run-registry';
 import {
   AGENT_SKILL_SOURCE,
   STAFF_DIRECTORY,
+  TASK_KNOWLEDGE,
   TASK_WORKSPACE,
   TEST_COMMAND_RUNNER,
 } from './application/ports/task-execution.ports';
@@ -130,6 +131,8 @@ import { DraftWorkflowStepsUseCase } from './application/use-cases/draft-workflo
 import { ProposeWorkflowOptimizationUseCase } from './application/use-cases/propose-workflow-optimization.use-case';
 import { WorkflowProposalAuthor } from './application/use-cases/workflow-proposal-author';
 import { SqliteWorkflowRunHistoryQuery } from './infrastructure/persistence/sqlite-workflow-run-history.query';
+import { KnowledgeModule } from '../knowledge/knowledge.module';
+import { TaskKnowledgeLibrary } from '../knowledge/application/use-cases/task-knowledge-library';
 
 /**
  * Tasks, delegation, workflows, step gates, approvals and the task scheduler (phase 3).
@@ -138,7 +141,14 @@ import { SqliteWorkflowRunHistoryQuery } from './infrastructure/persistence/sqli
 import { AgentSkillLibrary } from '../skills/application/use-cases/agent-skill.use-cases';
 import { SkillsModule } from '../skills/skills.module';
 @Module({
-  imports: [DepartmentsModule, AgentsModule, ProvidersModule, TracingModule, SkillsModule],
+  imports: [
+    DepartmentsModule,
+    AgentsModule,
+    ProvidersModule,
+    TracingModule,
+    SkillsModule,
+    KnowledgeModule,
+  ],
   controllers: [
     WorkflowsController,
     TasksController,
@@ -153,6 +163,7 @@ import { SkillsModule } from '../skills/skills.module';
     { provide: WORKFLOW_TASK_USAGE, useClass: SqliteWorkflowTaskUsage },
     { provide: TASK_REPOSITORY, useClass: SqliteTaskRepository },
     { provide: AGENT_SKILL_SOURCE, useExisting: AgentSkillLibrary },
+    { provide: TASK_KNOWLEDGE, useExisting: TaskKnowledgeLibrary },
     { provide: TASK_ATTACHMENT_REPOSITORY, useClass: SqliteTaskAttachmentRepository },
     { provide: WORKSPACE_SETTINGS_REPOSITORY, useClass: SqliteWorkspaceSettingsRepository },
     { provide: TASK_BOARD_QUERY, useClass: SqliteTaskBoardQuery },
