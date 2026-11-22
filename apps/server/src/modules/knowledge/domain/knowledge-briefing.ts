@@ -67,9 +67,7 @@ export function scoreTokenOverlap(query: ReadonlySet<string>, terms: ReadonlySet
  * tags go, code fences are defused, and the platform's own prefix is dropped.
  */
 export function normalizeLessonText(text: string): string {
-  let body = text
-    .replace(/(?!\n)\p{Cc}/gu, '')
-    .replace(/<\/?aiteam-[^>]*>/gi, '')
+  let body = stripAiteamTags(text.replace(/(?!\n)\p{Cc}/gu, ''))
     .replace(/```/g, "'''")
     .trim();
   for (const prefix of TASK_FEEDBACK_PREFIXES) {
@@ -162,18 +160,35 @@ function quoteLines(body: string): string[] {
   return body.split('\n').map((line) => `> ${line}`);
 }
 
+/** One unquoted line per file: paths and names come from the repository, so they are cleaned. */
 function describeFile(file: BriefingFile): string {
-  const parts = [`- ${file.path}`];
+  const list = (values: string[]) => values.map(cleanCodeMapText).join(', ');
+  const parts = [`- ${cleanCodeMapText(file.path)}`];
   if (file.exportedNames.length > 0) {
-    parts.push(`export: ${file.exportedNames.join(', ')}`);
+    parts.push(`export: ${list(file.exportedNames)}`);
   }
   if (file.importedBy.length > 0) {
-    parts.push(`được import bởi: ${file.importedBy.join(', ')}`);
+    parts.push(`được import bởi: ${list(file.importedBy)}`);
   }
   if (file.imports.length > 0) {
-    parts.push(`import: ${file.imports.join(', ')}`);
+    parts.push(`import: ${list(file.imports)}`);
   }
   return parts.join(' | ');
+}
+
+function cleanCodeMapText(text: string): string {
+  return stripAiteamTags(text.replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ''));
+}
+
+/** Repeated until stable, so nested pieces cannot rebuild a tag. */
+function stripAiteamTags(text: string): string {
+  let previous: string;
+  let current = text;
+  do {
+    previous = current;
+    current = current.replace(/<\/?aiteam-[^>]*>/gi, '');
+  } while (current !== previous);
+  return current;
 }
 
 function utf8Length(line: string): number {

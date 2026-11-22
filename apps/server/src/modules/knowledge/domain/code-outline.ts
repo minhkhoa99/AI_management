@@ -155,11 +155,17 @@ function isInsideRepository(repositoryPath: string): boolean {
   );
 }
 
+const NPM_NAME = /^(?:@[a-z0-9~-][\w.~-]*\/)?[a-z0-9~-][\w.~-]*$/i;
+const NPM_NAME_MAX_LENGTH = 214;
+
 function readPackageName(text: string): string[] {
   try {
     const parsed: unknown = JSON.parse(text);
     const name = (parsed as { name?: unknown } | null)?.name;
-    return typeof name === 'string' && name !== '' ? [name] : [];
+    // Agent-written file: only an npm package name ever reaches the code map.
+    return typeof name === 'string' && name.length <= NPM_NAME_MAX_LENGTH && NPM_NAME.test(name)
+      ? [name]
+      : [];
   } catch {
     // A broken package.json only means the package has no name to resolve imports with.
     return [];
