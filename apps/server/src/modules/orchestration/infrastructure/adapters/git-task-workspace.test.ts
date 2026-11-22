@@ -323,6 +323,20 @@ describe('GitTaskWorkspace with agent-planted files', { timeout: 30_000 }, () =>
       ]);
     });
 
+    it('rejects instead of crashing when git exits before reading every blob sha', async () => {
+      // Regression: without a stdin error listener the EPIPE/EOF was an uncaughtException.
+      const readGitBlobs = (
+        workspace as unknown as {
+          readGitBlobs(directory: string, shas: string[]): Promise<Map<string, Buffer>>;
+        }
+      ).readGitBlobs.bind(workspace);
+      const shas = Array.from({ length: 5000 }, (_, index) => index.toString(16).padStart(40, '0'));
+
+      await expect(readGitBlobs(path.join(rootDirectory, 'missing'), shas)).rejects.toMatchObject({
+        code: 'GIT_COMMAND_FAILED',
+      });
+    });
+
     it('writes the knowledge folder out of git and removes a planted junction', async () => {
       const { worktreePath } = await prepare();
       const outside = path.join(rootDirectory, 'outside');

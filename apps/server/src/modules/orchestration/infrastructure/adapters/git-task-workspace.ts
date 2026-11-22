@@ -539,6 +539,9 @@ export class GitTaskWorkspace implements TaskWorkspace {
           );
         },
       );
+      child.stdin?.on('error', () => {
+        // EPIPE/EOF when git exits before reading every sha; the callback above reports it.
+      });
       child.stdin?.end(`${shas.join('\n')}\n`);
     });
   }
